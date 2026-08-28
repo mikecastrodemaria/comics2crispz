@@ -30,7 +30,7 @@ border-top-color:transparent;border-radius:50%;margin-right:6px;
 animation:sp 1s linear infinite;vertical-align:-1px}
 @keyframes sp{to{transform:rotate(360deg)}}
 #layout{display:flex;height:calc(100vh - 46px)}
-/* ---------- navigateur ---------- */
+/* ---------- navigator ---------- */
 #nav{width:230px;flex-shrink:0;overflow-y:auto;background:var(--pan);
 border-right:1px solid var(--bd);padding:8px 0}
 #nav .ch{padding:7px 12px 4px;font-size:11px;text-transform:uppercase;
@@ -44,7 +44,7 @@ cursor:pointer;font-size:13px}
 .st-empty{background:var(--st-empty)}.st-partial{background:var(--st-partial)}
 .st-rendered{background:var(--st-rendered)}.st-composed{background:var(--st-composed)}
 #nav .pg .mut{color:var(--mut);font-size:11px;margin-left:auto}
-/* ---------- chemin de fer ---------- */
+/* ---------- flatplan ---------- */
 #main{flex:1;overflow:auto;padding:18px}
 #legend{display:flex;gap:16px;align-items:center;font-size:12px;color:var(--mut);
 margin-bottom:14px;flex-wrap:wrap}
@@ -74,7 +74,7 @@ background:#000a;color:var(--warn);z-index:2}
 .spread .lbl{position:absolute;top:0;left:2px;font-size:10px;color:var(--mut)}
 .chsep{width:100%;margin:6px 0 -8px;font-size:11px;color:var(--mut);
 text-transform:uppercase;letter-spacing:.5px}
-/* ---------- aperçu planche ---------- */
+/* ---------- page preview ---------- */
 #page{display:none;gap:16px}
 #page.on{display:flex}
 #stagewrap{flex:1;min-width:0;display:flex;justify-content:center;align-items:flex-start}
@@ -99,25 +99,25 @@ font-size:11px}
   <h1>📚 comics2crispz</h1>
   <span id="pname" style="color:var(--mut);font-size:12px"></span>
   <div class="tabs">
-    <button id="tab-flat" class="on">Chemin de fer</button>
-    <button id="tab-script" disabled title="Étape 2 (voir docs/UI_PLAN.md)">Scénario</button>
-    <button id="tab-page" disabled title="Sélectionne une page">Planche</button>
-    <button id="tab-prod" disabled title="Étape 3 (voir docs/UI_PLAN.md)">Production</button>
+    <button id="tab-flat" class="on">Flatplan</button>
+    <button id="tab-script" disabled title="Coming with step 2">Script</button>
+    <button id="tab-page" disabled title="Select a page first">Page</button>
+    <button id="tab-prod" disabled title="Coming with step 3">Production</button>
   </div>
   <span id="status"></span>
-  <button id="reload" title="Recharger project.json">↻</button>
+  <button id="reload" title="Reload project.json">↻</button>
 </header>
 <div id="layout">
   <div id="nav"></div>
   <div id="main">
     <div id="flatview">
       <div id="legend">
-        <span><span class="dot st-empty"></span>vide</span>
-        <span><span class="dot st-partial"></span>cases partielles</span>
-        <span><span class="dot st-rendered"></span>cases générées</span>
-        <span><span class="dot st-composed"></span>composée</span>
-        <span>· glisser une page sur une autre = insérer AVANT · sur un titre de
-        chapitre (navigateur) = déplacer en fin de chapitre</span>
+        <span><span class="dot st-empty"></span>empty</span>
+        <span><span class="dot st-partial"></span>partial panels</span>
+        <span><span class="dot st-rendered"></span>panels rendered</span>
+        <span><span class="dot st-composed"></span>composed</span>
+        <span>· drag a page onto another = insert BEFORE it · onto a chapter
+        header (navigator) = move to the end of that chapter</span>
         <button id="composeall" class="primary" style="margin-left:auto">🧩 Compose book</button>
       </div>
       <div id="flat"></div>
@@ -128,15 +128,15 @@ font-size:11px}
         <div class="box">
           <h3 id="pghead">Page</h3>
           <div class="row">
-            <button id="backflat">📖 Chemin de fer</button>
+            <button id="backflat">📖 Flatplan</button>
             <button id="composeone" class="primary">🧩 Compose</button>
-            <button id="genmissing" title="Génère les cases sans image via le moteur configuré (protocole CLI famille)">🎨 Generate missing</button>
+            <button id="genmissing" title="Generate the panels without an image through the configured engine (family CLI protocol)">🎨 Generate missing</button>
           </div>
-          <div class="hint" style="margin-top:8px">Aperçu (étape 1). L'édition des
-          cases et des bulles arrive avec le mode Planche complet — en attendant,
-          le 🎬 Comic Studio de crispz-studio édite le même project.json.</div>
+          <div class="hint" style="margin-top:8px">Preview (step 1). Panel and
+          balloon editing arrives with the full Page mode — meanwhile,
+          crispz-studio's 🎬 Comic Studio edits the same project.json.</div>
         </div>
-        <div class="box hint"><kbd>Esc</kbd> retour chemin de fer</div>
+        <div class="box hint"><kbd>Esc</kbd> back to the flatplan</div>
       </div>
     </div>
   </div>
@@ -145,8 +145,8 @@ font-size:11px}
 <script>
 'use strict';
 let IDX = null;            // /api/index
-let SEL = null;            // {cid, pid} sélection
-let DRAG = null;           // {cid, pid} en cours de drag
+let SEL = null;            // {cid, pid} selection
+let DRAG = null;           // {cid, pid} being dragged
 let BUSY = false;
 
 const $ = id => document.getElementById(id);
@@ -196,10 +196,22 @@ async function load(){
   renderNav(); renderFlat();
   if(SEL && bookPos(SEL.cid, SEL.pid) < 0) SEL = null;
   if($('page').classList.contains('on') && SEL) showPage(SEL.cid, SEL.pid);
+  else applyHash();          // deep link: #ch01.p03 opens that page directly
   status(res.book.length + ' page(s)', 'ok');
 }
 
-/* ---------- navigateur ---------- */
+/* Deep link (#cid.pid): bookmarks, tutorials, screenshots. */
+function applyHash(){
+  const m = (location.hash || '').replace('#', '').split('.');
+  if(m.length === 2 && IDX && bookPos(m[0], m[1]) >= 0){
+    showPage(m[0], m[1]);
+    return true;
+  }
+  return false;
+}
+window.addEventListener('hashchange', applyHash);
+
+/* ---------- navigator ---------- */
 function renderNav(){
   const nav = $('nav');
   nav.innerHTML = '';
@@ -207,7 +219,7 @@ function renderNav(){
     const h = document.createElement('div');
     h.className = 'ch';
     h.innerHTML = '<span>' + esc(ch.name) + '</span><span>' + ch.pages.length + '</span>';
-    // drop "en fin de chapitre"
+    // drop = "append to this chapter"
     h.ondragover = ev => { if(DRAG){ ev.preventDefault(); h.classList.add('droptgt'); } };
     h.ondragleave = () => h.classList.remove('droptgt');
     h.ondrop = ev => { ev.preventDefault(); h.classList.remove('droptgt');
@@ -227,7 +239,7 @@ function renderNav(){
   });
 }
 
-/* ---------- chemin de fer ---------- */
+/* ---------- flatplan ---------- */
 function card(p){
   const c = document.createElement('div');
   c.className = 'card';
@@ -284,7 +296,7 @@ function renderFlat(){
       if(i !== null){
         const p = IDX.book[i];
         const cd = card(p);
-        // folio du côté extérieur : gauche sur verso, droite sur recto
+        // folio on the outer edge: left on a verso, right on a recto
         if(p.folio){
           const f = document.createElement('span');
           f.className = 'folio ' + (row.length === 2 && k === 0 ? 'left' : 'right');
@@ -299,8 +311,8 @@ function renderFlat(){
   });
 }
 
-/* drop AVANT la page cible (index calculé dans le chapitre de la cible,
-   après retrait de la page déplacée — la sémantique de /api/move_page). */
+/* drop BEFORE the target page (index computed in the target's chapter,
+   after the moved page is removed - the /api/move_page semantics). */
 function dropBefore(target){
   if(!DRAG) return;
   const src = DRAG;
@@ -322,10 +334,10 @@ async function movePage(src, toCid, toIndex){
     to_cid: toCid, to_index: toIndex}, 'Moving page…');
   if(!res) return;
   IDX = res; renderNav(); renderFlat();
-  status(src.cid + '.' + src.pid + ' déplacée', 'ok');
+  status(src.cid + '.' + src.pid + ' moved', 'ok');
 }
 
-/* ---------- aperçu planche (lecture seule, étape 1) ---------- */
+/* ---------- page preview (read-only, step 1) ---------- */
 async function showPage(cid, pid){
   SEL = {cid, pid};
   const res = await api('chapter', {cid}, 'Loading chapter…');

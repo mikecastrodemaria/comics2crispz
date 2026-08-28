@@ -1,10 +1,10 @@
-"""Lance toute la suite tests/test_*.py dans des processus separes et resume.
-Meme runner que la famille crispz (aucune dependance, pas de pytest).
+"""Run the whole tests/test_*.py suite in separate processes and summarize.
+Same runner as the crispz family (no dependency, no pytest).
 
 Usage:
-    python tools/run_tests.py            # tout
-    python tools/run_tests.py state      # ceux dont le nom matche
-    python tools/run_tests.py -v         # sortie complete des echecs
+    python tools/run_tests.py            # everything
+    python tools/run_tests.py state      # files whose name matches
+    python tools/run_tests.py -v         # full output of failures
 """
 import os
 import subprocess

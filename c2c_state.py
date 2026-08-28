@@ -1,20 +1,19 @@
-"""comics2crispz - etat pagine + operations de structure (chemin de fer).
+"""comics2crispz - paginated state + structure operations (flatplan).
 
-Couche PURE au-dessus de cz_comic (vendore de crispz-studio, voir README) :
-aucun HTTP ici, tout est testable sans serveur ni GPU. Deux niveaux d'etat,
-pattern days.json/manifests de l'Asset Browser :
+PURE layer on top of cz_comic (vendored from crispz-studio, see README):
+no HTTP here, everything is testable without a server or a GPU. Two levels
+of state, following the Asset Browser days.json/manifest pattern:
 
-  book_index()    -> l'INDEX maigre (navigateur + chemin de fer) : chapitres,
-                     pages (role, layout, folio, avancement), quelques Ko meme
-                     a 100 pages. C'est lui qui est recharge apres chaque op.
-  chapter_state() -> l'etat COMPLET d'un chapitre (rects en fractions,
-                     panneaux, dialogues, placements) - charge a la demande.
+  book_index()    -> the THIN index (navigator + flatplan): chapters, pages
+                     (role, layout, folio, progress), a few KB even at
+                     100 pages. Reloaded after every operation.
+  chapter_state() -> the FULL state of one chapter (rects as page fractions,
+                     panels, dialogues, placements) - loaded on demand.
 
-Regles maison (heritees de la famille crispz) : rien n'est perdu en silence
-(move_page refuse un index hors bornes au lieu de clamper sans le dire), les
-ids de pages restent STABLES (les chemins panels/pages ne bougent pas quand on
-reordonne : l'ordre = la position dans le tableau, le folio fait foi a
-l'affichage).
+House rules (inherited from the crispz family): nothing is lost silently
+(move_page refuses an out-of-range index instead of clamping quietly), page
+ids stay STABLE (panel/page paths never move when reordering: order = the
+position in the array, the folio is what readers see).
 """
 
 import os
@@ -28,12 +27,12 @@ THUMB_DIRNAME = "_studio_thumbs"
 
 
 # ----------------------------------------------------------------------------
-# Avancement d'une planche
+# Page progress
 # ----------------------------------------------------------------------------
 def page_progress(project_dir, chapter, page):
-    """{panels_total, panels_done, composed, locked} d'une planche.
-    'composed' = un PNG de planche existe ET est plus recent que la derniere
-    image de case (sinon il est perime et l'UI doit le montrer)."""
+    """{panels_total, panels_done, composed, locked} for one page.
+    'composed' = a page PNG exists AND is newer than the latest panel image
+    (otherwise it is stale and the UI must show it)."""
     total, done, latest, locked = len(page["panels"]), 0, 0.0, 0
     for pn in page["panels"]:
         p = pn.get("image")
@@ -50,7 +49,7 @@ def page_progress(project_dir, chapter, page):
 
 
 def _folios(project):
-    """{(cid, pid): folio} des planches 'story' dans l'ordre de publication."""
+    """{(cid, pid): folio} of the 'story' pages in publication order."""
     out, folio = {}, 0
     for ch, pg in cz_comic.book_order(project):
         if pg.get("role", "story") == "story":
@@ -60,8 +59,8 @@ def _folios(project):
 
 
 def book_index(project, project_dir):
-    """Index maigre du livre : la seule chose que le navigateur et le chemin
-    de fer chargent. L'ordre de `book` est l'ORDRE DE PUBLICATION."""
+    """Thin index of the book: the only thing the navigator and the flatplan
+    load. The order of `book` is the PUBLICATION order."""
     folios = _folios(project)
     chapters = [{"id": ch["id"], "name": ch.get("name") or ch["id"],
                  "pages": [pg["id"] for pg in ch["pages"]]}
@@ -88,10 +87,10 @@ def book_index(project, project_dir):
 
 
 def spreads(book):
-    """Doubles pages en regard depuis l'index : la couverture (et toute page
-    'cover'/'back') est SEULE, le corps va par paires [verso, recto] - le
-    recto (page de droite) porte la chute. Une page 'title' consomme sa place
-    dans la parite (c'est le but : voir ou tombent les pages droites)."""
+    """Facing-page spreads from the index: the cover (and any 'cover'/'back'
+    page) stands ALONE, the body goes in [verso, recto] pairs - the recto
+    (right-hand page) carries the beat. A 'title' page consumes its slot in
+    the parity (that is the point: SEE where right-hand pages land)."""
     out, body = [], []
     for p in book:
         if p["role"] in ("cover", "back"):
@@ -107,8 +106,8 @@ def spreads(book):
 
 
 def _pair(pages):
-    """Corps du livre : la premiere page d'histoire est un RECTO (page de
-    droite, comme dans un album relie), puis verso/recto."""
+    """Body of the book: the first story page is a RECTO (right-hand page,
+    like in a bound album), then verso/recto pairs."""
     out = []
     if pages:
         out.append([None, pages[0]])
@@ -119,7 +118,7 @@ def _pair(pages):
 
 
 # ----------------------------------------------------------------------------
-# Etat complet d'un chapitre (vue planche / overlays)
+# Full state of one chapter (page view / overlays)
 # ----------------------------------------------------------------------------
 def _placements(project_dir, cid, pid):
     sp = cz_comic.page_path(project_dir, cid, pid, ext="placements.json")
@@ -141,8 +140,9 @@ def _rel(path, project_dir):
 
 
 def chapter_state(project, project_dir, cid):
-    """Etat complet des planches d'UN chapitre (fractions de page pour les
-    overlays, dialogues, placements sidecarres) - charge a la demande."""
+    """Full state of ONE chapter's pages (page-fraction rects for the
+    clickable overlays, dialogues, sidecarred placements) - loaded on
+    demand."""
     ch = cz_comic.find_chapter(project, cid)
     pg_conf = cz_comic.page_size(project.get("page"))
     W, H = float(pg_conf["width"]), float(pg_conf["height"])
@@ -181,16 +181,15 @@ def chapter_state(project, project_dir, cid):
 
 
 # ----------------------------------------------------------------------------
-# Reordonnancement (le drag du chemin de fer)
+# Reordering (the flatplan drag)
 # ----------------------------------------------------------------------------
 def move_page(project, cid, pid, to_cid, to_index):
-    """Deplace une planche a `to_index` : position 0-based dans le tableau
-    pages du chapitre cible APRES retrait de la page deplacee (c'est l'index
-    naturel d'un drop : le client compte les cartes restantes) ; hors borne
-    superieure = insertion en fin. Meme chapitre = reordonnancement.
-    L'id de la page ne change JAMAIS (les chemins
-    panels/pages restent valides) ; collision d'id dans le chapitre cible =
-    erreur explicite, on ne renumerote pas en silence."""
+    """Move a page to `to_index`: 0-based position in the target chapter's
+    pages array AFTER the moved page has been removed (the natural index of
+    a drop: the client counts the remaining cards); past the upper bound =
+    append. Same chapter = reorder. The page id NEVER changes (panel/page
+    paths are keyed by ids); an id collision in the target chapter is an
+    explicit error - nothing is renamed silently."""
     src = cz_comic.find_chapter(project, cid)
     dst = cz_comic.find_chapter(project, to_cid)
     page = cz_comic.find_page(project, cid, pid)
@@ -216,14 +215,14 @@ def set_role(project, cid, pid, role):
 
 
 # ----------------------------------------------------------------------------
-# Composition d'une planche (+ sidecar de placements, comme Comic Studio)
+# Page composition (+ placements sidecar, like Comic Studio)
 # ----------------------------------------------------------------------------
 def compose_one(project, project_dir, cid, pid, face_detector=None,
                 char_embeddings=None):
-    """Compose UNE planche + lettrage + folio (memes regles que compose_book :
-    seules les planches 'story' sont foliotees, si page_numbers est actif),
-    sauve le PNG et le sidecar de placements (fractions de page + index de
-    replique par panneau). Renvoie les placements."""
+    """Compose ONE page + lettering + folio (same rules as compose_book:
+    only 'story' pages get a folio, when page_numbers is on), save the PNG
+    and the placements sidecar (page fractions + per-panel dialogue index).
+    Returns the placements."""
     page = cz_comic.find_page(project, cid, pid)
     pg = cz_comic.page_size(project.get("page"))
     sheet = cz_comic.compose_page(project, page)
@@ -257,12 +256,12 @@ def compose_one(project, project_dir, cid, pid, face_detector=None,
 
 
 # ----------------------------------------------------------------------------
-# Vignettes du chemin de fer (cache, pattern Asset Browser)
+# Flatplan thumbnails (cached, Asset Browser pattern)
 # ----------------------------------------------------------------------------
 def page_thumb(project_dir, cid, pid, size=360):
-    """Chemin de la vignette JPEG de la planche composee (regeneree si le PNG
-    est plus recent). None si la planche n'est pas composee. Ecriture atomique
-    (tmp + replace) : la SPA la sert pendant qu'on la regenere."""
+    """Path of the composed page's cached JPEG thumbnail (regenerated when
+    the PNG is newer). None when the page is not composed. Atomic write
+    (tmp + replace): the SPA serves it while it is being regenerated."""
     src = cz_comic.page_path(project_dir, cid, pid)
     if not os.path.isfile(src):
         return None

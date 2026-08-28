@@ -1,72 +1,166 @@
 # comics2crispz
 
-Atelier local de création de bandes dessinées, **agnostique du moteur de
-génération** : l'app ne génère rien elle-même, elle pilote les outils de la
-famille crispz (crispz-studio, crispz-qwen-edit, crispz-krea…) via le
-[protocole CLI v1](docs/CLI_PROTOCOL.md) — spec JSON en entrée, JSON en sortie,
-routage vers l'instance qui tourne.
+Local, **engine-agnostic comic book workshop**: the app generates nothing
+itself — it drives the crispz family tools (crispz-studio, crispz-qwen-edit,
+crispz-krea…) through the [family CLI protocol v1](docs/CLI_PROTOCOL.md):
+JSON spec in, JSON out, routed to the running instance (warm model, one GPU
+queue).
 
-Un projet = un dossier avec un `project.json` **compatible famille crispz**
-(le moteur documentaire `cz_comic.py` est vendoré de crispz-studio) : le
-🎞 Comic de crispz-studio, son 🎬 Comic Studio, le CLI `--comic` et
-comics2crispz travaillent sur le même fichier, chacun stateless.
+A project is a folder with a **crispz-family-compatible `project.json`**
+(the documentary engine `cz_comic.py` is vendored from crispz-studio): the
+🎞 Comic accordion of crispz-studio, its 🎬 Comic Studio, the `--comic` CLI
+and comics2crispz all work on the same file, each of them stateless.
 
-## Installer / lancer
+*Version française : [README.fr.md](README.fr.md).*
 
-```bat
-install.bat                       REM venv + Pillow + config.json + livre d'exemple
-run.bat books\exemple             REM sert http://127.0.0.1:8770/
-```
-
-ou :
+## Install / run
 
 ```bat
-python c2c_server.py chemin\du\projet --port 8770
+install.bat                       REM venv + Pillow + config.json + example book
+run.bat books\exemple             REM serves http://127.0.0.1:8770/
 ```
 
-Pas de projet sous la main ? `python tools\make_example.py` crée
-`books\exemple\` (2 chapitres, 14 planches, placeholders composés) et
-`--pages 100` un livre de stress pour le chemin de fer.
+Dependencies: Python 3.10+, Pillow. The server is pure stdlib
+(http.server), no framework. Copy `config-sample.json` to `config.json`
+(local, gitignored) and point the `engines` entries to your crispz installs.
 
-Dépendances : Python 3.10+, Pillow (`pip install -r requirements.txt`).
-Le serveur est en stdlib pure (http.server), aucun framework.
+## The UI
 
-## L'UI (voir [docs/UI_PLAN.md](docs/UI_PLAN.md) pour la cible complète)
+Four modes on a permanent chapter/page navigator:
 
-Quatre modes sur un navigateur chapitres/pages permanent :
-
-| Mode | État | Contenu |
+| Mode | Status | Content |
 |---|---|---|
-| **Chemin de fer** | ✅ étape 1 | doubles pages en regard (la page de droite porte la chute), badges de rôle, folios, code couleur d'avancement (vide / partiel / généré / composé), **drag & drop** pour réordonner ou changer de chapitre (glisser sur une page = insérer avant ; sur un titre de chapitre = déplacer en fin), Compose page/book |
-| **Planche** | aperçu + génération | la planche composée + rects des cases + bulles, **🎨 Generate missing** : les cases sans image partent au moteur configuré via le protocole CLI (prompt résolu par le casting @Name, taille au ratio exact de la case, `project.json` sauvé après chaque case, case au texte vide sautée avec warning — jamais de prompt vide envoyé au moteur), puis la planche se recompose ; l'édition fine (drag des bulles, dialogues) = étape suivante — en attendant, le Comic Studio de crispz-studio édite le même projet |
-| **Scénario** | étape 2 | tout le livre en texte (format `.czs`, spécifié dans UI_PLAN) |
-| **Production** | étape 3 | compteurs-filtres, batch via le protocole CLI |
+| **Flatplan** | ✅ step 1 | facing-page spreads (the right-hand page carries the beat), role badges, folios, progress colors (empty / partial / rendered / composed), **drag & drop** to reorder or change chapter (drop on a page = insert before; on a chapter header = append), Compose page/book |
+| **Page** | preview + generation | the composed page + panel rects + balloons, **🎨 Generate missing**: panels without an image go to the configured engine through the CLI protocol (prompt resolved by the @Name casting, exact panel ratio, `project.json` saved after each panel, empty panel texts skipped with a warning — an empty prompt is never sent to an engine), then the page recomposes; fine editing (balloon drag, dialogues) = next step — meanwhile crispz-studio's Comic Studio edits the same project |
+| **Script** | step 2 | the whole book as text (`.czs` format) |
+| **Production** | step 3 | counter-filters, batch through the CLI protocol |
 
-Principes hérités de la famille : rien n'est perdu en silence (un déplacement
-impossible est une erreur expliquée, jamais un clamp muet), les **ids de pages
-sont stables** (les chemins `panels/` et `pages/` ne bougent pas quand on
-réordonne — le folio fait foi à l'affichage), écriture atomique de
-`project.json`.
+House rules inherited from the family: nothing is lost silently (an
+impossible move is an explained error, never a quiet clamp), **page ids are
+stable** (the `panels/` and `pages/` paths never move when reordering — the
+folio is what readers see), atomic `project.json` writes.
+
+## Tutorial — a full book, step by step
+
+This walkthrough builds *The Making of comics2crispz*, a short comic telling
+how this app came to be, and generates it end-to-end through a family
+engine. Every screenshot below comes from this exact flow.
+
+### 1. Install and configure
+
+```bat
+install.bat
+```
+
+Edit `config.json`: each engine has the `url` of its running app (preferred
+route — warm model, shared GPU queue) and the `czp` path of its CLI (cold
+fallback). Start ONE family app (crispz-studio, krea2… whichever model you
+want to draw with) and check the wiring:
+
+```bat
+D:\Github\crispz-krea2\czp.bat caps
+```
+
+`"instance": {"running": true, …}` = ready.
+
+### 2. Write the book as a script
+
+A book is chapters → pages (with a **role**: `cover`, `title`, `story`,
+`back`) → panels. Each panel has a visual description (the prompt, with
+`@Name` casting references) and dialogue lines. The tutorial book ships as a
+builder script — read it, it is the whole authoring API in one file:
+
+```bat
+python tools\make_making_of.py
+```
+
+This creates `books/making-of/` with 6 pages / 17 panels, a casting
+(`@Mika` the artist, `@Robi` the protocol robot, `@Atelier` the workshop
+setting) and composes every page with placeholders.
+
+### 3. Open the flatplan
+
+```bat
+run.bat books\making-of
+```
+
+![Flatplan with placeholder pages](docs/img/01-flatplan-before.png)
+
+The book in publication order, as facing pages: cover alone, then
+verso/recto spreads — you SEE where right-hand pages land. Colored dots =
+progress. Drag a page onto another to reorder (folios recompute), drop on a
+chapter header to move it there.
+
+### 4. Open a page
+
+Click any page:
+
+![Page preview with panel rects](docs/img/02-page-before.png)
+
+The layout rects are overlaid on the composed page; hover a panel to see its
+id and prompt. Balloons (from the last compose) show as blue outlines.
+
+### 5. Generate through the engine
+
+Press **🎨 Generate missing**. Each panel without an image is resolved
+(casting substituted, exact panel ratio) and sent to the engine — the
+running instance renders it in its own queue, the image lands in
+`panels/…`, `project.json` is saved after every panel, and the page
+recomposes with lettering:
+
+![Page after generation](docs/img/03-page-after.png)
+
+The status bar reports the engine, the seeds (replayable) and any warnings
+(unknown casting names, empty panels, dropped refs — never silent).
+
+### 6. The whole book
+
+Back to the flatplan (Esc), **🧩 Compose book**:
+
+![Flatplan after generation](docs/img/04-flatplan-after.png)
+
+### 7. Character consistency (refs v2)
+
+Give a casting entry reference images (`refs`, project-relative paths —
+crispz-studio's 🪪 *Generate reference sheet* creates them) and, when the
+engine supports multi-reference generation (`supports.refs` in `czp caps`),
+panels mentioning `@Name` are generated WITH those references. Engines that
+cannot (e.g. Krea 2) say so upfront and fall back to plain txt2img with a
+warning.
+
+### 8. Export
+
+The project stays fully compatible with crispz-studio, so its CLI finishes
+the job:
+
+```bat
+D:\Github\crispz-studio\cz.bat --comic books\making-of --comic-export pdf
+```
+
+(or open the same folder in crispz-studio's 🎬 Comic Studio to drag
+balloons, then export PDF/CBZ.)
+
+**The finished result of this exact tutorial**, generated end-to-end by the
+crispz family through the CLI protocol:
+📖 **[The Making of comics2crispz — final PDF](docs/the-making-of.pdf)**
+(6 pages, 17 panels, one engine, zero manual retouching).
 
 ## Architecture
 
 ```
-c2c_server.py     serveur stdlib : SPA + API JSON (/api/index, /api/chapter,
-                  /api/move_page, /api/compose…), vignettes cachées (/thumb/)
-c2c_state.py      couche pure : index maigre + état par chapitre (pattern
-                  manifests de l'Asset Browser), move_page, spreads (doubles
-                  pages), composition + sidecar de placements
-c2c_engines.py    client du protocole CLI famille : caps/gen par moteur,
-                  route instance (modèle chaud) puis czp (chemin froid)
-cz_comic.py       VENDORÉ de crispz-studio (verbatim, commit 92deee8) —
-                  géométrie, casting @Name, lettrage ; resynchroniser en
-                  recopiant le fichier depuis l'upstream
-assets/studio.html  la SPA (vanilla HTML/JS, zéro build)
-docs/             CLI_PROTOCOL.md (contrat famille) + UI_PLAN.md (cible UI)
+c2c_server.py     stdlib server: SPA + JSON API (/api/index, /api/chapter,
+                  /api/move_page, /api/generate, /api/compose…), cached page
+                  thumbnails, path-traversal-safe file serving
+c2c_state.py      pure layer: thin book index + per-chapter state (Asset
+                  Browser manifest pattern), move_page, facing-page spreads,
+                  composition + placements sidecar
+c2c_engines.py    CLI-protocol client: caps/gen per engine, instance route
+                  first (warm model), czp cold fallback
+cz_comic.py       VENDORED verbatim from crispz-studio - geometry, @Name
+                  casting, lettering; resync = copy the file from upstream
+assets/studio.html  the SPA (vanilla HTML/JS, zero build)
+docs/             CLI_PROTOCOL.md (family contract)
 ```
-
-Config : copier `config-sample.json` en `config.json` (local, gitignoré) et
-renseigner les moteurs (`url` de l'instance + chemin `czp` de l'outil).
 
 ## Tests
 
@@ -74,5 +168,5 @@ renseigner les moteurs (`url` de l'instance + chemin `czp` de l'outil).
 python tools\run_tests.py
 ```
 
-Sans GPU ni serveur : la couche `c2c_state` est pure, l'API est testée via un
-serveur éphémère, les moteurs contre un mock du protocole.
+No GPU, no server needed: the `c2c_state` layer is pure, the API is tested
+against an ephemeral server, the engines against a protocol mock.

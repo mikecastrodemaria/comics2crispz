@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
-"""Cree books/exemple/ : un livre de demonstration pour le chemin de fer
-(2 chapitres, cover/title/story/back, layouts varies, dialogues), planches
-composees (placeholders, aucun GPU).
+"""Build books/exemple: a demo book for the flatplan (2 chapters,
+cover/title/story/back, varied layouts, dialogues), pages composed with
+placeholders (no GPU).
 
-    python tools/make_example.py              # 14 planches
-    python tools/make_example.py --pages 100  # livre de stress (1 chapitre
-                                              # supplementaire de N pages)
+    python tools/make_example.py              # 14 pages
+    python tools/make_example.py --pages 100  # stress book (one extra
+                                              # chapter of N pages)
 """
 import argparse
 import os
@@ -21,7 +21,7 @@ LAYOUT_CYCLE = ["3-classic", "4-grid", "5-hero", "3-strip", "2-up", "6-grid"]
 
 def build(dest, extra_pages=0):
     if os.path.isfile(cc.project_json_path(dest)):
-        print(f"EXISTE DEJA - rien touche: {dest}")
+        print(f"ALREADY EXISTS - untouched: {dest}")
         return 1
     p = cc.new_project("Exemple c2c", page="Web")
     p["page"]["page_numbers"] = True
@@ -60,15 +60,15 @@ def build(dest, extra_pages=0):
     for ch, pg in cc.book_order(p):
         c2c_state.compose_one(p, dest, ch["id"], pg["id"])
     n = len(cc.book_order(p))
-    print(f"OK: {dest} — {n} planche(s) composee(s).")
-    print(f"Lancer:  run.bat {os.path.relpath(dest, os.path.dirname(os.path.dirname(os.path.abspath(__file__)))) }")
+    print(f"OK: {dest} — {n} page(s) composed.")
+    print("Start with:  run.bat books\\exemple")
     return 0
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--pages", type=int, default=0,
-                    help="pages de stress supplementaires (chapitre 3)")
+                    help="extra stress pages (chapter 3)")
     ap.add_argument("--dest", default=None)
     args = ap.parse_args()
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))

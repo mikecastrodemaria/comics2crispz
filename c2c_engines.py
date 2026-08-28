@@ -1,21 +1,21 @@
-"""comics2crispz - client du protocole CLI famille crispz (v1).
+"""comics2crispz - client of the crispz family CLI protocol (v1).
 
-comics2crispz ne genere RIEN lui-meme : il parle aux outils de la famille
-(crispz-studio, crispz-qwen-edit, crispz-krea*) via le contrat JSON documente
-dans docs/CLI_PROTOCOL.md. Deux routes par moteur, essayees dans l'ordre :
+comics2crispz generates NOTHING itself: it talks to the family tools
+(crispz-studio, crispz-qwen-edit, crispz-krea*) through the JSON contract
+documented in docs/CLI_PROTOCOL.md. Two routes per engine, tried in order:
 
-  1. l'INSTANCE qui tourne (endpoints Gradio cli_caps/cli_gen a `url`) -
-     modele chaud, queue partagee, jamais deux processus sur le GPU ;
-  2. le CLI de l'outil (`czp.bat gen --spec ...`) - chemin froid, qui refait
-     lui-meme cette detection d'instance (double filet, mais un seul contrat).
+  1. the RUNNING instance (Gradio endpoints cli_caps/cli_gen at `url`) -
+     warm model, shared queue, never two processes on the GPU;
+  2. the tool's CLI (`czp.bat gen --spec ...`) - cold path, which redoes
+     that instance detection itself (double safety net, single contract).
 
-Config (config.json, voir config-sample.json) :
+Config (config.json, see config-sample.json):
   "engines": {"studio": {"url": "http://127.0.0.1:7860",
                          "czp": "D:/Github/crispz-studio/czp.bat"}, ...}
-  "engine": "studio"        <- moteur par defaut
+  "engine": "studio"        <- default engine
 
-Tout est stdlib : urllib + subprocess. Une erreur d'un moteur remonte en
-{ok: false, error} - jamais d'exception qui traverse le serveur.
+Everything is stdlib: urllib + subprocess. An engine failure comes back as
+{ok: false, error} - no exception ever crosses the server.
 """
 
 import os
@@ -49,7 +49,7 @@ def _gradio_call(url, name, data, post_timeout=10, get_timeout=3600):
 
 
 def probe(url, timeout=4):
-    """caps de l'instance a `url`, None si rien ne repond."""
+    """caps of the instance at `url`, None when nothing answers."""
     try:
         caps = _gradio_call(url, "cli_caps", [], post_timeout=timeout,
                             get_timeout=max(timeout, 8))
@@ -59,8 +59,8 @@ def probe(url, timeout=4):
 
 
 def _run_czp(czp_path, args, spec=None, timeout=3600):
-    """Invoque le czp d'un outil ; le spec passe par stdin ('-'), la reponse
-    est la DERNIERE ligne JSON de stdout (contrat : une ligne JSON)."""
+    """Invoke a tool's czp; the spec goes through stdin ('-'), the reply is
+    the LAST JSON line of stdout (contract: one JSON line)."""
     cmd = [czp_path] + args
     if czp_path.lower().endswith((".bat", ".cmd")):
         cmd = ["cmd", "/c", czp_path] + args
@@ -79,7 +79,7 @@ def _run_czp(czp_path, args, spec=None, timeout=3600):
 
 
 class Engine:
-    """Un moteur de la famille : une URL d'instance et/ou un czp."""
+    """One family engine: an instance URL and/or a czp path."""
 
     def __init__(self, name, url=None, czp=None):
         self.name = name
@@ -100,9 +100,9 @@ class Engine:
                 "error": "no running instance and no czp path configured"}
 
     def gen(self, spec):
-        """Genere UNE image. spec = dict du protocole (protocol/prompt/...).
-        Prefere l'instance (modele chaud) ; sinon czp (qui re-essaie lui-meme
-        l'instance avant de charger un pipeline)."""
+        """Generate ONE image. spec = a protocol dict (protocol/prompt/...).
+        Prefers the instance (warm model); falls back to czp (which retries
+        the instance itself before loading a pipeline)."""
         spec = dict(spec)
         spec.setdefault("protocol", PROTOCOL)
         spec.setdefault("op", "gen")
@@ -119,8 +119,8 @@ class Engine:
 
 
 def load_engines(config):
-    """{nom: Engine} depuis la config. Jamais d'erreur : un moteur mal
-    configure existe quand meme et echouera proprement a l'appel."""
+    """{name: Engine} from the config. Never raises: a misconfigured engine
+    still exists and will fail cleanly when called."""
     out = {}
     for name, e in (config.get("engines") or {}).items():
         if isinstance(e, dict):

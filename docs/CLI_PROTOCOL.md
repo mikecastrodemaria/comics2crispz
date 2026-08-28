@@ -1,50 +1,46 @@
-# Protocole CLI de la famille crispz (v1)
+# crispz family CLI protocol (v1)
 
-> 2026-08-28 — validé et implémenté dans crispz-studio (`cz_protocol.py` +
-> `czp.bat`, endpoints `cli_caps`/`cli_gen`), porté aux forks. Client de
-> référence : `c2c_engines.py` (comics2crispz). Écarts d'implémentation par
-> rapport au plan initial : voir §9.
-> Objectif : un contrat unique pour que n'importe quelle interface (Comic Studio,
-> accordéons Gradio, un agent, un script de nuit) dialogue avec n'importe quel
-> outil de la famille — crispz (upscale), crispz-studio (Z-Image), crispz-qwen-edit
-> (Qwen-Image-Edit) — sans savoir qui génère.
+> 2026-08-28 — validated and implemented in crispz-studio (`cz_protocol.py` +
+> `czp.bat`, hidden `cli_caps`/`cli_gen` endpoints), ported to every fork.
+> Reference client: `c2c_engines.py` (this repo). One contract so that any
+> interface (comics2crispz, the Gradio accordions, an agent, a night batch
+> script) can talk to any family tool — crispz (upscale), crispz-studio
+> (Z-Image), crispz-qwen-edit (Qwen-Image-Edit), crispz-krea/krea2 — without
+> knowing which one generates.
 
-## 1. Décisions de principe
+## 1. Principles
 
-1. **Le CLI est le contrat, pas le processus.** L'unité d'échange est un spec JSON
-   en entrée et un JSON en sortie. Un appel CLI ne recharge JAMAIS un modèle si une
-   instance tourne déjà : il **route** vers elle (gradio_client, 127.0.0.1:7860) et
-   la queue Gradio sérialise le GPU. Exécution directe (chemin froid) seulement si
-   aucune instance ne répond — batch de nuit, CI.
-2. **Un seul GPU, une seule file.** Deux interfaces ne parlent jamais au GPU en
-   parallèle : tout passe par l'instance qui tourne, ou par UN processus batch.
-3. **Dégradation annoncée, jamais silencieuse** (règle maison). Un outil qui ne
-   sait pas faire (pas de LoRA, pas de refs) le dit dans `caps` et l'appelant
-   décide ; il ne tronque pas en silence.
-4. **Le protocole vit dans crispz-studio** (l'upstream) et redescend dans
-   crispz-qwen-edit par merge, comme le reste. crispz (upscaler) l'adopte à son
-   rythme sur son périmètre (upscale only).
+1. **The CLI is the contract, not the process.** The unit of exchange is a
+   JSON spec in and a JSON line out. A CLI call NEVER reloads a model when an
+   instance is already running: it **routes** to it (direct HTTP on the
+   Gradio endpoints, same mechanics as the family SPAs) and the app's queue
+   serializes the GPU. Direct execution (cold path) only when no instance
+   answers — night batches, CI.
+2. **One GPU, one queue.** Two interfaces never talk to the GPU in parallel:
+   everything goes through the running instance, or through ONE batch
+   process.
+3. **Announced degradation, never silent** (house rule). A tool that cannot
+   do something (no LoRA, no refs) says so in `caps` and the caller decides;
+   it never truncates silently.
+4. **The protocol lives in crispz-studio** (the upstream) and flows to the
+   forks by patch/merge. The crispz upscaler adopts it at its own pace on its
+   own scope (upscale only).
 
-## 2. Commandes
+## 2. Commands
 
-Toutes prennent `--json` (sortie machine sur stdout, une seule ligne JSON finale)
-et `--spec <fichier|->` (`-` = stdin). Sans `--json` : sortie humaine actuelle,
-inchangée (compat totale).
+`czp.bat` (each repo ships one; always JSON on stdout, one line).
 
-| Commande | Rôle | Outils qui l'exposent |
+| Command | Role | Tools exposing it |
 |---|---|---|
-| `caps` | annonce les capacités de l'outil | tous |
-| `gen` | txt2img depuis un spec | studio, qwen-edit |
-| `edit` | édition d'image (img+prompt→img) | qwen-edit (studio si Omni configuré) |
-| `upscale` | upscale/refine d'une image | crispz, studio |
-| `comic-render` | rend les cases d'un projet BD via `gen` | studio (existe : `--comic-render`) |
+| `caps` | announce the tool's capabilities | all |
+| `gen`  | txt2img / omni multi-reference from a spec | studio, qwen-edit, krea, krea2 |
+| `edit` | image editing (img+prompt→img) | reserved (exit 3), qwen-edit first |
+| `upscale` | upscale/refine an image | reserved (exit 3) |
 
-Le nom d'entrée reste `cz.bat` / `cz_cli.py` par outil ; pas de dispatcheur
-global en v1 (chaque repo garde son CLI, même dialecte).
+## 3. The spec (input)
 
-## 3. Le spec (entrée)
-
-Aligné sur la sortie de `cz_comic.resolve_panel` — c'est déjà le contrat interne.
+Aligned with the output of `cz_comic.resolve_panel` — already the internal
+contract.
 
 ```json
 {
@@ -55,112 +51,104 @@ Aligné sur la sortie de `cz_comic.resolve_panel` — c'est déjà le contrat in
   "width": 1024, "height": 1344,
   "seed": -1,
   "steps": null,
-  "guidance": null,
-  "refs": ["refs/lea.png"],
-  "loras": ["style-encre.safetensors:0.8"],
+  "refs": ["C:/abs/path/lea.png"],
+  "loras": ["style-ink.safetensors:0.8"],
   "model": null,
-  "input": null,
   "out_dir": "out/",
   "count": 1
 }
 ```
 
-Règles :
-- `protocol` obligatoire. Version inconnue → erreur propre, code 3.
-- Champs `null`/absents = réglages courants de l'outil (config/UI). Le spec ne
-  redit que ce qu'il impose.
-- `refs` et chemins relatifs : POSIX, résolus par rapport au dossier du spec
-  (même règle que project.json).
-- `input` : image d'entrée (`edit`, `upscale`).
-- Un champ inconnu est **ignoré avec warning** dans la sortie (`warnings[]`),
-  jamais une erreur : un spec écrit pour qwen-edit doit passer chez studio.
+Rules:
+- `protocol` is mandatory. Unknown version → clean error, exit 3.
+- `null`/absent fields = the tool's current settings (config/UI). The spec
+  only states what it imposes.
+- An unknown field is **ignored with a warning** (`warnings[]`), never an
+  error: a spec written for qwen-edit must go through studio.
+- `count` other than 1 → warning + forced to 1 (the caller loops).
 
-## 4. La sortie
+### refs (v2) — character consistency
+
+- `refs` = **local absolute file paths** (the protocol is machine-local).
+  The caller resolves project-relative paths before sending.
+- When the tool has an Omni/edit model available (`supports.refs` true),
+  generation goes through the multi-reference pipeline (`generate_omni`).
+- When not (`supports.refs` false — no model configured, or the model family
+  has no such pipeline at all, e.g. Krea): refs are **dropped with a
+  warning**, generation continues as plain txt2img.
+- A ref missing on disk = **error, exit 2** — never a silently degraded
+  image.
+- At most `supports.max_refs` (4) refs; extras are cut with a warning.
+
+## 4. The output
 
 ```json
 {
-  "ok": true,
-  "protocol": 1,
-  "tool": "crispz-studio", "version": "1.11.2",
+  "ok": true, "protocol": 1,
+  "tool": "crispz-studio", "version": "1.16.0",
   "route": "remote",
-  "images": ["out/2026-08-28/img_001.png"],
-  "seed_used": 123456789,
-  "timings": {"total_s": 14.2, "load_s": 0.0},
-  "warnings": ["field 'foo' ignored"]
+  "images": ["…/out/2026-08-28/….png"],
+  "seed_used": 42, "refs_used": 2,
+  "timings": {"total_s": 14.2, "txt2img": 13.9},
+  "warnings": []
 }
 ```
 
-Erreur : `{"ok": false, "error": "…", "code": "no_model"}` + code retour.
+Error: `{"ok": false, "error": "…"}` + exit code.
+Exit codes: `0` ok · `1` run error · `2` invalid spec · `3` unsupported
+op/protocol · `4` no route.
 
-Codes retour : `0` ok · `1` erreur d'exécution (génération) · `2` spec invalide ·
-`3` protocole/op non supporté · `4` aucune route (pas d'instance ET pas de
-modèle local chargeable).
+`route`: `"remote"` (through the instance) or `"local"` (loaded in this
+process) — essential diagnostics when timings blow up. `seed_used` is always
+the concrete seed (a `-1` is resolved BEFORE generating, same rule as the
+UI, so every image is replayable).
 
-`route` : `"remote"` (via l'instance) ou `"local"` (chargé dans ce processus) —
-diagnostic indispensable quand les temps s'envolent.
-
-## 5. `caps` — capacités
+## 5. `caps`
 
 ```json
 {
-  "ok": true, "protocol": 1, "tool": "crispz-qwen-edit",
-  "ops": ["gen", "edit", "upscale", "caps"],
-  "supports": {"loras": true, "refs": false, "seed": true,
+  "ok": true, "protocol": 1, "tool": "crispz-qwen-edit", "version": "1.16.0",
+  "ops": ["caps", "gen"],
+  "supports": {"loras": true, "refs": true, "max_refs": 4, "seed": true,
                "negative": true, "arbitrary_size": true},
-  "models": ["…"],
-  "instance": {"running": true, "url": "http://127.0.0.1:7861"}
+  "instance": {"running": true, "url": "http://127.0.0.1:7860",
+               "tool": "crispz-qwen-edit", "version": "1.16.0"}
 }
 ```
 
-`caps` n'exige ni GPU ni modèle chargé : lecture de config + probe de l'instance,
-< 2 s. C'est l'appel que Comic Studio fera pour peupler un futur menu « moteur ».
+`caps` needs neither GPU nor a loaded model: config read + instance probe,
+~1.5 s. `supports.refs` is honest per model family: hard `false` on
+crispz-krea/krea2 (no instruction-edit pipeline exists — config can never
+turn it on), default `true` on crispz-qwen-edit (ships Qwen-Image-Edit),
+config-driven on crispz-studio (`zimage_omni_model`).
 
-## 6. Routage
+## 6. Routing
 
-1. `--remote <url>` : force cette instance (erreur 4 si injoignable).
-2. `--local` : force l'exécution dans ce processus (batch de nuit assumé).
-3. Défaut : probe de l'URL de l'outil (config `server_port`, défaut 7860 studio /
-   7861 qwen-edit — **à valider**) ; instance trouvée → gradio_client sur un
-   endpoint `api_name="cli_gen"` (miroir exact du chemin local) ; sinon local.
-4. Le GPU partagé est réglé par construction : la route remote passe dans la
-   queue de l'instance, derrière les générations de l'utilisateur.
+1. `--remote <url>`: force this instance (exit 4 when unreachable).
+2. `--local`: force execution in this process (assumed night batch).
+3. Default: probe `cli_protocol.instance_url` (default `127.0.0.1:7860`);
+   instance found → `cli_gen` endpoint through its queue; otherwise local.
+4. The shared GPU is solved by construction: the remote route waits in the
+   instance's queue, behind the user's own renders.
 
-## 7. Plan d'implémentation (dans l'ordre)
+## 7. Recorded decisions (v1)
 
-1. **`--json` + `--spec` sur cz_cli** (studio) : parse, validation, sortie JSON,
-   codes retour. Zéro nouveau chemin de génération — on emballe l'existant.
-2. **`caps`** (studio) : trivial une fois 1 fait.
-3. **Endpoint `cli_gen`** dans cz_ui + routage gradio_client dans le CLI.
-4. Merge dans crispz-qwen-edit ; son adaptateur `edit` (le pipeline y est déjà).
-5. crispz (upscaler) : `upscale` + `caps` sur son périmètre.
+- **One image per call**, the caller loops.
+- **No per-tool port**: every tool reads `cli_protocol.instance_url` and the
+  reply's `tool`/`version` identify WHO answered — the reply, not the port.
+- Progress: v1 = blocking call. A `--progress-file` may come with the
+  comics2crispz Production dashboard.
+- Auth: out of scope for v1 (everything is localhost).
+- On the **remote** route, `spec.model` is **refused with a warning**: never
+  swap the model of the user's running instance under their feet.
 
-Chaque étape : tests dans tests/ (sans GPU : spec→spec, codes retour, probe
-mockée), config documentée dans config-sample.txt, README.
+## 8. Implementation notes
 
-## 8. Décisions actées (v1)
-
-- **Une image par appel**, l'appelant boucle (`count>1` → warning + 1).
-- **Pas de port par outil** : chaque outil lit `cli_protocol.instance_url`
-  (défaut 7860) et la réponse de `caps`/`gen` porte `tool`/`version` — c'est
-  la réponse qui identifie QUI tourne, pas le port. Un seul outil UI à la
-  fois sur un port ; le champ `tool` permet à l'appelant de vérifier.
-- Progression : v1 = appel bloquant. `--progress-file` viendra avec le
-  dashboard Production de comics2crispz si besoin.
-- Auth : hors périmètre v1 (tout est localhost).
-- Sur la route **remote**, `spec.model` est **refusé avec warning** : on ne
-  change jamais le modèle de l'instance de l'utilisateur sous ses pieds.
-- `refs` : acceptées mais non appliquées en v1 (warning) ; `supports.refs`
-  reste `false` tant que ce n'est pas branché (honnêteté avant tout).
-
-## 9. Écarts d'implémentation vs plan initial
-
-- Le protocole vit dans un module dédié **`cz_protocol.py`** + `czp.bat`
-  (entrée TOUJOURS JSON, imports légers — pas de torch avant le chemin
-  local) au lieu de flags `--json`/`--spec` greffés sur `cz_cli.py` :
-  `python app.py` importe tout le stack dès le départ, un `caps` en <2 s y
-  était impossible. `cz_cli` est inchangé, compat totale.
-- Le routage remote parle aux endpoints Gradio en **HTTP direct (urllib)**,
-  même mécanique que les SPA Asset Browser / Comic Studio — pas de
-  dépendance gradio_client.
-- `edit`/`upscale` : réservés dans la CLI (code retour 3 explicite),
-  implémentation à venir (qwen-edit d'abord).
+- The protocol lives in a dedicated module **`cz_protocol.py`** + `czp.bat`
+  (always-JSON entry, light imports — no torch before the local path)
+  instead of flags grafted onto `cz_cli.py`: `python app.py` imports the
+  whole stack up front, a sub-2s `caps` was impossible there. `cz_cli` is
+  untouched, full compat.
+- The remote route speaks to the Gradio endpoints in **plain HTTP (urllib)**
+  — no gradio_client dependency.
+- Spec files may carry a UTF-8 BOM (PowerShell `-Encoding utf8`): accepted.

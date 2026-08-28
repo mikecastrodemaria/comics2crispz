@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-"""Cree books/demo6/ : un livre de 6 planches PRET A GENERER (cover, 4 story,
-back - 14 cases, casting 2 personnages + 1 decor, dialogues complets), puis
-genere les cases via un moteur de la famille (protocole CLI) si demande.
+"""Build books/demo6: a 6-page book READY TO GENERATE (cover, 4 story,
+back - 17 panels, 2 characters + 1 setting, full dialogues), then generate
+the panels through a family engine (CLI protocol) when asked.
 
-    python tools/make_demo6.py            # cree le projet seulement
-    python tools/make_demo6.py --generate # + genere via l'instance qui tourne
+    python tools/make_demo6.py            # build the project only
+    python tools/make_demo6.py --generate # + generate via the running instance
 """
 import argparse
 import os
@@ -110,8 +110,8 @@ def build(dest):
     cc.save_project(p, dest)
     for c, pg in cc.book_order(p):
         c2c_state.compose_one(p, dest, c["id"], pg["id"])
-    print(f"OK projet: {dest} — 6 planches, "
-          f"{sum(len(pg['panels']) for _c, pg in cc.book_order(p))} cases.")
+    print(f"OK project: {dest} - 6 pages, "
+          f"{sum(len(pg['panels']) for _c, pg in cc.book_order(p))} panels.")
     return p
 
 
@@ -123,7 +123,7 @@ def generate(dest):
     for c, pg in cc.book_order(project):
         res = studio.op_generate({"cid": c["id"], "pid": pg["id"]})
         if not res.get("ok"):
-            print(f"ECHEC {c['id']}.{pg['id']}: {res.get('error')}")
+            print(f"FAILED {c['id']}.{pg['id']}: {res.get('error')}")
             return 1
         done = res.get("generated") or []
         total += len(done)
@@ -132,8 +132,8 @@ def generate(dest):
         for g in done:
             print(f"  {c['id']}.{pg['id']}.{g['panel']}  "
                   f"seed={g['seed_used']}  {g['total_s']}s")
-    print(f"GENERATION OK: {total} case(s) en {time.time() - t0:.0f}s "
-          f"(moteur: {res.get('engine')})")
+    print(f"GENERATION OK: {total} panel(s) in {time.time() - t0:.0f}s "
+          f"(engine: {res.get('engine')})")
     return 0
 
 
@@ -147,5 +147,5 @@ if __name__ == "__main__":
     if not os.path.isfile(cc.project_json_path(dest)):
         build(dest)
     else:
-        print(f"projet existant: {dest}")
+        print(f"existing project: {dest}")
     sys.exit(generate(dest) if args.generate else 0)

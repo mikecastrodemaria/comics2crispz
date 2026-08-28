@@ -1,10 +1,10 @@
-# --- Claude Code / outils locaux ---
+# --- Claude Code / local tooling ---
 .claude/
 CLAUDE.local.md
 *.local.json
 
-# --- Config locale (chemins machine, moteurs). On versionne UNIQUEMENT
-#     config-sample.json ; config.json reste local. ---
+# --- Local config (machine paths, engines). ONLY config-sample.json is
+#     versioned; config.json stays local. ---
 config.json
 
 # --- Python ---
@@ -15,13 +15,13 @@ venv/
 env/
 .env
 
-# --- Livres locaux (tes albums : project.json, cases, planches, exports) ---
+# --- Local books (your own albums: project.json, panels, pages, exports) ---
 books/
 
-# --- Tests locaux (images de test, essais) ---
+# --- Local tests (test images, experiments) ---
 tests/
 
-# --- OS / editeurs ---
+# --- OS / editors ---
 .DS_Store
 Thumbs.db
 desktop.ini

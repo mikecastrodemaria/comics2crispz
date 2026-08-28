@@ -1,29 +1,30 @@
-"""comics2crispz - serveur local (stdlib) : SPA + API JSON d'un projet BD.
+"""comics2crispz - local server (stdlib): SPA + JSON API for a comic project.
 
-    python c2c_server.py <dossier_projet> [--port 8770]
+    python c2c_server.py <project_dir> [--port 8770]
 
-Zero dependance serveur (http.server) ; Pillow seulement pour les vignettes et
-la composition. Le projet reste UN project.json compatible famille crispz
-(cz_comic vendore) : l'accordeon de crispz-studio, son Comic Studio et le CLI
-peuvent travailler sur le meme dossier - tout est stateless, chaque operation
-relit/reecrit le fichier.
+Zero server dependency (http.server); Pillow only for thumbnails and page
+composition. A project stays ONE crispz-family-compatible project.json
+(vendored cz_comic): the crispz-studio accordion, its Comic Studio and the
+CLI can all work on the same folder - everything is stateless, every
+operation re-reads/re-writes the file.
 
-Routes :
+Routes:
   GET  /                    -> assets/studio.html
-  GET  /assets/<f>          -> fichiers de la SPA
-  GET  /file/<rel>          -> fichiers du PROJET (pages/, panels/, refs/)
-  GET  /thumb/<cid>/<pid>   -> vignette JPEG cachee de la planche composee
-  POST /api/<op>            -> JSON in / JSON out :
-       index                  l'index maigre (navigateur + chemin de fer)
-       chapter {cid}          l'etat complet d'un chapitre
-       move_page {cid,pid,to_cid,to_index}   drag du chemin de fer
+  GET  /assets/<f>          -> SPA files
+  GET  /file/<rel>          -> PROJECT files (pages/, panels/, refs/)
+  GET  /thumb/<cid>/<pid>   -> cached JPEG thumbnail of the composed page
+  POST /api/<op>            -> JSON in / JSON out:
+       index                  the thin index (navigator + flatplan)
+       chapter {cid}          the full state of one chapter
+       move_page {cid,pid,to_cid,to_index}   the flatplan drag
        set_role {cid,pid,role}
        compose {cid,pid} | compose_book {}
-       engines {}             caps des moteurs configures (protocole CLI)
+       generate {cid,pid,pnid?,engine?,force?}  panels via a family engine
+       engines {}             caps of the configured engines (CLI protocol)
 
-Toute reponse API est {ok: true, ...} ou {ok: false, error} - la SPA n'a
-qu'un chemin d'erreur. Un lock process serialise les ecritures project.json
-(deux drags rapides ne se perdent pas).
+Every API reply is {ok: true, ...} or {ok: false, error} - the SPA has a
+single error path. A process lock serializes project.json writes (two quick
+drags cannot lose each other).
 """
 
 import os
@@ -61,8 +62,8 @@ def load_config():
 
 
 class Studio:
-    """Etat du serveur : le dossier du projet + les moteurs. Le projet
-    lui-meme n'est PAS garde en memoire (stateless, comme la famille)."""
+    """Server state: the project folder + the engines. The project itself is
+    NOT kept in memory (stateless, like the rest of the family)."""
 
     def __init__(self, project_dir, config):
         self.dir = os.path.abspath(project_dir)
@@ -74,7 +75,7 @@ class Studio:
     def load(self):
         return cz_comic.load_project(self.dir)
 
-    # ---- ops API (toutes renvoient un dict pret a serialiser) ----
+    # ---- API ops (each returns a dict ready to serialize) ----
     def op_index(self, _data):
         return c2c_state.book_index(self.load(), self.dir)
 
@@ -111,13 +112,14 @@ class Studio:
         return c2c_state.book_index(project, self.dir)
 
     def op_generate(self, data):
-        """Genere les cases d'UNE planche via un moteur de la famille
-        (protocole CLI): {cid, pid, pnid?, engine?, force?}. Sans pnid =
-        toutes les cases SANS image (force = les refait toutes). Le moteur
-        ecrit dans SON dossier de sortie, l'image est copiee dans
-        panels/<cid>/<pid>/<pnid>.png et project.json est sauve apres CHAQUE
-        case (un echec au milieu ne perd rien). S'arrete au premier echec
-        moteur - jamais de trou silencieux. Recompose la planche a la fin."""
+        """Generate the panels of ONE page through a family engine (CLI
+        protocol): {cid, pid, pnid?, engine?, force?}. Without pnid = every
+        panel WITHOUT an image (force = redo them all). The engine writes
+        into ITS output folder, the image is copied to
+        panels/<cid>/<pid>/<pnid>.png and project.json is saved after EACH
+        panel (a failure in the middle loses nothing). Stops at the first
+        engine failure - never a silent hole. Recomposes the page at the
+        end."""
         cid, pid = data["cid"], data["pid"]
         only, force = data.get("pnid"), bool(data.get("force"))
         name = (data.get("engine") or self.config.get("engine")
@@ -144,10 +146,24 @@ class Studio:
             if spec["unknown"]:
                 warnings.append(f"{panel['id']}: unknown casting "
                                 f"{', '.join(spec['unknown'])}")
+            # refs v2: casting refs are stored project-relative (POSIX) -
+            # the protocol wants LOCAL ABSOLUTE paths. A ref missing on disk
+            # is reported and dropped HERE (we know the project); sending it
+            # would fail the whole panel with a code-2 spec error.
+            refs = []
+            for r in spec.get("refs") or []:
+                p = r if os.path.isabs(r) else os.path.join(
+                    self.dir, *str(r).replace("\\", "/").split("/"))
+                if os.path.isfile(p):
+                    refs.append(os.path.abspath(p))
+                else:
+                    warnings.append(f"{panel['id']}: ref missing on disk, "
+                                    f"dropped: {r}")
             res = eng.gen({"prompt": spec["prompt"],
                            "negative": spec["negative"],
                            "width": spec["width"], "height": spec["height"],
-                           "seed": spec["seed"], "loras": spec["loras"]})
+                           "seed": spec["seed"], "loras": spec["loras"],
+                           "refs": refs})
             if not res.get("ok"):
                 return {"ok": False, "engine": name, "generated": done,
                         "error": f"{panel['id']}: {res.get('error')}"}
@@ -159,7 +175,7 @@ class Studio:
             dst = cz_comic.panel_path(self.dir, cid, pid, panel["id"])
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             shutil.copy(src, dst)
-            with _LOCK:                     # relecture: l'utilisateur a pu editer
+            with _LOCK:                     # re-read: the user may have edited
                 project = self.load()
                 page = cz_comic.find_page(project, cid, pid)
                 pn = cz_comic.find_panel(project, cid, pid, panel["id"])
@@ -198,7 +214,7 @@ class Studio:
 
 
 def _safe_join(root, rel):
-    """Chemin fichier sous `root`, ou None si la requete tente d'en sortir."""
+    """File path under `root`, or None when the request tries to escape it."""
     rel = posixpath.normpath(rel.lstrip("/"))
     if rel.startswith("..") or os.path.isabs(rel):
         return None
@@ -207,7 +223,7 @@ def _safe_join(root, rel):
 
 
 class Handler(BaseHTTPRequestHandler):
-    studio = None                      # renseigne par serve()
+    studio = None                      # set by serve()
 
     # ---- helpers ----
     def _send(self, code, body, ctype="application/json; charset=utf-8"):
@@ -257,7 +273,7 @@ class Handler(BaseHTTPRequestHandler):
                 t = c2c_state.page_thumb(self.studio.dir, parts[0], pid)
             except Exception:
                 t = None
-            # cache=False: la vignette change quand la planche est recomposee
+            # cache=False: the thumbnail changes when the page is recomposed
             self._send_file(t)
         else:
             self._send_json({"ok": False, "error": "not found"}, 404)
@@ -276,7 +292,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         self._send_json(self.studio.dispatch(op, data))
 
-    def log_message(self, fmt, *args):          # logs compacts
+    def log_message(self, fmt, *args):          # compact logs
         sys.stderr.write("[c2c] %s\n" % (fmt % args))
 
 
