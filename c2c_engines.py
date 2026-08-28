@@ -19,8 +19,11 @@ Everything is stdlib: urllib + subprocess. An engine failure comes back as
 """
 
 import os
+import io
 import json
 import re
+import time
+import base64
 import subprocess
 import urllib.request
 
@@ -85,6 +88,40 @@ class Engine:
         self.name = name
         self.url = (url or "").strip() or None
         self.czp = (czp or "").strip() or None
+        self._probe = (0.0, None)          # (timestamp, caps|None) cache
+
+    def alive(self, ttl=20):
+        """Cached instance probe: caps dict when the instance answers, else
+        None. The cache keeps per-panel face-detection calls from paying two
+        extra HTTP round-trips each."""
+        ts, caps = self._probe
+        if time.time() - ts > ttl:
+            caps = probe(self.url) if self.url else None
+            self._probe = (time.time(), caps)
+        return caps
+
+    def faces(self, pil_image, timeout=180):
+        """Face detection through the running instance (cli_faces endpoint):
+        [{'box': (x1,y1,x2,y2), 'mouth': (x,y)|None, 'embedding': [...]|None}]
+        or None when the instance is down or has no detector - the caller
+        letters with the fallback placement then."""
+        caps = self.alive()
+        if not caps or not (caps.get("supports") or {}).get("faces"):
+            return None
+        buf = io.BytesIO()
+        pil_image.convert("RGB").save(buf, "JPEG", quality=92)
+        b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+        try:
+            res = _gradio_call(self.url, "cli_faces", [b64],
+                               get_timeout=timeout)
+            if not (isinstance(res, dict) and res.get("ok")):
+                return None
+            return [{"box": tuple(f["box"]),
+                     "mouth": (tuple(f["mouth"]) if f.get("mouth") else None),
+                     "embedding": f.get("embedding")}
+                    for f in res.get("faces") or []]
+        except Exception:
+            return None
 
     def caps(self):
         if self.url:
@@ -106,7 +143,7 @@ class Engine:
         spec = dict(spec)
         spec.setdefault("protocol", PROTOCOL)
         spec.setdefault("op", "gen")
-        if self.url and probe(self.url):
+        if self.url and self.alive():
             try:
                 return _gradio_call(self.url, "cli_gen", [json.dumps(spec)])
             except Exception as e:

@@ -69,11 +69,61 @@ class Studio:
         self.dir = os.path.abspath(project_dir)
         self.config = config
         self.engines = c2c_engines.load_engines(config)
+        self._emb_cache = {}          # (name, ref path, mtime) -> embedding
         if not os.path.isfile(cz_comic.project_json_path(self.dir)):
             raise FileNotFoundError(f"no project.json in {self.dir}")
 
     def load(self):
         return cz_comic.load_project(self.dir)
+
+    def _default_engine(self, name=None):
+        name = name or self.config.get("engine") or next(iter(self.engines),
+                                                         None)
+        return name, self.engines.get(name)
+
+    def _letter_kit(self, project):
+        """(face_detector, char_embeddings) for face-aware lettering, served
+        by the default engine's running instance (cli_faces endpoint of the
+        CLI protocol). (None, None) when no instance/detector is available -
+        render_lettering then uses its fallback placement. Reference-portrait
+        embeddings are cached by (path, mtime)."""
+        _name, eng = self._default_engine()
+        if eng is None or not hasattr(eng, "faces") or not eng.alive():
+            return None, None
+        caps = eng.alive()
+        if not (caps.get("supports") or {}).get("faces"):
+            return None, None
+
+        from PIL import Image
+
+        def detector(img):
+            return eng.faces(img) or []
+
+        emb = {}
+        for cname, char in (project.get("casting") or {}).items():
+            if char.get("kind", "character") != "character":
+                continue
+            for r in char.get("refs") or []:
+                p = r if os.path.isabs(r) else os.path.join(
+                    self.dir, *str(r).replace("\\", "/").split("/"))
+                if not os.path.isfile(p):
+                    continue
+                key = (cname.lower(), os.path.abspath(p),
+                       int(os.path.getmtime(p)))
+                if key in self._emb_cache:
+                    vec = self._emb_cache[key]
+                else:
+                    try:
+                        with Image.open(p) as im:
+                            faces = eng.faces(im) or []
+                    except Exception:
+                        faces = []
+                    vec = faces[0].get("embedding") if faces else None
+                    self._emb_cache[key] = vec
+                if vec:
+                    emb[cname.strip().lower()] = vec
+                break                     # first existing ref = the portrait
+        return detector, (emb or None)
 
     # ---- API ops (each returns a dict ready to serialize) ----
     def op_index(self, _data):
@@ -101,14 +151,18 @@ class Studio:
     def op_compose(self, data):
         with _LOCK:
             project = self.load()
-            c2c_state.compose_one(project, self.dir, data["cid"], data["pid"])
+            fd, emb = self._letter_kit(project)
+            c2c_state.compose_one(project, self.dir, data["cid"], data["pid"],
+                                  face_detector=fd, char_embeddings=emb)
         return c2c_state.book_index(project, self.dir)
 
     def op_compose_book(self, _data):
         with _LOCK:
             project = self.load()
+            fd, emb = self._letter_kit(project)
             for ch, pg in cz_comic.book_order(project):
-                c2c_state.compose_one(project, self.dir, ch["id"], pg["id"])
+                c2c_state.compose_one(project, self.dir, ch["id"], pg["id"],
+                                      face_detector=fd, char_embeddings=emb)
         return c2c_state.book_index(project, self.dir)
 
     def op_generate(self, data):
@@ -122,9 +176,7 @@ class Studio:
         end."""
         cid, pid = data["cid"], data["pid"]
         only, force = data.get("pnid"), bool(data.get("force"))
-        name = (data.get("engine") or self.config.get("engine")
-                or next(iter(self.engines), None))
-        eng = self.engines.get(name)
+        name, eng = self._default_engine(data.get("engine"))
         if eng is None:
             return {"ok": False,
                     "error": f"no engine '{name}' (config.json 'engines')"}
@@ -190,7 +242,10 @@ class Studio:
                     warnings.append(w)
         if done:
             with _LOCK:
-                c2c_state.compose_one(self.load(), self.dir, cid, pid)
+                project = self.load()
+                fd, emb = self._letter_kit(project)
+                c2c_state.compose_one(project, self.dir, cid, pid,
+                                      face_detector=fd, char_embeddings=emb)
         out = c2c_state.book_index(self.load(), self.dir)
         out.update({"engine": name, "generated": done, "warnings": warnings})
         return out
