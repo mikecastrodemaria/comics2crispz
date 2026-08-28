@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>comics2crispz</title>
+<style>
+:root{--bg:#14171d;--pan:#1d2129;--pan2:#232834;--bd:#323a48;--fg:#dfe5ee;--mut:#8b94a5;
+--acc:#4d82c4;--ok:#5fba7d;--warn:#ffd27a;--err:#ff8a8a;
+--st-empty:#4a5261;--st-partial:#c99b3f;--st-rendered:#4d82c4;--st-composed:#5fba7d}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);
+font:14px/1.45 "Segoe UI",system-ui,sans-serif}
+button{background:var(--pan2);color:var(--fg);border:1px solid var(--bd);
+border-radius:6px;padding:6px 12px;cursor:pointer;font:inherit}
+button:hover{border-color:var(--acc)}
+button.primary{background:#2c4a6e;border-color:#3a6ea5}
+button:disabled{opacity:.45;cursor:default}
+header{display:flex;align-items:center;gap:12px;padding:8px 14px;
+background:var(--pan);border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:30}
+header h1{font-size:15px;margin:0;font-weight:600;white-space:nowrap}
+.tabs{display:flex;gap:4px}
+.tabs button{border-radius:6px 6px 0 0;border-bottom:none;padding:6px 14px}
+.tabs button.on{background:var(--bg);border-color:var(--acc);color:#fff}
+#status{margin-left:auto;font-size:12px;color:var(--mut);max-width:40%;
+overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#status.ok{color:var(--ok)}#status.err{color:var(--err)}
+.spin{display:inline-block;width:11px;height:11px;border:2px solid var(--mut);
+border-top-color:transparent;border-radius:50%;margin-right:6px;
+animation:sp 1s linear infinite;vertical-align:-1px}
+@keyframes sp{to{transform:rotate(360deg)}}
+#layout{display:flex;height:calc(100vh - 46px)}
+/* ---------- navigateur ---------- */
+#nav{width:230px;flex-shrink:0;overflow-y:auto;background:var(--pan);
+border-right:1px solid var(--bd);padding:8px 0}
+#nav .ch{padding:7px 12px 4px;font-size:11px;text-transform:uppercase;
+letter-spacing:.5px;color:var(--mut);display:flex;justify-content:space-between}
+#nav .ch.droptgt{background:#4d82c422;outline:1px dashed var(--acc)}
+#nav .pg{display:flex;align-items:center;gap:8px;padding:3px 12px 3px 18px;
+cursor:pointer;font-size:13px}
+#nav .pg:hover{background:var(--pan2)}
+#nav .pg.sel{background:#2c4a6e55}
+.dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.st-empty{background:var(--st-empty)}.st-partial{background:var(--st-partial)}
+.st-rendered{background:var(--st-rendered)}.st-composed{background:var(--st-composed)}
+#nav .pg .mut{color:var(--mut);font-size:11px;margin-left:auto}
+/* ---------- chemin de fer ---------- */
+#main{flex:1;overflow:auto;padding:18px}
+#legend{display:flex;gap:16px;align-items:center;font-size:12px;color:var(--mut);
+margin-bottom:14px;flex-wrap:wrap}
+#legend .dot{display:inline-block;vertical-align:-1px;margin-right:5px}
+#flat{display:flex;flex-wrap:wrap;gap:22px;align-items:flex-start}
+.spread{display:flex;gap:3px;position:relative;padding-top:16px}
+.slot{width:var(--cw);position:relative}
+.slot.blank{border:1px dashed #323a4855;border-radius:4px}
+.card{background:var(--pan);border:1px solid var(--bd);border-radius:4px;
+overflow:hidden;cursor:pointer;position:relative}
+.card:hover{border-color:var(--acc)}
+.card.dragging{opacity:.4}
+.card.droptgt{outline:2px solid var(--warn);outline-offset:1px}
+.card img{width:100%;aspect-ratio:var(--ar);object-fit:cover;display:block;background:#fff}
+.card .empty{width:100%;aspect-ratio:var(--ar);display:flex;flex-direction:column;
+align-items:center;justify-content:center;color:var(--mut);font-size:11px;gap:6px;
+background:repeating-linear-gradient(45deg,#1a1e26,#1a1e26 10px,#1e2330 10px,#1e2330 20px)}
+.card .cap{padding:3px 6px;font-size:11px;color:var(--mut);display:flex;
+justify-content:space-between;gap:4px}
+.badge{position:absolute;top:4px;left:4px;font-size:10px;padding:0 7px;border-radius:9px;
+background:#000a;color:#fff;text-transform:uppercase;z-index:2}
+.badge.cover{background:#7a4dc4cc}.badge.title{background:#3a6ea5cc}
+.badge.back{background:#555c}.badge.story{display:none}
+.folio{position:absolute;bottom:26px;font-size:10px;padding:0 6px;border-radius:9px;
+background:#000a;color:var(--warn);z-index:2}
+.folio.left{left:4px}.folio.right{right:4px}
+.spread .lbl{position:absolute;top:0;left:2px;font-size:10px;color:var(--mut)}
+.chsep{width:100%;margin:6px 0 -8px;font-size:11px;color:var(--mut);
+text-transform:uppercase;letter-spacing:.5px}
+/* ---------- aperçu planche ---------- */
+#page{display:none;gap:16px}
+#page.on{display:flex}
+#stagewrap{flex:1;min-width:0;display:flex;justify-content:center;align-items:flex-start}
+#stage{position:relative;background:#fff;box-shadow:0 4px 24px #0008}
+#stage img.sheet{position:absolute;inset:0;width:100%;height:100%}
+.pn{position:absolute;border:1px dashed #4d82c455}
+.pn:hover{border-color:var(--acc);background:#4d82c414}
+.pn img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.bub{position:absolute;border:1.5px solid #4d82c488;border-radius:6px}
+#pgside{width:280px;flex-shrink:0}
+.box{background:var(--pan);border:1px solid var(--bd);border-radius:8px;
+padding:10px 12px;margin-bottom:10px}
+.box h3{margin:0 0 8px;font-size:12px;text-transform:uppercase;color:var(--mut)}
+.hint{font-size:11px;color:var(--mut)}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+kbd{background:#121722;border:1px solid var(--bd);border-radius:4px;padding:0 5px;
+font-size:11px}
+</style>
+</head>
+<body>
+<header>
+  <h1>📚 comics2crispz</h1>
+  <span id="pname" style="color:var(--mut);font-size:12px"></span>
+  <div class="tabs">
+    <button id="tab-flat" class="on">Chemin de fer</button>
+    <button id="tab-script" disabled title="Étape 2 (voir docs/UI_PLAN.md)">Scénario</button>
+    <button id="tab-page" disabled title="Sélectionne une page">Planche</button>
+    <button id="tab-prod" disabled title="Étape 3 (voir docs/UI_PLAN.md)">Production</button>
+  </div>
+  <span id="status"></span>
+  <button id="reload" title="Recharger project.json">↻</button>
+</header>
+<div id="layout">
+  <div id="nav"></div>
+  <div id="main">
+    <div id="flatview">
+      <div id="legend">
+        <span><span class="dot st-empty"></span>vide</span>
+        <span><span class="dot st-partial"></span>cases partielles</span>
+        <span><span class="dot st-rendered"></span>cases générées</span>
+        <span><span class="dot st-composed"></span>composée</span>
+        <span>· glisser une page sur une autre = insérer AVANT · sur un titre de
+        chapitre (navigateur) = déplacer en fin de chapitre</span>
+        <button id="composeall" class="primary" style="margin-left:auto">🧩 Compose book</button>
+      </div>
+      <div id="flat"></div>
+    </div>
+    <div id="page">
+      <div id="stagewrap"><div id="stage"></div></div>
+      <div id="pgside">
+        <div class="box">
+          <h3 id="pghead">Page</h3>
+          <div class="row">
+            <button id="backflat">📖 Chemin de fer</button>
+            <button id="composeone" class="primary">🧩 Compose</button>
+          </div>
+          <div class="hint" style="margin-top:8px">Aperçu (étape 1). L'édition des
+          cases et des bulles arrive avec le mode Planche complet — en attendant,
+          le 🎬 Comic Studio de crispz-studio édite le même project.json.</div>
+        </div>
+        <div class="box hint"><kbd>Esc</kbd> retour chemin de fer</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+let IDX = null;            // /api/index
+let SEL = null;            // {cid, pid} sélection
+let DRAG = null;           // {cid, pid} en cours de drag
+let BUSY = false;
+
+const $ = id => document.getElementById(id);
+const esc = s => (s == null ? '' : String(s)).replace(/[&<>"]/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function status(msg, cls, spin){
+  const s = $('status');
+  s.className = cls || '';
+  s.innerHTML = (spin ? '<span class="spin"></span>' : '') + esc(msg || '');
+}
+
+async function api(op, payload, busyMsg){
+  if(BUSY) return null;
+  BUSY = true;
+  if(busyMsg) status(busyMsg, '', true);
+  try{
+    const r = await fetch('/api/' + op, {method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload || {})});
+    const res = await r.json();
+    if(!res || res.ok === false) throw new Error((res && res.error) || 'unknown error');
+    return res;
+  }catch(err){
+    status('⚠️ ' + err.message, 'err');
+    return null;
+  }finally{
+    BUSY = false;
+  }
+}
+
+function stCls(p){
+  if(p.composed) return 'st-composed';
+  if(p.panels_done === 0) return 'st-empty';
+  return p.panels_done >= p.panels_total ? 'st-rendered' : 'st-partial';
+}
+function bookPos(cid, pid){
+  return IDX.book.findIndex(p => p.cid === cid && p.pid === pid);
+}
+
+async function load(){
+  const res = await api('index', {}, 'Loading project…');
+  if(!res) return;
+  IDX = res;
+  $('pname').textContent = res.name;
+  document.title = 'comics2crispz — ' + res.name;
+  renderNav(); renderFlat();
+  if(SEL && bookPos(SEL.cid, SEL.pid) < 0) SEL = null;
+  if($('page').classList.contains('on') && SEL) showPage(SEL.cid, SEL.pid);
+  status(res.book.length + ' page(s)', 'ok');
+}
+
+/* ---------- navigateur ---------- */
+function renderNav(){
+  const nav = $('nav');
+  nav.innerHTML = '';
+  IDX.chapters.forEach(ch => {
+    const h = document.createElement('div');
+    h.className = 'ch';
+    h.innerHTML = '<span>' + esc(ch.name) + '</span><span>' + ch.pages.length + '</span>';
+    // drop "en fin de chapitre"
+    h.ondragover = ev => { if(DRAG){ ev.preventDefault(); h.classList.add('droptgt'); } };
+    h.ondragleave = () => h.classList.remove('droptgt');
+    h.ondrop = ev => { ev.preventDefault(); h.classList.remove('droptgt');
+                       dropToChapterEnd(ch.id); };
+    nav.appendChild(h);
+    ch.pages.forEach(pid => {
+      const p = IDX.book[bookPos(ch.id, pid)];
+      if(!p) return;
+      const d = document.createElement('div');
+      d.className = 'pg' + (SEL && SEL.cid === p.cid && SEL.pid === p.pid ? ' sel' : '');
+      d.innerHTML = '<span class="dot ' + stCls(p) + '"></span>' +
+        esc(p.pid) + (p.role !== 'story' ? ' · ' + esc(p.role) : '') +
+        '<span class="mut">' + (p.folio ? 'p.' + p.folio : '') + '</span>';
+      d.onclick = () => showPage(p.cid, p.pid);
+      nav.appendChild(d);
+    });
+  });
+}
+
+/* ---------- chemin de fer ---------- */
+function card(p){
+  const c = document.createElement('div');
+  c.className = 'card';
+  c.draggable = true;
+  const thumb = p.composed || p.mtime
+    ? '<img loading="lazy" src="/thumb/' + p.cid + '/' + p.pid + '.jpg?t=' + p.mtime + '">'
+    : '<div class="empty"><span>' + esc(p.layout) + '</span><span>' +
+      p.panels_done + '/' + p.panels_total + ' cases</span></div>';
+  c.innerHTML = thumb +
+    '<span class="badge ' + esc(p.role) + '">' + esc(p.role) + '</span>' +
+    '<div class="cap"><span>' + esc(p.cid + '.' + p.pid) + '</span><span>' +
+    esc(p.layout) + '</span></div>';
+  c.onclick = () => showPage(p.cid, p.pid);
+  c.ondragstart = ev => { DRAG = {cid: p.cid, pid: p.pid};
+                          c.classList.add('dragging');
+                          ev.dataTransfer.effectAllowed = 'move'; };
+  c.ondragend = () => { DRAG = null; c.classList.remove('dragging'); };
+  c.ondragover = ev => { if(DRAG && (DRAG.cid !== p.cid || DRAG.pid !== p.pid)){
+                           ev.preventDefault(); c.classList.add('droptgt'); } };
+  c.ondragleave = () => c.classList.remove('droptgt');
+  c.ondrop = ev => { ev.preventDefault(); c.classList.remove('droptgt');
+                     dropBefore(p); };
+  return c;
+}
+
+function renderFlat(){
+  const cw = 150;
+  const ar = IDX.page.width + '/' + IDX.page.height;
+  const flat = $('flat');
+  flat.innerHTML = '';
+  flat.style.setProperty('--cw', cw + 'px');
+  flat.style.setProperty('--ar', ar);
+  let lastCh = null;
+  IDX.spreads.forEach(row => {
+    const first = row.find(i => i !== null);
+    const chapName = first !== null ? IDX.book[first].chapter : '';
+    if(chapName !== lastCh){
+      lastCh = chapName;
+      const sep = document.createElement('div');
+      sep.className = 'chsep';
+      sep.textContent = chapName;
+      flat.appendChild(sep);
+    }
+    const sp = document.createElement('div');
+    sp.className = 'spread';
+    sp.style.setProperty('--cw', cw + 'px');
+    sp.style.setProperty('--ar', ar);
+    const lbl = row.map(i => i === null ? '·'
+      : (IDX.book[i].folio || IDX.book[i].role)).join(' — ');
+    sp.innerHTML = '<span class="lbl">' + esc(lbl) + '</span>';
+    row.forEach((i, k) => {
+      const slot = document.createElement('div');
+      slot.className = 'slot' + (i === null ? ' blank' : '');
+      if(i !== null){
+        const p = IDX.book[i];
+        const cd = card(p);
+        // folio du côté extérieur : gauche sur verso, droite sur recto
+        if(p.folio){
+          const f = document.createElement('span');
+          f.className = 'folio ' + (row.length === 2 && k === 0 ? 'left' : 'right');
+          f.textContent = 'p.' + p.folio;
+          cd.appendChild(f);
+        }
+        slot.appendChild(cd);
+      }
+      sp.appendChild(slot);
+    });
+    flat.appendChild(sp);
+  });
+}
+
+/* drop AVANT la page cible (index calculé dans le chapitre de la cible,
+   après retrait de la page déplacée — la sémantique de /api/move_page). */
+function dropBefore(target){
+  if(!DRAG) return;
+  const src = DRAG;
+  const ch = IDX.chapters.find(c => c.id === target.cid);
+  let idx = ch.pages.indexOf(target.pid);
+  if(src.cid === target.cid && ch.pages.indexOf(src.pid) < idx) idx -= 1;
+  movePage(src, target.cid, idx);
+}
+function dropToChapterEnd(cid){
+  if(!DRAG) return;
+  const src = DRAG;
+  const ch = IDX.chapters.find(c => c.id === cid);
+  let idx = ch.pages.length;
+  if(src.cid === cid) idx -= 1;
+  movePage(src, cid, idx);
+}
+async function movePage(src, toCid, toIndex){
+  const res = await api('move_page', {cid: src.cid, pid: src.pid,
+    to_cid: toCid, to_index: toIndex}, 'Moving page…');
+  if(!res) return;
+  IDX = res; renderNav(); renderFlat();
+  status(src.cid + '.' + src.pid + ' déplacée', 'ok');
+}
+
+/* ---------- aperçu planche (lecture seule, étape 1) ---------- */
+async function showPage(cid, pid){
+  SEL = {cid, pid};
+  const res = await api('chapter', {cid}, 'Loading chapter…');
+  if(!res) return;
+  const p = res.pages.find(x => x.pid === pid);
+  if(!p) return;
+  $('flatview').style.display = 'none';
+  $('page').classList.add('on');
+  $('tab-page').disabled = false;
+  renderNav();
+  $('pghead').textContent = cid + '.' + pid + ' — ' + p.layout +
+    (p.role !== 'story' ? ' · ' + p.role : '') + (p.folio ? ' · folio ' + p.folio : '');
+  const W = IDX.page.width, H = IDX.page.height;
+  const avail = Math.min($('stagewrap').clientWidth || 700, 900);
+  const sw = Math.min(avail, Math.round((window.innerHeight - 120) * W / H));
+  const sh = Math.round(sw * H / W);
+  const st = $('stage');
+  st.style.width = sw + 'px'; st.style.height = sh + 'px';
+  st.innerHTML = '';
+  if(p.url){
+    const img = document.createElement('img');
+    img.className = 'sheet';
+    img.src = '/file/' + p.url + '?t=' + p.mtime;
+    st.appendChild(img);
+  }
+  p.panels.forEach(pn => {
+    if(!pn.rect) return;
+    const d = document.createElement('div');
+    d.className = 'pn';
+    d.title = pn.id + (pn.text ? ' — ' + pn.text : '');
+    d.style.left = (pn.rect[0] * sw) + 'px';
+    d.style.top = (pn.rect[1] * sh) + 'px';
+    d.style.width = (pn.rect[2] * sw) + 'px';
+    d.style.height = (pn.rect[3] * sh) + 'px';
+    if(!p.url && pn.img){
+      const im = document.createElement('img');
+      im.src = '/file/' + pn.img;
+      d.appendChild(im);
+    }
+    st.appendChild(d);
+  });
+  (p.placements || []).forEach(pl => {
+    const b = document.createElement('div');
+    b.className = 'bub';
+    b.style.left = (pl.rect[0] * sw) + 'px';
+    b.style.top = (pl.rect[1] * sh) + 'px';
+    b.style.width = (pl.rect[2] * sw) + 'px';
+    b.style.height = (pl.rect[3] * sh) + 'px';
+    st.appendChild(b);
+  });
+}
+function backToFlat(){
+  $('page').classList.remove('on');
+  $('flatview').style.display = '';
+  $('tab-page').disabled = true;
+  SEL = null; renderNav();
+}
+
+$('backflat').onclick = backToFlat;
+$('tab-flat').onclick = backToFlat;
+$('reload').onclick = load;
+$('composeall').onclick = async () => {
+  const res = await api('compose_book', {}, 'Composing the whole book…');
+  if(res){ IDX = res; renderNav(); renderFlat(); status('Book composed', 'ok'); }
+};
+$('composeone').onclick = async () => {
+  if(!SEL) return;
+  const res = await api('compose', SEL, 'Composing page…');
+  if(res){ IDX = res; showPage(SEL.cid, SEL.pid); status('Page composed', 'ok'); }
+};
+document.addEventListener('keydown', ev => {
+  if(ev.key === 'Escape' && $('page').classList.contains('on')) backToFlat();
+});
+
+load();
+</script>
+</body>
+</html>

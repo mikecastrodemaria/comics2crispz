@@ -1,0 +1,15 @@
+{
+  "_help": "Copy to config.json (gitignored) and edit. 'engines' lists the crispz-family tools comics2crispz can drive through the CLI protocol v1 (docs/CLI_PROTOCOL.md): 'url' = the running app instance (preferred route: warm model, shared queue), 'czp' = the tool's czp.bat for the cold path (night batch). 'engine' = default engine name.",
+  "engine": "studio",
+  "engines": {
+    "studio": {
+      "url": "http://127.0.0.1:7860",
+      "czp": "D:/Github/crispz-studio/czp.bat"
+    },
+    "qwen-edit": {
+      "url": "http://127.0.0.1:7860",
+      "czp": "D:/Github/crispz-qwen-edit/czp.bat"
+    }
+  },
+  "port": 8770
+}
