@@ -27,3 +27,10 @@ Thumbs.db
 desktop.ini
 .vscode/
 .idea/
+
+# --- Internal / strategic docs (NEVER on GitHub; they live in ..\upscale_zit) ---
+PLAN_*.md
+BRIEF_*.md
+PROJECT_BRIEF.md
+docs/UI_PLAN.md
+docs/internal/
