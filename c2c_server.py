@@ -29,6 +29,7 @@ qu'un chemin d'erreur. Un lock process serialise les ecritures project.json
 import os
 import sys
 import json
+import shutil
 import argparse
 import threading
 import mimetypes
@@ -108,6 +109,75 @@ class Studio:
             for ch, pg in cz_comic.book_order(project):
                 c2c_state.compose_one(project, self.dir, ch["id"], pg["id"])
         return c2c_state.book_index(project, self.dir)
+
+    def op_generate(self, data):
+        """Genere les cases d'UNE planche via un moteur de la famille
+        (protocole CLI): {cid, pid, pnid?, engine?, force?}. Sans pnid =
+        toutes les cases SANS image (force = les refait toutes). Le moteur
+        ecrit dans SON dossier de sortie, l'image est copiee dans
+        panels/<cid>/<pid>/<pnid>.png et project.json est sauve apres CHAQUE
+        case (un echec au milieu ne perd rien). S'arrete au premier echec
+        moteur - jamais de trou silencieux. Recompose la planche a la fin."""
+        cid, pid = data["cid"], data["pid"]
+        only, force = data.get("pnid"), bool(data.get("force"))
+        name = (data.get("engine") or self.config.get("engine")
+                or next(iter(self.engines), None))
+        eng = self.engines.get(name)
+        if eng is None:
+            return {"ok": False,
+                    "error": f"no engine '{name}' (config.json 'engines')"}
+        done, warnings = [], []
+        project = self.load()
+        page = cz_comic.find_page(project, cid, pid)
+        for i in range(len(page["panels"])):
+            panel = page["panels"][i]
+            if only and panel["id"] != only:
+                continue
+            if (panel.get("image") and os.path.isfile(panel["image"])
+                    and not force):
+                continue
+            spec = cz_comic.resolve_panel(project, page, panel, index=i)
+            if not (spec["prompt"] or "").strip():
+                warnings.append(f"{panel['id']}: empty panel text - skipped "
+                                f"(write the panel description first)")
+                continue
+            if spec["unknown"]:
+                warnings.append(f"{panel['id']}: unknown casting "
+                                f"{', '.join(spec['unknown'])}")
+            res = eng.gen({"prompt": spec["prompt"],
+                           "negative": spec["negative"],
+                           "width": spec["width"], "height": spec["height"],
+                           "seed": spec["seed"], "loras": spec["loras"]})
+            if not res.get("ok"):
+                return {"ok": False, "engine": name, "generated": done,
+                        "error": f"{panel['id']}: {res.get('error')}"}
+            src = (res.get("images") or [None])[0]
+            if not src or not os.path.isfile(src):
+                return {"ok": False, "engine": name, "generated": done,
+                        "error": f"{panel['id']}: engine returned no "
+                                 f"readable image ({src})"}
+            dst = cz_comic.panel_path(self.dir, cid, pid, panel["id"])
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            shutil.copy(src, dst)
+            with _LOCK:                     # relecture: l'utilisateur a pu editer
+                project = self.load()
+                page = cz_comic.find_page(project, cid, pid)
+                pn = cz_comic.find_panel(project, cid, pid, panel["id"])
+                pn["image"] = dst
+                pn["status"] = "rendered"
+                cz_comic.save_project(project, self.dir)
+            done.append({"panel": panel["id"],
+                         "seed_used": res.get("seed_used"),
+                         "total_s": (res.get("timings") or {}).get("total_s")})
+            for w in res.get("warnings") or []:
+                if w not in warnings:
+                    warnings.append(w)
+        if done:
+            with _LOCK:
+                c2c_state.compose_one(self.load(), self.dir, cid, pid)
+        out = c2c_state.book_index(self.load(), self.dir)
+        out.update({"engine": name, "generated": done, "warnings": warnings})
+        return out
 
     def op_engines(self, _data):
         return {"ok": True,

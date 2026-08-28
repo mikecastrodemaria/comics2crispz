@@ -130,6 +130,7 @@ font-size:11px}
           <div class="row">
             <button id="backflat">📖 Chemin de fer</button>
             <button id="composeone" class="primary">🧩 Compose</button>
+            <button id="genmissing" title="Génère les cases sans image via le moteur configuré (protocole CLI famille)">🎨 Generate missing</button>
           </div>
           <div class="hint" style="margin-top:8px">Aperçu (étape 1). L'édition des
           cases et des bulles arrive avec le mode Planche complet — en attendant,
@@ -394,6 +395,18 @@ $('composeone').onclick = async () => {
   if(!SEL) return;
   const res = await api('compose', SEL, 'Composing page…');
   if(res){ IDX = res; showPage(SEL.cid, SEL.pid); status('Page composed', 'ok'); }
+};
+$('genmissing').onclick = async () => {
+  if(!SEL) return;
+  const res = await api('generate', SEL,
+    'Generating missing panels… (routed to the running engine, can take minutes)');
+  if(!res) return;
+  IDX = res;
+  showPage(SEL.cid, SEL.pid);
+  const n = (res.generated || []).length;
+  const warn = (res.warnings || []).join(' · ');
+  status((n ? n + ' panel(s) generated via ' + res.engine : 'Nothing to generate') +
+         (warn ? '  ⚠ ' + warn : ''), warn ? 'warn' : 'ok');
 };
 document.addEventListener('keydown', ev => {
   if(ev.key === 'Escape' && $('page').classList.contains('on')) backToFlat();

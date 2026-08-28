@@ -11,10 +11,11 @@ Un projet = un dossier avec un `project.json` **compatible famille crispz**
 🎞 Comic de crispz-studio, son 🎬 Comic Studio, le CLI `--comic` et
 comics2crispz travaillent sur le même fichier, chacun stateless.
 
-## Lancer
+## Installer / lancer
 
 ```bat
-run.bat chemin\du\projet          REM sert http://127.0.0.1:8770/
+install.bat                       REM venv + Pillow + config.json + livre d'exemple
+run.bat books\exemple             REM sert http://127.0.0.1:8770/
 ```
 
 ou :
@@ -37,7 +38,7 @@ Quatre modes sur un navigateur chapitres/pages permanent :
 | Mode | État | Contenu |
 |---|---|---|
 | **Chemin de fer** | ✅ étape 1 | doubles pages en regard (la page de droite porte la chute), badges de rôle, folios, code couleur d'avancement (vide / partiel / généré / composé), **drag & drop** pour réordonner ou changer de chapitre (glisser sur une page = insérer avant ; sur un titre de chapitre = déplacer en fin), Compose page/book |
-| **Planche** | aperçu (lecture) | la planche composée + rects des cases + bulles ; l'édition complète (drag des bulles, dialogues, génération) = étape suivante — en attendant, le Comic Studio de crispz-studio édite le même projet |
+| **Planche** | aperçu + génération | la planche composée + rects des cases + bulles, **🎨 Generate missing** : les cases sans image partent au moteur configuré via le protocole CLI (prompt résolu par le casting @Name, taille au ratio exact de la case, `project.json` sauvé après chaque case, case au texte vide sautée avec warning — jamais de prompt vide envoyé au moteur), puis la planche se recompose ; l'édition fine (drag des bulles, dialogues) = étape suivante — en attendant, le Comic Studio de crispz-studio édite le même projet |
 | **Scénario** | étape 2 | tout le livre en texte (format `.czs`, spécifié dans UI_PLAN) |
 | **Production** | étape 3 | compteurs-filtres, batch via le protocole CLI |
 
