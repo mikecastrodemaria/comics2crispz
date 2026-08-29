@@ -66,7 +66,13 @@ def improve(text, cfg, timeout=180):
     try:
         req = urllib.request.Request(
             url + "/api/generate",
+            # keep_alive 0 par defaut: le modele est DECHARGE de la VRAM des
+            # la reponse. Le GPU est partage avec le moteur de dessin - un
+            # LLM de 6 GB qui traine 5 min fait s'effondrer la generation
+            # d'images (CUDA bascule en RAM systeme, ~10x plus lent). Config
+            # ollama.keep_alive (ex. "5m") pour qui enchaine les Improve.
             data=json.dumps({"model": model, "stream": False,
+                             "keep_alive": cfg.get("keep_alive", 0),
                              "prompt": INSTRUCTION + "\n\nDescription:\n"
                                        + text}).encode("utf-8"),
             headers={"Content-Type": "application/json"})
