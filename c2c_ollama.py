@@ -81,9 +81,19 @@ def improve(text, cfg, timeout=180):
     except Exception as e:
         return {"ok": False,
                 "error": f"Ollama call failed ({model} at {url}): {e}"}
-    out = " ".join((res.get("response") or "").strip().strip('"').split())
+    raw = res.get("response") or ""
+    # Modeles "thinking" (Qwen3+, DeepSeek-R1...): le raisonnement
+    # <think>...</think> ne doit JAMAIS finir dans le prompt. On garde ce qui
+    # suit le dernier </think>, puis on purge tout bloc residuel.
+    if "</think>" in raw:
+        raw = raw.rsplit("</think>", 1)[1]
+    raw = re.sub(r"<think>[\s\S]*?(?:</think>|$)", "", raw,
+                 flags=re.IGNORECASE)
+    out = " ".join(raw.strip().strip('"').split())
     if not out:
-        return {"ok": False, "error": f"empty answer from {model}"}
+        return {"ok": False,
+                "error": f"empty answer from {model} (it may have spent the "
+                         f"whole reply thinking - try another model in ⚙)"}
     reply = {"ok": True, "improved": out, "model": model}
     lost = sorted(set(_AT.findall(text)) - set(_AT.findall(out)))
     if "<lora:" in text.lower() and "<lora:" not in out.lower():
