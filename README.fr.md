@@ -16,9 +16,16 @@ fichier, chacun stateless.
 ## Installer / lancer
 
 ```bat
-install.bat                       REM venv + Pillow + config.json + livre d'exemple
-run.bat books\exemple             REM sert http://127.0.0.1:8770/
+start.bat
 ```
+
+C'est tout : le premier lancement installe ce qu'il faut (venv + Pillow +
+config + un livre d'exemple), puis **ton livre le plus récent s'ouvre dans le
+navigateur**. Dans l'app, le **menu 📚** change de livre et **➕ New book** en
+crée un (couverture + une première planche 4 cases, prête à remplir) ; le tout
+premier lancement affiche un écran d'accueil. Linux/macOS : `./start.sh`.
+Avancé : `run.bat books\exemple` (livre précis, sans navigateur),
+`start.bat books\autre --port 8771` (deux livres côte à côte).
 
 Copier `config-sample.json` en `config.json` (local, gitignoré) et pointer
 les `engines` vers tes installations crispz.

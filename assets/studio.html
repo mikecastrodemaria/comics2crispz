@@ -16,6 +16,9 @@ border-radius:6px;padding:6px 12px;cursor:pointer;font:inherit}
 button:hover{border-color:var(--acc)}
 button.primary{background:#2c4a6e;border-color:#3a6ea5}
 button:disabled{opacity:.45;cursor:default}
+select{background:var(--pan2);color:var(--fg);border:1px solid var(--bd);
+border-radius:6px;padding:6px 8px;font:inherit;max-width:240px}
+select:hover{border-color:var(--acc)}
 header{display:flex;align-items:center;gap:12px;padding:8px 14px;
 background:var(--pan);border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:30}
 header h1{font-size:15px;margin:0;font-weight:600;white-space:nowrap}
@@ -97,6 +100,8 @@ font-size:11px}
 <body>
 <header>
   <h1>📚 comics2crispz</h1>
+  <select id="bookdd" title="Open another book"></select>
+  <button id="newbook" title="Create a new book">➕ New book</button>
   <span id="pname" style="color:var(--mut);font-size:12px"></span>
   <div class="tabs">
     <button id="tab-flat" class="on">Flatplan</button>
@@ -121,6 +126,18 @@ font-size:11px}
         <button id="composeall" class="primary" style="margin-left:auto">🧩 Compose book</button>
       </div>
       <div id="flat"></div>
+    </div>
+    <div id="welcome" style="display:none">
+      <div class="box" style="max-width:460px;margin:12vh auto;text-align:center;
+                              padding:28px 30px">
+        <h2 style="margin:0 0 10px">📚 Welcome to comics2crispz</h2>
+        <p class="hint" style="font-size:13px">No book is open yet. Create your
+        first one — it starts with a cover and a 4-panel page, ready to fill —
+        or pick an existing book in the 📚 menu at the top.</p>
+        <div class="row" style="justify-content:center;margin-top:14px">
+          <button id="welcomenew" class="primary">➕ Create my first book</button>
+        </div>
+      </div>
     </div>
     <div id="page">
       <div id="stagewrap"><div id="stage"></div></div>
@@ -187,9 +204,56 @@ function bookPos(cid, pid){
   return IDX.book.findIndex(p => p.cid === cid && p.pid === pid);
 }
 
+/* ---------- book selector (📚 menu + welcome screen) ---------- */
+async function loadBooks(){
+  try{
+    const r = await fetch('/api/books', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body:'{}'});
+    const res = await r.json();
+    if(!res || !res.ok) return res;
+    const dd = $('bookdd');
+    dd.innerHTML = '<option value="" disabled' +
+      (res.books.some(b => b.current) ? '' : ' selected') +
+      '>📚 Books…</option>' +
+      res.books.map(b => '<option value="' + esc(b.book) + '"' +
+        (b.current ? ' selected' : '') + '>' + esc(b.title) +
+        ' — ' + b.pages + ' page' + (b.pages > 1 ? 's' : '') +
+        '</option>').join('');
+    return res;
+  }catch(_){ return null; }
+}
+
+function afterBookSwitch(res){
+  IDX = res; SEL = null;
+  backToFlat();
+  renderNav(); renderFlat();
+  $('pname').textContent = res.name;
+  document.title = 'comics2crispz — ' + res.name;
+  showWelcome(false);
+  loadBooks();
+  status('Book “' + res.name + '” opened', 'ok');
+}
+
+function showWelcome(on){
+  $('welcome').style.display = on ? '' : 'none';
+  $('flatview').style.display = on ? 'none' : '';
+  if(on){ $('nav').innerHTML = ''; $('pname').textContent = ''; }
+}
+
+async function newBook(){
+  const name = prompt('Name of the new book:');
+  if(!name || !name.trim()) return;
+  const res = await api('new_book', {name: name.trim()}, 'Creating the book…');
+  if(res) afterBookSwitch(res);
+}
+
 async function load(){
+  const books = await loadBooks();
   const res = await api('index', {}, 'Loading project…');
-  if(!res) return;
+  if(!res){
+    if(books && !books.open) showWelcome(true);
+    return;
+  }
   IDX = res;
   $('pname').textContent = res.name;
   document.title = 'comics2crispz — ' + res.name;
@@ -399,6 +463,15 @@ function backToFlat(){
 $('backflat').onclick = backToFlat;
 $('tab-flat').onclick = backToFlat;
 $('reload').onclick = load;
+$('bookdd').onchange = async () => {
+  const v = $('bookdd').value;
+  if(!v) return;
+  const res = await api('open_book', {book: v}, 'Opening book…');
+  if(res) afterBookSwitch(res);
+  else loadBooks();              // met la selection en face du livre courant
+};
+$('newbook').onclick = newBook;
+$('welcomenew').onclick = newBook;
 $('composeall').onclick = async () => {
   const res = await api('compose_book', {}, 'Composing the whole book…');
   if(res){ IDX = res; renderNav(); renderFlat(); status('Book composed', 'ok'); }

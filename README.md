@@ -16,8 +16,18 @@ and comics2crispz all work on the same file, each of them stateless.
 ## Install / run
 
 ```bat
-install.bat                       REM venv + Pillow + config.json + example book
-run.bat books\exemple             REM serves http://127.0.0.1:8770/
+start.bat
+```
+
+That's it: first run installs everything (venv + Pillow + config + an example
+book), then your **most recently edited book opens in the browser**. Inside
+the app, the **📚 menu** switches between books and **➕ New book** creates
+one (cover + a first 4-panel page, ready to fill); the very first launch
+shows a welcome screen. Linux/macOS: `./start.sh`. Power users:
+
+```bat
+run.bat books\exemple             REM serve a specific book, no browser
+start.bat books\autre --port 8771 REM a second book side by side
 ```
 
 Dependencies: Python 3.10+, Pillow. The server is pure stdlib

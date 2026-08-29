@@ -28,6 +28,7 @@ drags cannot lose each other).
 """
 
 import os
+import re
 import sys
 import json
 import shutil
@@ -44,6 +45,9 @@ import c2c_engines
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSETS = os.path.join(HERE, "assets")
 DEFAULT_PORT = 8770
+# Racine des livres (le selecteur de l'UI ne montre QUE ce dossier).
+# Variable de module pour que les tests la deportent dans un tmp.
+BOOKS_ROOT = os.path.join(HERE, "books")
 
 _LOCK = threading.Lock()
 
@@ -345,6 +349,15 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             self._send_json({"ok": False, "error": f"bad JSON body: {e}"}, 400)
             return
+        # Ops de niveau serveur (selecteur de livres) - dispo meme sans livre
+        if op in ("books", "open_book", "new_book"):
+            self._send_json(books_op(op, data))
+            return
+        if self.studio is None:
+            self._send_json({"ok": False, "no_book": True,
+                             "error": "no book open - create or open one "
+                                      "with the 📚 menu"})
+            return
         self._send_json(self.studio.dispatch(op, data))
 
     def log_message(self, fmt, *args):          # compact logs
@@ -352,24 +365,133 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def serve(project_dir, port=DEFAULT_PORT, config=None):
-    Handler.studio = Studio(project_dir, config or load_config())
+    """project_dir=None -> demarre SANS livre: l'UI montre l'ecran d'accueil
+    (creer / ouvrir un livre), pour que le premier lancement d'un utilisateur
+    non-dev ne finisse jamais sur une erreur de terminal."""
+    Handler.studio = (Studio(project_dir, config or load_config())
+                      if project_dir else None)
     srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"[c2c] serving {Handler.studio.dir}")
+    print(f"[c2c] serving {Handler.studio.dir if Handler.studio else '(no book yet)'}")
     print(f"[c2c] open   http://127.0.0.1:{port}/")
     return srv
+
+
+def find_latest_book():
+    """Newest books/*/project.json - the default project when start.bat /
+    start.sh are run without an argument ('open my current book')."""
+    best, best_m = None, -1.0
+    if os.path.isdir(BOOKS_ROOT):
+        for name in os.listdir(BOOKS_ROOT):
+            pj = os.path.join(BOOKS_ROOT, name, "project.json")
+            if os.path.isfile(pj) and os.path.getmtime(pj) > best_m:
+                best, best_m = os.path.join(BOOKS_ROOT, name), \
+                    os.path.getmtime(pj)
+    return best
+
+
+# ----------------------------------------------------------------------------
+# Selecteur de livres (ops SERVEUR, pas Studio: elles changent le livre ouvert)
+# ----------------------------------------------------------------------------
+def list_books():
+    """Les livres de books/ (titre lisible, nb de planches) + lequel est
+    ouvert. C'est la source du menu 📚 de l'UI."""
+    out = []
+    cur = os.path.abspath(Handler.studio.dir) if Handler.studio else ""
+    if os.path.isdir(BOOKS_ROOT):
+        for name in sorted(os.listdir(BOOKS_ROOT)):
+            pj = os.path.join(BOOKS_ROOT, name, "project.json")
+            if not os.path.isfile(pj):
+                continue
+            title, pages = name, 0
+            try:
+                with open(pj, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                title = data.get("name") or name
+                pages = sum(len(c.get("pages") or [])
+                            for c in data.get("chapters") or [])
+            except Exception:
+                pass
+            out.append({"book": name, "title": title, "pages": pages,
+                        "mtime": int(os.path.getmtime(pj)),
+                        "current": os.path.abspath(
+                            os.path.join(BOOKS_ROOT, name)) == cur})
+    return {"ok": True, "books": out,
+            "open": bool(Handler.studio)}
+
+
+def books_op(op, data):
+    """Ops de niveau serveur: books / open_book {book} / new_book {name}.
+    Toujours {ok: ...}; apres open/new, le livre devient le livre OUVERT et
+    la reponse contient son index (l'UI bascule sans recharger)."""
+    try:
+        with _LOCK:
+            if op == "books":
+                return list_books()
+            cfg = Handler.studio.config if Handler.studio else load_config()
+            if op == "open_book":
+                name = os.path.basename(str(data.get("book") or "").strip())
+                if not name:
+                    raise ValueError("pick a book in the list")
+                d = os.path.join(BOOKS_ROOT, name)
+                if not os.path.isfile(cz_comic.project_json_path(d)):
+                    raise ValueError(f"'{name}' has no project.json (was the "
+                                     f"folder moved?)")
+                studio = Studio(d, cfg)
+            elif op == "new_book":
+                title = str(data.get("name") or "").strip()
+                slug = re.sub(r"[^A-Za-z0-9_-]+", "-", title.lower()).strip("-")
+                if not slug:
+                    raise ValueError("give the new book a name")
+                d = os.path.join(BOOKS_ROOT, slug)
+                if os.path.isfile(cz_comic.project_json_path(d)):
+                    raise ValueError(f"a book named '{slug}' already exists - "
+                                     f"pick it in the list or choose another "
+                                     f"name")
+                p = cz_comic.new_project(title, page="Web")
+                p["page"]["page_numbers"] = True
+                ch = cz_comic.add_chapter(p, "Chapter 1")
+                cz_comic.add_page(p, ch["id"], "splash", role="cover")
+                cz_comic.add_page(p, ch["id"], "4-grid")
+                cz_comic.save_project(p, d)
+                for c, pg in cz_comic.book_order(p):
+                    c2c_state.compose_one(p, d, c["id"], pg["id"])
+                studio = Studio(d, cfg)
+            else:
+                raise ValueError(f"unknown op '{op}'")
+            Handler.studio = studio
+        idx = c2c_state.book_index(studio.load(), studio.dir)
+        idx["opened"] = os.path.basename(studio.dir)
+        return idx
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
         prog="c2c", description="comics2crispz - comic book studio (local)")
-    parser.add_argument("project", help="folder holding a project.json")
-    parser.add_argument("--port", type=int, default=DEFAULT_PORT)
+    parser.add_argument("project", nargs="?", default=None,
+                        help="folder holding a project.json (default: the "
+                             "most recently edited book under books/)")
+    parser.add_argument("--port", type=int, default=None,
+                        help=f"server port (default: config 'port' or "
+                             f"{DEFAULT_PORT})")
+    parser.add_argument("--open", action="store_true",
+                        help="open the browser once the server is up")
     args = parser.parse_args(argv)
+    config = load_config()
+    port = args.port or int(config.get("port") or DEFAULT_PORT)
+    # Pas de livre ? On sert quand meme: l'UI accueille avec "creer/ouvrir".
+    project = args.project or find_latest_book()
     try:
-        srv = serve(args.project, args.port)
+        srv = serve(project, port, config)
     except FileNotFoundError as e:
         print(f"[c2c] {e}", file=sys.stderr)
         return 2
+    if args.open:
+        import threading
+        import webbrowser
+        threading.Timer(0.8, webbrowser.open,
+                        [f"http://127.0.0.1:{port}/"]).start()
     try:
         srv.serve_forever()
     except KeyboardInterrupt:
