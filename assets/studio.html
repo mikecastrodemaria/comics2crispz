@@ -85,6 +85,8 @@ text-transform:uppercase;letter-spacing:.5px}
 #stage img.sheet{position:absolute;inset:0;width:100%;height:100%}
 .pn{position:absolute;border:1px dashed #4d82c455}
 .pn:hover{border-color:var(--acc);background:#4d82c414}
+.pn{cursor:pointer}
+.pn.sel{border:2px solid var(--warn);background:#ffd27a14}
 .pn img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .bub{position:absolute;border:1.5px solid #4d82c488;border-radius:6px}
 #pgside{width:280px;flex-shrink:0}
@@ -153,6 +155,17 @@ font-size:11px}
           balloon editing arrives with the full Page mode — meanwhile,
           crispz-studio's 🎬 Comic Studio edits the same project.json.</div>
         </div>
+        <div class="box" id="pnbox" style="display:none">
+          <h3 id="pnhead">Panel</h3>
+          <div class="hint" id="pntext" style="margin-bottom:8px"></div>
+          <div class="row">
+            <button id="regenbtn" class="primary"
+                    title="Generate this panel again with a new random seed, then recompose the page">🎲 Regenerate this panel</button>
+          </div>
+          <div class="hint" style="margin-top:8px">Don’t like a panel? Click
+          it on the page, then regenerate — a new seed, a new drawing. The
+          rest of the page is untouched.</div>
+        </div>
         <div class="box hint"><kbd>Esc</kbd> back to the flatplan</div>
       </div>
     </div>
@@ -163,6 +176,7 @@ font-size:11px}
 'use strict';
 let IDX = null;            // /api/index
 let SEL = null;            // {cid, pid} selection
+let SELPN = null;          // panel id selectionne dans la vue Page
 let DRAG = null;           // {cid, pid} being dragged
 let BUSY = false;
 
@@ -403,6 +417,7 @@ async function movePage(src, toCid, toIndex){
 
 /* ---------- page preview (read-only, step 1) ---------- */
 async function showPage(cid, pid){
+  if(!SEL || SEL.cid !== cid || SEL.pid !== pid) SELPN = null;
   SEL = {cid, pid};
   const res = await api('chapter', {cid}, 'Loading chapter…');
   if(!res) return;
@@ -430,8 +445,9 @@ async function showPage(cid, pid){
   p.panels.forEach(pn => {
     if(!pn.rect) return;
     const d = document.createElement('div');
-    d.className = 'pn';
-    d.title = pn.id + (pn.text ? ' — ' + pn.text : '');
+    d.className = 'pn' + (SELPN === pn.id ? ' sel' : '');
+    d.dataset.pn = pn.id;
+    d.title = pn.id + (pn.text ? ' — ' + pn.text : '') + '  (click to select)';
     d.style.left = (pn.rect[0] * sw) + 'px';
     d.style.top = (pn.rect[1] * sh) + 'px';
     d.style.width = (pn.rect[2] * sw) + 'px';
@@ -441,8 +457,15 @@ async function showPage(cid, pid){
       im.src = '/file/' + pn.img;
       d.appendChild(im);
     }
+    d.onclick = () => {
+      SELPN = (SELPN === pn.id ? null : pn.id);
+      document.querySelectorAll('#stage .pn').forEach(x =>
+        x.classList.toggle('sel', x.dataset.pn === SELPN));
+      renderPanelBox(p);
+    };
     st.appendChild(d);
   });
+  renderPanelBox(p);
   (p.placements || []).forEach(pl => {
     const b = document.createElement('div');
     b.className = 'bub';
@@ -457,7 +480,37 @@ function backToFlat(){
   $('page').classList.remove('on');
   $('flatview').style.display = '';
   $('tab-page').disabled = true;
-  SEL = null; renderNav();
+  SEL = null; SELPN = null; renderNav();
+}
+
+/* Encadre "case selectionnee": regenerer UNE case (meme deja rendue). */
+function renderPanelBox(p){
+  const box = $('pnbox');
+  const pn = p.panels.find(x => x.id === SELPN);
+  box.style.display = pn ? '' : 'none';
+  if(!pn) return;
+  $('pnhead').textContent = 'Panel ' + pn.id +
+    (pn.seed >= 0 ? ' · seed ' + pn.seed : '');
+  $('pntext').textContent = pn.text || '(no description yet — add one in ' +
+    'crispz-studio’s Comic Studio)';
+  $('regenbtn').disabled = !pn.text;
+}
+
+async function regenPanel(){
+  if(!SEL || !SELPN) return;
+  const pnid = SELPN;
+  const res = await api('generate', {cid: SEL.cid, pid: SEL.pid,
+    pnid: pnid, force: true},
+    'Regenerating ' + pnid + '… (new seed, through the engine — can take a '
+    + 'minute)');
+  if(!res) return;
+  IDX = res;
+  SELPN = pnid;
+  showPage(SEL.cid, SEL.pid);
+  const g = (res.generated || [])[0];
+  status(g ? pnid + ' regenerated (seed ' + g.seed_used + ') and page '
+             + 'recomposed' : 'Nothing regenerated',
+         (res.warnings || []).length ? 'warn' : 'ok');
 }
 
 $('backflat').onclick = backToFlat;
@@ -472,6 +525,7 @@ $('bookdd').onchange = async () => {
 };
 $('newbook').onclick = newBook;
 $('welcomenew').onclick = newBook;
+$('regenbtn').onclick = regenPanel;
 $('composeall').onclick = async () => {
   const res = await api('compose_book', {}, 'Composing the whole book…');
   if(res){ IDX = res; renderNav(); renderFlat(); status('Book composed', 'ok'); }
