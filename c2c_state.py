@@ -163,6 +163,7 @@ def chapter_state(project, project_dir, cid):
                 "img": (_rel(img, project_dir)
                         if img and os.path.isfile(img) else None),
                 "dialogue": pn.get("dialogue") or [],
+                "dialogue_text": fmt_dialogue(pn.get("dialogue")),
                 "rect": ([rects[i][0] / W, rects[i][1] / H,
                           rects[i][2] / W, rects[i][3] / H]
                          if i < len(rects) else None)})
@@ -215,6 +216,55 @@ def set_role(project, cid, pid, role):
 
 
 # ----------------------------------------------------------------------------
+# Dialogue: writer syntax <-> structured lines (lossless round-trip)
+# ----------------------------------------------------------------------------
+def fmt_dialogue(dlg):
+    """Structured lines -> writer syntax (the inverse of parse_dialogue),
+    keeping the style modifiers ('Rook (angular): ...')."""
+    lines = []
+    for x in dlg or []:
+        k, t, s = x.get("kind", "speech"), x.get("text", ""), x.get("speaker", "")
+        if k == "caption":
+            lines.append(f"CAP: {t}")
+        elif k == "sfx":
+            lines.append(f"SFX: {t}")
+        else:
+            mods = []
+            if k == "thought":
+                mods.append("think")
+            if x.get("style"):
+                mods.append(x["style"])
+            lines.append(f"{s} ({', '.join(mods)}): {t}" if mods else f"{s}: {t}")
+    return "\n".join(lines)
+
+
+def merge_dialogue(old, new):
+    """parse_dialogue starts over from TEXT: balloon positions placed by
+    dragging (anchor/pos) would be lost on every save. Re-attach them to
+    unchanged lines: same (kind, speaker, text) first, else the first free
+    line of the same (kind, speaker)."""
+    used = set()
+    for nd in new:
+        best = None
+        for j, od in enumerate(old or []):
+            if j in used:
+                continue
+            if (od.get("kind") == nd.get("kind")
+                    and (od.get("speaker") or "") == (nd.get("speaker") or "")):
+                if (od.get("text") or "") == (nd.get("text") or ""):
+                    best = j
+                    break
+                if best is None:
+                    best = j
+        if best is not None:
+            used.add(best)
+            for k in ("anchor", "pos"):
+                if k in old[best] and k not in nd:
+                    nd[k] = old[best][k]
+    return new
+
+
+# ----------------------------------------------------------------------------
 # Page composition (+ placements sidecar, like Comic Studio)
 # ----------------------------------------------------------------------------
 def compose_one(project, project_dir, cid, pid, face_detector=None,
@@ -234,7 +284,19 @@ def compose_one(project, project_dir, cid, pid, face_detector=None,
         cz_comic._draw_page_number(sheet, pg, folio)
     dst = cz_comic.page_path(project_dir, cid, pid)
     os.makedirs(os.path.dirname(dst), exist_ok=True)
-    sheet.save(dst)
+    # Ecriture ATOMIQUE (tmp + replace): la SPA recharge ce PNG pendant qu'on
+    # recompose - un save() direct tronque le fichier sous le serveur HTTP et
+    # le navigateur affiche une planche noire/cassee (lecon Asset Browser).
+    tmp = dst + f".{os.getpid()}.tmp"
+    try:
+        sheet.save(tmp, "PNG")
+        os.replace(tmp, dst)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
     W, H = float(pg["width"]), float(pg["height"])
     counters, placements = {}, []
     for pl in raw:

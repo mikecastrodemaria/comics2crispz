@@ -41,6 +41,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import cz_comic
 import c2c_state
 import c2c_engines
+import c2c_ollama
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSETS = os.path.join(HERE, "assets")
@@ -48,19 +49,21 @@ DEFAULT_PORT = 8770
 # Racine des livres (le selecteur de l'UI ne montre QUE ce dossier).
 # Variable de module pour que les tests la deportent dans un tmp.
 BOOKS_ROOT = os.path.join(HERE, "books")
+# Config locale editable par la modale ⚙ (op_save_config). Variable de module
+# pour la meme raison: les tests ecrivent dans un tmp, jamais la vraie.
+CONFIG_PATH = os.path.join(HERE, "config.json")
 
 _LOCK = threading.Lock()
 
 
 def load_config():
-    for name in ("config.json", "config-sample.json"):
-        p = os.path.join(HERE, name)
+    for p in (CONFIG_PATH, os.path.join(HERE, "config-sample.json")):
         if os.path.isfile(p):
             try:
                 with open(p, "r", encoding="utf-8") as f:
                     return json.load(f)
             except Exception as e:
-                print(f"[c2c] {name} unreadable ({e}), ignored",
+                print(f"[c2c] {os.path.basename(p)} unreadable ({e}), ignored",
                       file=sys.stderr)
     return {}
 
@@ -167,6 +170,106 @@ class Studio:
             for ch, pg in cz_comic.book_order(project):
                 c2c_state.compose_one(project, self.dir, ch["id"], pg["id"],
                                       face_detector=fd, char_embeddings=emb)
+        return c2c_state.book_index(project, self.dir)
+
+    def op_improve(self, data):
+        """✨ Improve du texte d'une case via Ollama (config 'ollama').
+        Warning explicite si le modele a perdu un @Name ou un <lora:>."""
+        return c2c_ollama.improve(str(data.get("text") or ""),
+                                  self.config.get("ollama"))
+
+    def op_config(self, _data):
+        """Reglages pour la modale ⚙: moteur par defaut, moteurs connus,
+        Ollama (url/modele + etat live: joignable, modeles installes)."""
+        oll = self.config.get("ollama") or {}
+        return {"ok": True, "engine": self.config.get("engine"),
+                "engines": sorted(self.engines),
+                "ollama": {"url": oll.get("url") or c2c_ollama.DEFAULT_URL,
+                           "model": oll.get("model") or ""},
+                "ollama_status": c2c_ollama.models(oll)}
+
+    def op_save_config(self, data):
+        """Sauve les reglages de la modale ⚙ dans config.json (cree depuis
+        le sample au premier enregistrement) et les applique a chaud."""
+        with _LOCK:
+            # Base = la config COURANTE (pas une relecture disque: elle
+            # ecraserait ce que le serveur tient deja, p.ex. en tests).
+            cfg = dict(self.config)
+            eng = data.get("engine")
+            if eng:
+                if eng not in self.engines:
+                    return {"ok": False,
+                            "error": f"unknown engine '{eng}' (config.json "
+                                     f"'engines')"}
+                cfg["engine"] = eng
+            oll = data.get("ollama")
+            if isinstance(oll, dict):
+                cur = dict(cfg.get("ollama") or {})
+                for k in ("url", "model"):
+                    if k in oll:
+                        cur[k] = str(oll[k] or "").strip()
+                cfg["ollama"] = cur
+            tmp = CONFIG_PATH + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(cfg, f, indent=2, ensure_ascii=False)
+            os.replace(tmp, CONFIG_PATH)
+            self.config = cfg
+            self.engines = c2c_engines.load_engines(cfg)
+        return {"ok": True, "engine": cfg.get("engine"),
+                "ollama": cfg.get("ollama") or {}}
+
+    def op_save_panel(self, data):
+        """Sauve le TEXTE d'une case avant regeneration: {cid, pid, pnid,
+        text?, dialogue?, seed?}. Le dialogue est reparse (syntaxe
+        scenariste) en recollant les positions de bulles posees au drag.
+        Renvoie l'index + 'unknown' (les @Name absents du casting)."""
+        with _LOCK:
+            project = self.load()
+            panel = cz_comic.find_panel(project, data["cid"], data["pid"],
+                                        data["pnid"])
+            if data.get("text") is not None:
+                panel["text"] = str(data["text"]).strip()
+            if data.get("dialogue") is not None:
+                panel["dialogue"] = c2c_state.merge_dialogue(
+                    panel.get("dialogue") or [],
+                    cz_comic.parse_dialogue(str(data["dialogue"])))
+            if data.get("seed") is not None:
+                try:
+                    panel["seed"] = int(data["seed"])
+                except (TypeError, ValueError):
+                    pass
+            cz_comic.save_project(project, self.dir)
+        idx = c2c_state.book_index(project, self.dir)
+        idx["unknown"] = cz_comic.resolve_casting(
+            panel.get("text") or "", project.get("casting"))["unknown"]
+        return idx
+
+    def op_set_bubble(self, data):
+        """Deplace une bulle: {cid, pid, pnid, index, pos|anchor: [fx, fy]}
+        ou {clear: ["pos", "anchor"]}. pos = coin haut-gauche de la bulle,
+        anchor = pointe de la queue - en FRACTIONS DE CASE, clampes ici.
+        Recompose la planche (lettrage) et renvoie l'index."""
+        with _LOCK:
+            project = self.load()
+            panel = cz_comic.find_panel(project, data["cid"], data["pid"],
+                                        data["pnid"])
+            dlg = panel.get("dialogue") or []
+            idx = int(data.get("index", -1))
+            if not 0 <= idx < len(dlg):
+                raise IndexError(f"dialogue index {idx} out of range "
+                                 f"(panel has {len(dlg)} line(s))")
+            for key in ("pos", "anchor"):
+                if data.get(key) is not None:
+                    fx, fy = data[key]
+                    dlg[idx][key] = [max(0.0, min(1.0, float(fx))),
+                                     max(0.0, min(1.0, float(fy)))]
+            for key in data.get("clear") or []:
+                if key in ("pos", "anchor"):
+                    dlg[idx].pop(key, None)
+            cz_comic.save_project(project, self.dir)
+            fd, emb = self._letter_kit(project)
+            c2c_state.compose_one(project, self.dir, data["cid"], data["pid"],
+                                  face_detector=fd, char_embeddings=emb)
         return c2c_state.book_index(project, self.dir)
 
     def op_generate(self, data):

@@ -1,6 +1,10 @@
 {
-  "_help": "Copy to config.json (gitignored) and edit. 'engines' lists the crispz-family tools comics2crispz can drive through the CLI protocol v1 (docs/CLI_PROTOCOL.md): 'url' = the running app instance (preferred route: warm model, shared queue), 'czp' = the tool's czp.bat for the cold path (night batch). 'engine' = default engine name.",
+  "_help": "Copy to config.json (gitignored) and edit - or just use the gear (settings) button in the app, which writes this file for you. 'engines' lists the crispz-family tools comics2crispz can drive through the CLI protocol v1 (docs/CLI_PROTOCOL.md): 'url' = the running app instance (preferred route: warm model, shared queue), 'czp' = the tool's czp.bat for the cold path (night batch). 'engine' = default engine name. 'ollama' = local Ollama service used by the panel-text Improve button (empty model = first installed one).",
   "engine": "studio",
+  "ollama": {
+    "url": "http://127.0.0.1:11434",
+    "model": ""
+  },
   "engines": {
     "studio": {
       "url": "http://127.0.0.1:7860",

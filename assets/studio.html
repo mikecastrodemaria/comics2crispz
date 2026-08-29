@@ -19,6 +19,20 @@ button:disabled{opacity:.45;cursor:default}
 select{background:var(--pan2);color:var(--fg);border:1px solid var(--bd);
 border-radius:6px;padding:6px 8px;font:inherit;max-width:240px}
 select:hover{border-color:var(--acc)}
+input,textarea{background:#10141c;color:var(--fg);border:1px solid var(--bd);
+border-radius:6px;padding:7px 9px;font:13px/1.45 "Segoe UI",system-ui,sans-serif;
+width:100%;box-sizing:border-box}
+textarea{resize:vertical;min-height:54px}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--acc);
+box-shadow:0 0 0 2px #4d82c433}
+.field{margin-top:10px}
+.field .lbl,.lbl{display:block;font-size:11px;color:var(--mut);
+margin:0 0 4px;letter-spacing:.3px}
+#modal{position:fixed;inset:0;background:#000b;display:none;z-index:50;
+align-items:center;justify-content:center}
+#modal.on{display:flex}
+#modal h3{margin:0 0 4px;font-size:13px;text-transform:uppercase;
+color:var(--mut)}
 header{display:flex;align-items:center;gap:12px;padding:8px 14px;
 background:var(--pan);border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:30}
 header h1{font-size:15px;margin:0;font-weight:600;white-space:nowrap}
@@ -87,6 +101,14 @@ text-transform:uppercase;letter-spacing:.5px}
 .pn:hover{border-color:var(--acc);background:#4d82c414}
 .pn{cursor:pointer}
 .pn.sel{border:2px solid var(--warn);background:#ffd27a14}
+.bub{cursor:grab;z-index:12}
+.bub:hover{background:#4d82c422}
+.bub.drag{cursor:grabbing;border-color:var(--warn)}
+.bub.dirty{border-color:var(--err);border-style:dashed}
+.tipdot{position:absolute;width:14px;height:14px;margin:-7px 0 0 -7px;
+border-radius:50%;background:var(--warn);border:2px solid #000;cursor:move;
+z-index:13}
+.tipdot.drag{transform:scale(1.3)}
 .pn img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
 .bub{position:absolute;border:1.5px solid #4d82c488;border-radius:6px}
 #pgside{width:280px;flex-shrink:0}
@@ -112,8 +134,34 @@ font-size:11px}
     <button id="tab-prod" disabled title="Coming with step 3">Production</button>
   </div>
   <span id="status"></span>
+  <button id="cfgbtn" title="Settings — engine & Ollama (AI prompt help)">⚙</button>
   <button id="reload" title="Reload project.json">↻</button>
 </header>
+<div id="modal">
+  <div class="box" style="width:420px">
+    <h3>⚙ Settings</h3>
+    <div class="field">
+      <span class="lbl">Drawing engine (which crispz app draws the panels)</span>
+      <select id="cfgengine" style="max-width:none;width:100%"></select>
+    </div>
+    <div class="field">
+      <span class="lbl">Ollama address (local AI that improves your panel
+      texts — leave as-is if Ollama runs on this computer)</span>
+      <input id="cfgollamaurl" placeholder="http://127.0.0.1:11434">
+    </div>
+    <div class="field">
+      <span class="lbl">Ollama model (empty = first installed model)</span>
+      <input id="cfgollamamodel" list="ollamamodels" placeholder="llama3.2">
+      <datalist id="ollamamodels"></datalist>
+    </div>
+    <div class="hint" id="cfgstatus" style="margin-top:8px"></div>
+    <div class="row" style="margin-top:12px">
+      <button id="cfgtest">🔌 Test Ollama</button>
+      <button id="cfgsave" class="primary" style="margin-left:auto">💾 Save</button>
+      <button id="cfgclose">Close</button>
+    </div>
+  </div>
+</div>
 <div id="layout">
   <div id="nav"></div>
   <div id="main">
@@ -151,20 +199,46 @@ font-size:11px}
             <button id="composeone" class="primary">🧩 Compose</button>
             <button id="genmissing" title="Generate the panels without an image through the configured engine (family CLI protocol)">🎨 Generate missing</button>
           </div>
-          <div class="hint" style="margin-top:8px">Preview (step 1). Panel and
-          balloon editing arrives with the full Page mode — meanwhile,
-          crispz-studio's 🎬 Comic Studio edits the same project.json.</div>
+          <div class="hint" style="margin-top:8px"><b>Click a panel</b> to
+          edit its text and redraw it. <b>Drag a balloon</b> to pin it where
+          you want, drag the <b>yellow dot</b> to re-aim its tail (onto a
+          mouth, an object…) — double-click a balloon to give it back to
+          automatic placement.</div>
         </div>
         <div class="box" id="pnbox" style="display:none">
           <h3 id="pnhead">Panel</h3>
-          <div class="hint" id="pntext" style="margin-bottom:8px"></div>
-          <div class="row">
-            <button id="regenbtn" class="primary"
-                    title="Generate this panel again with a new random seed, then recompose the page">🎲 Regenerate this panel</button>
+          <div class="field">
+            <span class="lbl">What to draw — @Name casting works here</span>
+            <textarea id="pntext" rows="3"
+              placeholder="wide shot of @Sam typing, fans everywhere…"></textarea>
+            <div class="row" style="margin-top:6px">
+              <button id="improvebtn"
+                      title="Ollama rewrites your draft into a richer visual prompt (keeps the @Names)">✨ Improve</button>
+              <button id="undoimprove" style="display:none"
+                      title="Back to your text before Improve">↩ Undo</button>
+            </div>
           </div>
-          <div class="hint" style="margin-top:8px">Don’t like a panel? Click
-          it on the page, then regenerate — a new seed, a new drawing. The
-          rest of the page is untouched.</div>
+          <div class="field">
+            <span class="lbl">Dialogue — one balloon per line
+            (Sam: … · Tom (think): … · CAP: … · SFX: …)</span>
+            <textarea id="pndlg" rows="3"
+              placeholder="Sam: On y va."></textarea>
+          </div>
+          <div class="row" style="align-items:center;margin-top:10px;
+                                  flex-wrap:nowrap">
+            <span class="lbl" style="margin:0">Seed</span>
+            <input id="pnseed" type="number" step="1" value="-1"
+                   style="width:110px"
+                   title="-1 = a new random drawing each time; a fixed number replays the same one">
+            <button id="savepnbtn" style="margin-left:auto"
+                    title="Save text and balloons, recompose the page — no redraw">💾 Save</button>
+          </div>
+          <button id="regenbtn" class="primary"
+                  style="width:100%;margin-top:10px"
+                  title="Save, then draw this panel again through the engine and recompose the page">🎲 Regenerate this panel</button>
+          <div class="hint" style="margin-top:8px">Regenerate redraws JUST
+          this panel (the rest of the page is untouched). Save alone updates
+          text and balloons without redrawing.</div>
         </div>
         <div class="box hint"><kbd>Esc</kbd> back to the flatplan</div>
       </div>
@@ -177,6 +251,7 @@ font-size:11px}
 let IDX = null;            // /api/index
 let SEL = null;            // {cid, pid} selection
 let SELPN = null;          // panel id selectionne dans la vue Page
+let LASTPAGE = null;       // etat chapitre de la page affichee (rects, dialogues)
 let DRAG = null;           // {cid, pid} being dragged
 let BUSY = false;
 
@@ -423,6 +498,7 @@ async function showPage(cid, pid){
   if(!res) return;
   const p = res.pages.find(x => x.pid === pid);
   if(!p) return;
+  LASTPAGE = p;
   $('flatview').style.display = 'none';
   $('page').classList.add('on');
   $('tab-page').disabled = false;
@@ -431,7 +507,10 @@ async function showPage(cid, pid){
     (p.role !== 'story' ? ' · ' + p.role : '') + (p.folio ? ' · folio ' + p.folio : '');
   const W = IDX.page.width, H = IDX.page.height;
   const avail = Math.min($('stagewrap').clientWidth || 700, 900);
-  const sw = Math.min(avail, Math.round((window.innerHeight - 120) * W / H));
+  // plancher a 280px: une fenetre minuscule (ou un onglet cache) donnerait
+  // une taille negative, que le style refuserait -> stage invisible
+  const sw = Math.max(280, Math.min(avail,
+    Math.round(((window.innerHeight || 900) - 120) * W / H)));
   const sh = Math.round(sw * H / W);
   const st = $('stage');
   st.style.width = sw + 'px'; st.style.height = sh + 'px';
@@ -466,14 +545,35 @@ async function showPage(cid, pid){
     st.appendChild(d);
   });
   renderPanelBox(p);
-  (p.placements || []).forEach(pl => {
+  // Bulles: DEPLACABLES quand la planche composee est affichee. Drag de la
+  // bulle = la punaiser la (pos, contour rouge, double-clic = replacement
+  // auto) ; drag du point jaune = re-viser la queue (anchor).
+  if(p.url) (p.placements || []).forEach(pl => {
+    const pn = p.panels.find(x => x.id === pl.panel);
+    const dlg = pn && pn.dialogue ? pn.dialogue[pl.index] : null;
     const b = document.createElement('div');
-    b.className = 'bub';
+    b.className = 'bub' + (dlg && dlg.pos ? ' dirty' : '');
+    b.title = (dlg ? (dlg.speaker ? dlg.speaker + ': ' : '') + dlg.text
+                   : pl.kind) +
+      '  — drag to pin, double-click to reset' +
+      (pl.clean ? '' : '  ⚠ overlaps a face');
     b.style.left = (pl.rect[0] * sw) + 'px';
     b.style.top = (pl.rect[1] * sh) + 'px';
     b.style.width = (pl.rect[2] * sw) + 'px';
     b.style.height = (pl.rect[3] * sh) + 'px';
+    makeDraggable(b, pl, 'pos');
+    b.ondblclick = ev => { ev.stopPropagation(); resetBubble(pl); };
     st.appendChild(b);
+    if(pl.tip && dlg && (dlg.kind === 'speech' || dlg.kind === 'thought')){
+      const t = document.createElement('div');
+      t.className = 'tipdot';
+      t.title = 'tail tip (' + (dlg.speaker || pl.kind) +
+        ') — drag onto the mouth';
+      t.style.left = (pl.tip[0] * sw) + 'px';
+      t.style.top = (pl.tip[1] * sh) + 'px';
+      makeDraggable(t, pl, 'anchor');
+      st.appendChild(t);
+    }
   });
 }
 function backToFlat(){
@@ -483,26 +583,112 @@ function backToFlat(){
   SEL = null; SELPN = null; renderNav();
 }
 
-/* Encadre "case selectionnee": regenerer UNE case (meme deja rendue). */
+/* Drag d'une bulle (mode 'pos': coin haut-gauche) ou de la pointe de queue
+   (mode 'anchor': un point). Ecrit en FRACTIONS DE CASE via /api/set_bubble,
+   qui recompose la planche. */
+function makeDraggable(el, pl, mode){
+  el.addEventListener('pointerdown', ev => {
+    if(BUSY) return;
+    ev.preventDefault(); ev.stopPropagation();
+    const st = $('stage');
+    const srect = st.getBoundingClientRect();
+    const start = el.getBoundingClientRect();
+    const offX = ev.clientX - start.left, offY = ev.clientY - start.top;
+    el.classList.add('drag');
+    el.setPointerCapture(ev.pointerId);
+    let moved = false;
+    const mv = e => {
+      moved = true;
+      el.style.left = (e.clientX - srect.left - (mode === 'anchor' ? 0 : offX)) + 'px';
+      el.style.top = (e.clientY - srect.top - (mode === 'anchor' ? 0 : offY)) + 'px';
+    };
+    const up = () => {
+      el.removeEventListener('pointermove', mv);
+      el.removeEventListener('pointerup', up);
+      el.classList.remove('drag');
+      if(!moved || !SEL) return;
+      // rect de la case en fractions de page -> pixels du stage
+      const chPn = LASTPAGE && LASTPAGE.panels.find(x => x.id === pl.panel);
+      if(!chPn || !chPn.rect) return;
+      const sw = st.clientWidth, sh = st.clientHeight;
+      const px = chPn.rect[0] * sw, py = chPn.rect[1] * sh;
+      const pw = chPn.rect[2] * sw, ph = chPn.rect[3] * sh;
+      const fx = Math.max(0, Math.min(1, (parseFloat(el.style.left) - px) / pw));
+      const fy = Math.max(0, Math.min(1, (parseFloat(el.style.top) - py) / ph));
+      const payload = {cid: SEL.cid, pid: SEL.pid, pnid: pl.panel,
+                       index: pl.index};
+      payload[mode] = [fx, fy];
+      api('set_bubble', payload, 'Recomposing the page…').then(res => {
+        if(res){ IDX = res;
+                 status(mode === 'pos' ? 'Bubble pinned' : 'Tail re-aimed',
+                        'ok'); }
+        showPage(SEL.cid, SEL.pid);
+      });
+    };
+    el.addEventListener('pointermove', mv);
+    el.addEventListener('pointerup', up);
+  });
+}
+
+function resetBubble(pl){
+  if(!SEL) return;
+  api('set_bubble', {cid: SEL.cid, pid: SEL.pid, pnid: pl.panel,
+                     index: pl.index, clear: ['pos', 'anchor']},
+      'Recomposing the page…').then(res => {
+    if(res){ IDX = res; status('Bubble back to automatic placement', 'ok'); }
+    showPage(SEL.cid, SEL.pid);
+  });
+}
+
+/* Encadre "case selectionnee": editer le texte, sauver, regenerer. */
 function renderPanelBox(p){
   const box = $('pnbox');
   const pn = p.panels.find(x => x.id === SELPN);
   box.style.display = pn ? '' : 'none';
   if(!pn) return;
-  $('pnhead').textContent = 'Panel ' + pn.id +
-    (pn.seed >= 0 ? ' · seed ' + pn.seed : '');
-  $('pntext').textContent = pn.text || '(no description yet — add one in ' +
-    'crispz-studio’s Comic Studio)';
-  $('regenbtn').disabled = !pn.text;
+  $('pnhead').textContent = 'Panel ' + pn.id + ' (' + pn.status + ')';
+  $('pntext').value = pn.text || '';
+  $('pndlg').value = pn.dialogue_text || '';
+  $('pnseed').value = pn.seed;
+}
+
+async function savePanel(){
+  if(!SEL || !SELPN) return null;
+  const res = await api('save_panel', {cid: SEL.cid, pid: SEL.pid,
+    pnid: SELPN, text: $('pntext').value, dialogue: $('pndlg').value,
+    seed: parseInt($('pnseed').value || '-1', 10)}, 'Saving panel…');
+  if(res && res.unknown && res.unknown.length){
+    status('Saved — ⚠ unknown casting: ' + res.unknown.join(', ') +
+           ' (check the spelling of the @Names)', 'warn');
+  }
+  return res;
+}
+
+async function savePanelAndCompose(){
+  const pnid = SELPN;
+  const res = await savePanel();
+  if(!res) return;
+  IDX = res;
+  const res2 = await api('compose', {cid: SEL.cid, pid: SEL.pid},
+                         'Recomposing the page…');
+  if(res2) IDX = res2;
+  SELPN = pnid;
+  showPage(SEL.cid, SEL.pid);
+  if(!(res.unknown || []).length) status('Panel saved, page recomposed', 'ok');
 }
 
 async function regenPanel(){
   if(!SEL || !SELPN) return;
   const pnid = SELPN;
+  if(!$('pntext').value.trim()){
+    status('⚠ Describe the panel first (the top text box)', 'warn');
+    return;
+  }
+  const saved = await savePanel();          // le texte edite part au moteur
+  if(!saved) return;
   const res = await api('generate', {cid: SEL.cid, pid: SEL.pid,
     pnid: pnid, force: true},
-    'Regenerating ' + pnid + '… (new seed, through the engine — can take a '
-    + 'minute)');
+    'Regenerating ' + pnid + '… (through the engine — can take a minute)');
   if(!res) return;
   IDX = res;
   SELPN = pnid;
@@ -526,6 +712,72 @@ $('bookdd').onchange = async () => {
 $('newbook').onclick = newBook;
 $('welcomenew').onclick = newBook;
 $('regenbtn').onclick = regenPanel;
+$('savepnbtn').onclick = savePanelAndCompose;
+
+/* ---------- ✨ Improve (Ollama) ---------- */
+let PREVTEXT = null;
+$('improvebtn').onclick = async () => {
+  const cur = $('pntext').value;
+  const res = await api('improve', {text: cur}, 'Asking Ollama…');
+  if(!res) return;
+  PREVTEXT = cur;
+  $('pntext').value = res.improved;
+  $('undoimprove').style.display = '';
+  const warn = (res.warnings || []).join(' · ');
+  status('✨ Improved by ' + res.model +
+         ' — check the text, then Save or Regenerate' +
+         (warn ? '  ⚠ ' + warn : ''), warn ? 'warn' : 'ok');
+};
+$('undoimprove').onclick = () => {
+  if(PREVTEXT !== null){ $('pntext').value = PREVTEXT; PREVTEXT = null; }
+  $('undoimprove').style.display = 'none';
+  status('Back to your text', 'ok');
+};
+
+/* ---------- ⚙ Settings ---------- */
+async function openSettings(){
+  const res = await api('config', {}, 'Loading settings…');
+  if(!res) return;
+  $('cfgengine').innerHTML = res.engines.map(e =>
+    '<option' + (e === res.engine ? ' selected' : '') + '>' + esc(e) +
+    '</option>').join('') || '<option disabled>(none in config.json)</option>';
+  $('cfgollamaurl').value = res.ollama.url;
+  $('cfgollamamodel').value = res.ollama.model;
+  renderOllamaStatus(res.ollama_status);
+  $('modal').classList.add('on');
+}
+function renderOllamaStatus(st){
+  const el = $('cfgstatus');
+  if(st && st.ok){
+    el.innerHTML = '✅ Ollama answers — ' + st.models.length +
+      ' model(s) installed' + (st.models.length ? ': ' +
+      esc(st.models.slice(0, 4).join(', ')) : '');
+    $('ollamamodels').innerHTML = st.models.map(m =>
+      '<option value="' + esc(m) + '">').join('');
+  }else{
+    el.innerHTML = '⚠️ ' + esc((st && st.error) || 'Ollama not tested yet');
+  }
+}
+$('cfgbtn').onclick = openSettings;
+$('cfgclose').onclick = () => $('modal').classList.remove('on');
+$('modal').onclick = ev => { if(ev.target === $('modal'))
+                             $('modal').classList.remove('on'); };
+$('cfgtest').onclick = async () => {
+  const res = await api('save_config',
+    {ollama: {url: $('cfgollamaurl').value}}, 'Testing Ollama…');
+  if(!res) return;
+  const cfg = await api('config', {});
+  if(cfg) renderOllamaStatus(cfg.ollama_status);
+};
+$('cfgsave').onclick = async () => {
+  const res = await api('save_config',
+    {engine: $('cfgengine').value || null,
+     ollama: {url: $('cfgollamaurl').value,
+              model: $('cfgollamamodel').value}}, 'Saving settings…');
+  if(!res) return;
+  $('modal').classList.remove('on');
+  status('Settings saved (engine: ' + (res.engine || '—') + ')', 'ok');
+};
 $('composeall').onclick = async () => {
   const res = await api('compose_book', {}, 'Composing the whole book…');
   if(res){ IDX = res; renderNav(); renderFlat(); status('Book composed', 'ok'); }
@@ -550,6 +802,7 @@ $('genmissing').onclick = async () => {
          (warn ? '  ⚠ ' + warn : ''), warn ? 'warn' : 'ok');
 };
 document.addEventListener('keydown', ev => {
+  if(ev.target.tagName === 'TEXTAREA' || ev.target.tagName === 'INPUT') return;
   if(ev.key === 'Escape' && $('page').classList.contains('on')) backToFlat();
 });
 
