@@ -48,8 +48,8 @@ d'exemple du tutoriel — *The Making of comics2crispz*, la genèse de cette
 app racontée en BD — se construit avec :
 
 ```bat
-python tools\make_making_of.py            REM le projet seul
-python tools\make_making_of.py --generate REM + génération via le moteur
+.venv\Scripts\python.exe tools\make_making_of.py            REM le projet seul
+.venv\Scripts\python.exe tools\make_making_of.py --generate REM + génération via le moteur
 ```
 
 Le résultat fini de ce tutoriel :
@@ -59,7 +59,7 @@ Le résultat fini de ce tutoriel :
 ## Tests
 
 ```bat
-python tools\run_tests.py
+.venv\Scripts\python.exe tools\run_tests.py
 ```
 
 Sans GPU ni serveur.

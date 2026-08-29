@@ -67,6 +67,19 @@ Rules:
   error: a spec written for qwen-edit must go through studio.
 - `count` other than 1 → warning + forced to 1 (the caller loops).
 
+### loras — style / character consistency
+
+- `loras` = `["file.safetensors:0.8", ...]`, hot-swapped per call by the
+  tool (a character LoRA wins over a style LoRA on the same file: first
+  weight wins).
+- The **prompt itself** may carry `<lora:file[:weight]>` tags (the
+  A1111/Civitai habit): they are extracted at validation time, merged into
+  `loras` (explicit entries win on duplicates) and stripped before the text
+  encoder ever sees them. So a LoRA can travel inside a comics2crispz panel
+  text: `@Lea runs in the rain <lora:ink-style.safetensors:0.8>`.
+- A prompt that contains ONLY lora tags = error, exit 2 (describe the image
+  too).
+
 ### refs (v2) — character consistency
 
 - `refs` = **local absolute file paths** (the protocol is machine-local).
@@ -88,7 +101,7 @@ Rules:
   "tool": "crispz-studio", "version": "1.16.0",
   "route": "remote",
   "images": ["…/out/2026-08-28/….png"],
-  "seed_used": 42, "refs_used": 2,
+  "seed_used": 42, "refs_used": 2, "loras": ["style-ink.safetensors:0.8"],
   "timings": {"total_s": 14.2, "txt2img": 13.9},
   "warnings": []
 }

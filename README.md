@@ -71,8 +71,10 @@ A book is chapters → pages (with a **role**: `cover`, `title`, `story`,
 builder script — read it, it is the whole authoring API in one file:
 
 ```bat
-python tools\make_making_of.py
+.venv\Scripts\python.exe tools\make_making_of.py
 ```
+
+(always use the repo's `.venv` — a bare `python` may lack Pillow.)
 
 This creates `books/making-of/` with 6 pages / 17 panels, a casting
 (`@Mika` the artist, `@Robi` the protocol robot, `@Atelier` the workshop
@@ -128,14 +130,24 @@ panels mentioning `@Name` are generated WITH those references. Engines that
 cannot (e.g. Krea 2) say so upfront and fall back to plain txt2img with a
 warning.
 
+**LoRAs** work on every engine (`supports.loras`), three ways, all ending up
+hot-swapped per panel: per character (the `loras` list of a casting entry —
+wins over the style LoRA on the same file), per book (`style.loras` in
+`project.json`), or **inline in a panel text** with the A1111/Civitai syntax:
+`@Lea runs in the rain <lora:ink-style.safetensors:0.8>` — the tag is
+extracted by the protocol and never reaches the text encoder.
+
 ### 8. Export
 
 The project stays fully compatible with crispz-studio, so its CLI finishes
 the job:
 
 ```bat
-D:\Github\crispz-studio\cz.bat --comic books\making-of --comic-export pdf
+D:\Github\crispz-studio\.venv\Scripts\python.exe D:\Github\crispz-studio\app.py --comic D:\Github\comics2crispz\books\making-of --comic-export pdf
 ```
+
+(absolute paths on purpose: `--comic` resolves relative to the shell's current
+directory, and crispz-studio's venv is the one with the full pipeline.)
 
 (or open the same folder in crispz-studio's 🎬 Comic Studio to drag
 balloons, then export PDF/CBZ.)
@@ -165,7 +177,7 @@ docs/             CLI_PROTOCOL.md (family contract)
 ## Tests
 
 ```bat
-python tools\run_tests.py
+.venv\Scripts\python.exe tools\run_tests.py
 ```
 
 No GPU, no server needed: the `c2c_state` layer is pure, the API is tested

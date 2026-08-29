@@ -415,9 +415,11 @@ $('genmissing').onclick = async () => {
   if(!res) return;
   IDX = res;
   showPage(SEL.cid, SEL.pid);
-  const n = (res.generated || []).length;
+  const gen = res.generated || [];
   const warn = (res.warnings || []).join(' · ');
-  status((n ? n + ' panel(s) generated via ' + res.engine : 'Nothing to generate') +
+  const seeds = gen.map(g => g.panel + ' seed ' + g.seed_used).join(', ');
+  status((gen.length ? gen.length + ' panel(s) generated via ' + res.engine +
+          ' (' + seeds + ')' : 'Nothing to generate') +
          (warn ? '  ⚠ ' + warn : ''), warn ? 'warn' : 'ok');
 };
 document.addEventListener('keydown', ev => {
