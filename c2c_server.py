@@ -384,8 +384,29 @@ class Studio:
                     fx, fy = data[key]
                     dlg[idx][key] = [max(0.0, min(1.0, float(fx))),
                                      max(0.0, min(1.0, float(fy)))]
+            # type de bulle (parole/pensee/cartouche/sfx), forme, homothetie
+            if data.get("kind") is not None:
+                if data["kind"] not in cz_comic.DIALOGUE_KINDS:
+                    raise ValueError(f"kind must be one of "
+                                     f"{cz_comic.DIALOGUE_KINDS}")
+                dlg[idx]["kind"] = data["kind"]
+            if "style" in data:
+                st = data.get("style")
+                if st in cz_comic.BUBBLE_STYLES:
+                    dlg[idx]["style"] = st
+                elif st in (None, ""):
+                    dlg[idx].pop("style", None)   # retour au style du livre
+                else:
+                    raise ValueError(f"style must be one of "
+                                     f"{cz_comic.BUBBLE_STYLES} (or empty)")
+            if data.get("scale") is not None:
+                sc = max(0.4, min(3.0, float(data["scale"])))
+                if abs(sc - 1.0) < 0.05:
+                    dlg[idx].pop("scale", None)   # ~1.0 = pas d'override
+                else:
+                    dlg[idx]["scale"] = round(sc, 2)
             for key in data.get("clear") or []:
-                if key in ("pos", "anchor"):
+                if key in ("pos", "anchor", "scale", "style"):
                     dlg[idx].pop(key, None)
             cz_comic.save_project(project, self.dir)
             fd, emb = self._letter_kit(project)

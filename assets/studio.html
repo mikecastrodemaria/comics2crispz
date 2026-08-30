@@ -158,6 +158,7 @@ text-transform:uppercase;letter-spacing:.5px}
 .bub:hover{background:#4d82c422}
 .bub.drag{cursor:grabbing;border-color:var(--warn)}
 .bub.dirty{border-color:var(--err);border-style:dashed}
+.bub.selb{border-color:var(--warn);border-width:2.5px;background:#ffd27a1a}
 .tipdot{position:absolute;width:14px;height:14px;margin:-7px 0 0 -7px;
 border-radius:50%;background:var(--warn);border:2px solid #000;cursor:move;
 z-index:13}
@@ -393,6 +394,37 @@ font-size:11px}
           you want, drag the <b>yellow dot</b> to re-aim its tail (onto a
           mouth, an object…) — double-click a balloon to give it back to
           automatic placement.</div>
+        </div>
+        <div class="box" id="bubbox" style="display:none">
+          <h3 id="bubhead">Balloon</h3>
+          <div class="row" style="align-items:center">
+            <span class="lbl" style="margin:0">Type</span>
+            <select id="bubkind">
+              <option value="speech">💬 speech (tail)</option>
+              <option value="thought">💭 thought (circles)</option>
+              <option value="caption">📜 caption (box)</option>
+              <option value="sfx">💥 SFX</option>
+            </select>
+            <span class="lbl" style="margin:0 0 0 8px">Shape</span>
+            <select id="bubstyle">
+              <option value="">(book default)</option>
+              <option value="round">round</option>
+              <option value="rounded">rounded</option>
+              <option value="angular">angular</option>
+            </select>
+          </div>
+          <div class="field">
+            <span class="lbl">Size ×<span id="bubscaleval">1.0</span> —
+            balloon and text scale together
+              <button class="helpb" data-help="The balloon size slider: a per-line homothety (0.4x to 3x) - the font, padding, tail and balloon grow together, proportions kept. Type switches speech (tail) / thought (little circles) / caption (narration box) / SFX; Shape picks the balloon outline for speech and thought.">?</button></span>
+            <input id="bubscale" type="range" min="0.4" max="3" step="0.1"
+                   value="1">
+          </div>
+          <div class="row" style="margin-top:8px">
+            <button id="bubapply" class="primary">✔ Apply</button>
+            <button id="bubauto"
+                    title="Forget the pinned position and tail — back to automatic placement">♻ Auto place</button>
+          </div>
         </div>
         <div class="box" id="pnbox" style="display:none">
           <h3 id="pnhead">Panel</h3>
@@ -964,7 +996,7 @@ async function movePage(src, toCid, toIndex){
 
 /* ---------- page preview (read-only, step 1) ---------- */
 async function showPage(cid, pid){
-  if(!SEL || SEL.cid !== cid || SEL.pid !== pid) SELPN = null;
+  if(!SEL || SEL.cid !== cid || SEL.pid !== pid){ SELPN = null; SELBUB = null; }
   SEL = {cid, pid};
   const res = await api('chapter', {cid}, 'Loading chapter…');
   if(!res) return;
@@ -1033,6 +1065,9 @@ async function showPage(cid, pid){
     b.style.top = (pl.rect[1] * sh) + 'px';
     b.style.width = (pl.rect[2] * sw) + 'px';
     b.style.height = (pl.rect[3] * sh) + 'px';
+    b.dataset.bk = pl.panel + ':' + pl.index;
+    if(SELBUB && SELBUB.panel === pl.panel && SELBUB.index === pl.index)
+      b.classList.add('selb');
     makeDraggable(b, pl, 'pos');
     b.ondblclick = ev => { ev.stopPropagation(); resetBubble(pl); };
     st.appendChild(b);
@@ -1047,13 +1082,14 @@ async function showPage(cid, pid){
       st.appendChild(t);
     }
   });
+  renderBubBox();
 }
 function backToFlat(){
   $('page').classList.remove('on');
   $('library').style.display = 'none';
   $('flatview').style.display = '';
   $('tab-page').disabled = true;
-  SEL = null; SELPN = null; renderNav();
+  SEL = null; SELPN = null; SELBUB = null; renderNav();
 }
 
 /* Drag d'une bulle (mode 'pos': coin haut-gauche) ou de la pointe de queue
@@ -1079,7 +1115,11 @@ function makeDraggable(el, pl, mode){
       el.removeEventListener('pointermove', mv);
       el.removeEventListener('pointerup', up);
       el.classList.remove('drag');
-      if(!moved || !SEL) return;
+      if(!moved){
+        if(mode === 'pos') selectBubble(pl);   // simple clic = selection
+        return;
+      }
+      if(!SEL) return;
       // rect de la case en fractions de page -> pixels du stage
       const chPn = LASTPAGE && LASTPAGE.panels.find(x => x.id === pl.panel);
       if(!chPn || !chPn.rect) return;
@@ -1102,6 +1142,48 @@ function makeDraggable(el, pl, mode){
     el.addEventListener('pointerup', up);
   });
 }
+
+/* ---------- selection d'une bulle: type / forme / taille ---------- */
+let SELBUB = null;
+
+function selectBubble(pl){
+  SELBUB = (SELBUB && SELBUB.panel === pl.panel && SELBUB.index === pl.index)
+    ? null : {panel: pl.panel, index: pl.index};
+  document.querySelectorAll('#stage .bub').forEach(b =>
+    b.classList.toggle('selb', !!SELBUB &&
+      b.dataset.bk === SELBUB.panel + ':' + SELBUB.index));
+  renderBubBox();
+}
+function renderBubBox(){
+  const box = $('bubbox');
+  const dlg = SELBUB && LASTPAGE &&
+    (LASTPAGE.panels.find(x => x.id === SELBUB.panel) || {dialogue: []})
+      .dialogue[SELBUB.index];
+  box.style.display = dlg ? '' : 'none';
+  if(!dlg) return;
+  $('bubhead').textContent = 'Balloon — ' +
+    ((dlg.speaker ? dlg.speaker + ': ' : '') + dlg.text).slice(0, 40);
+  $('bubkind').value = dlg.kind || 'speech';
+  $('bubstyle').value = dlg.style || '';
+  const sc = dlg.scale || 1.0;
+  $('bubscale').value = sc;
+  $('bubscaleval').textContent = Number(sc).toFixed(1);
+  $('bubstyle').disabled = ['caption', 'sfx'].includes(dlg.kind || 'speech');
+}
+$('bubscale').oninput = () =>
+  $('bubscaleval').textContent = Number($('bubscale').value).toFixed(1);
+$('bubkind').onchange = () =>
+  $('bubstyle').disabled = ['caption', 'sfx'].includes($('bubkind').value);
+$('bubapply').onclick = async () => {
+  if(!SEL || !SELBUB) return;
+  const res = await api('set_bubble', {cid: SEL.cid, pid: SEL.pid,
+    pnid: SELBUB.panel, index: SELBUB.index,
+    kind: $('bubkind').value, style: $('bubstyle').value,
+    scale: parseFloat($('bubscale').value)}, 'Recomposing the page…');
+  if(res){ IDX = res; status('Balloon updated', 'ok'); }
+  showPage(SEL.cid, SEL.pid);
+};
+$('bubauto').onclick = () => { if(SELBUB) resetBubble(SELBUB); };
 
 function resetBubble(pl){
   if(!SEL) return;
