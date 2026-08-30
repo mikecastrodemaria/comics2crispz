@@ -218,6 +218,71 @@ class Studio:
         return {"ok": True, "engine": cfg.get("engine"),
                 "ollama": cfg.get("ollama") or {}}
 
+    # Cycle de gabarits varies pour "ajouter N planches" (structure de
+    # depart): alternance large/dense, jamais deux fois le meme d'affilee.
+    LAYOUT_CYCLE = ("3-classic", "4-grid", "2-up", "5-hero", "3-strip",
+                    "6-grid")
+
+    def op_add_chapter(self, data):
+        """Nouveau chapitre: {name}. Renvoie l'index (+ cid cree)."""
+        with _LOCK:
+            project = self.load()
+            ch = cz_comic.add_chapter(
+                project, str(data.get("name") or "").strip() or "Chapter")
+            cz_comic.save_project(project, self.dir)
+        idx = c2c_state.book_index(project, self.dir)
+        idx["created"] = ch["id"]
+        return idx
+
+    def op_add_page(self, data):
+        """Ajoute des planches: {cid, layout, role?, count?}. layout
+        'varied' = cycle de gabarits varies (structure de depart). Les
+        planches sont composees (placeholders) pour apparaitre tout de
+        suite dans le chemin de fer."""
+        cid = data["cid"]
+        role = data.get("role") or "story"
+        count = max(1, min(int(data.get("count") or 1), 50))
+        layout = data.get("layout") or "4-grid"
+        with _LOCK:
+            project = self.load()
+            ch = cz_comic.find_chapter(project, cid)
+            start = len(ch["pages"])
+            made = []
+            for i in range(count):
+                lay = (self.LAYOUT_CYCLE[(start + i) % len(self.LAYOUT_CYCLE)]
+                       if layout == "varied" else layout)
+                pg = cz_comic.add_page(project, cid, lay, role=role)
+                made.append(pg["id"])
+            cz_comic.save_project(project, self.dir)
+            for pid in made:
+                c2c_state.compose_one(project, self.dir, cid, pid)
+        idx = c2c_state.book_index(project, self.dir)
+        idx["created"] = made
+        return idx
+
+    def op_set_layout(self, data):
+        """Change le gabarit d'une planche: {cid, pid, layout}. En
+        reduisant, les cases retirees sont RENDUES dans la reponse (id +
+        texte) - rien ne disparait en silence, regle maison."""
+        with _LOCK:
+            project = self.load()
+            _pg, removed = cz_comic.set_layout(project, data["cid"],
+                                               data["pid"], data["layout"])
+            cz_comic.save_project(project, self.dir)
+            fd, emb = self._letter_kit(project)
+            c2c_state.compose_one(project, self.dir, data["cid"], data["pid"],
+                                  face_detector=fd, char_embeddings=emb)
+        idx = c2c_state.book_index(project, self.dir)
+        idx["removed"] = [{"id": p["id"], "text": p.get("text") or ""}
+                          for p in removed]
+        if removed:
+            idx["warnings"] = [
+                f"{len(removed)} panel(s) removed by the smaller layout - "
+                f"their text is shown here so nothing is lost: " +
+                "; ".join(f"{p['id']}: {(p.get('text') or '(empty)')[:60]}"
+                          for p in removed)]
+        return idx
+
     def op_save_panel(self, data):
         """Sauve le TEXTE d'une case avant regeneration: {cid, pid, pnid,
         text?, dialogue?, seed?}. Le dialogue est reparse (syntaxe
@@ -552,9 +617,21 @@ def books_op(op, data):
                                      f"name")
                 p = cz_comic.new_project(title, page="Web")
                 p["page"]["page_numbers"] = True
+                if data.get("manga"):
+                    p["page"]["reading"] = "rtl"   # sens manga (droite→gauche)
                 ch = cz_comic.add_chapter(p, "Chapter 1")
                 cz_comic.add_page(p, ch["id"], "splash", role="cover")
-                cz_comic.add_page(p, ch["id"], "4-grid")
+                # structure de depart optionnelle: N planches d'histoire aux
+                # gabarits varies + dos - un livre pret a remplir case par
+                # case (le mode script .czs viendra completer, etape 2)
+                pages = max(0, min(int(data.get("pages") or 0), 100))
+                if pages:
+                    cycle = Studio.LAYOUT_CYCLE
+                    for i in range(pages):
+                        cz_comic.add_page(p, ch["id"], cycle[i % len(cycle)])
+                    cz_comic.add_page(p, ch["id"], "splash", role="back")
+                else:
+                    cz_comic.add_page(p, ch["id"], "4-grid")
                 cz_comic.save_project(p, d)
                 for c, pg in cz_comic.book_order(p):
                     c2c_state.compose_one(p, d, c["id"], pg["id"])

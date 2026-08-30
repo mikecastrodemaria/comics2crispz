@@ -28,11 +28,26 @@ box-shadow:0 0 0 2px #4d82c433}
 .field{margin-top:10px}
 .field .lbl,.lbl{display:block;font-size:11px;color:var(--mut);
 margin:0 0 4px;letter-spacing:.3px}
-#modal{position:fixed;inset:0;background:#000b;display:none;z-index:50;
-align-items:center;justify-content:center}
-#modal.on{display:flex}
-#modal h3{margin:0 0 4px;font-size:13px;text-transform:uppercase;
+#modal,#laymodal{position:fixed;inset:0;background:#000b;display:none;
+z-index:50;align-items:center;justify-content:center}
+#modal.on,#laymodal.on{display:flex}
+#modal h3,#laymodal h3{margin:0 0 4px;font-size:13px;text-transform:uppercase;
 color:var(--mut)}
+#laygrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;
+margin-top:10px}
+.laypre{position:relative;aspect-ratio:2/3;background:#f4f1ea;border:2px solid
+var(--bd);border-radius:4px;cursor:pointer;overflow:hidden}
+.laypre:hover{border-color:var(--acc)}
+.laypre.sel{border-color:var(--warn);box-shadow:0 0 0 2px #ffd27a44}
+.laypre i{position:absolute;background:#cdd8ea;border:1px solid #5a6a86;
+border-radius:1px}
+.laypre .nm{position:absolute;bottom:2px;left:0;right:0;text-align:center;
+font-size:9px;color:#333;font-style:normal;background:#fff9;padding:0 2px}
+.laypre.varied{display:flex;align-items:center;justify-content:center;
+font-size:22px;background:repeating-linear-gradient(45deg,#f4f1ea,#f4f1ea 8px,
+#e8e2d4 8px,#e8e2d4 16px)}
+.chsep button{margin-left:10px;padding:1px 9px;font-size:11px}
+#nav .addch{margin:10px 12px;padding:5px 10px;font-size:12px;width:auto}
 header{display:flex;align-items:center;gap:12px;padding:8px 14px;
 background:var(--pan);border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:30}
 header h1{font-size:15px;margin:0;font-weight:600;white-space:nowrap}
@@ -189,7 +204,30 @@ font-size:11px}
         </div>
       </div>
     </div>
-    <div id="page">
+    <div id="laymodal">
+  <div class="box" style="width:470px">
+    <h3 id="layhead">Add pages</h3>
+    <div id="laygrid"></div>
+    <div class="row" style="align-items:center;margin-top:12px" id="layaddopts">
+      <span class="lbl" style="margin:0">Role</span>
+      <select id="layrole">
+        <option value="story" selected>story</option>
+        <option value="cover">cover</option>
+        <option value="title">title</option>
+        <option value="back">back</option>
+      </select>
+      <span class="lbl" style="margin:0 0 0 10px">How many</span>
+      <input id="laycount" type="number" min="1" max="50" value="1"
+             style="width:70px">
+    </div>
+    <div class="hint" id="layhint" style="margin-top:8px"></div>
+    <div class="row" style="margin-top:12px">
+      <button id="layok" class="primary" style="margin-left:auto">✔ OK</button>
+      <button id="layclose">Cancel</button>
+    </div>
+  </div>
+</div>
+<div id="page">
       <div id="stagewrap"><div id="stage"></div></div>
       <div id="pgside">
         <div class="box">
@@ -198,6 +236,7 @@ font-size:11px}
             <button id="backflat">📖 Flatplan</button>
             <button id="composeone" class="primary">🧩 Compose</button>
             <button id="genmissing" title="Generate the panels without an image through the configured engine (family CLI protocol)">🎨 Generate missing</button>
+            <button id="laybtn" title="Change this page's panel grid — removed panels report their text, nothing is lost silently">🔲 Layout</button>
           </div>
           <div class="hint" style="margin-top:8px"><b>Click a panel</b> to
           edit its text and redraw it. <b>Drag a balloon</b> to pin it where
@@ -316,7 +355,7 @@ function afterBookSwitch(res){
   IDX = res; SEL = null;
   backToFlat();
   renderNav(); renderFlat();
-  $('pname').textContent = res.name;
+  $('pname').textContent = res.name + (res.reading === 'rtl' ? '  ↤ manga' : '');
   document.title = 'comics2crispz — ' + res.name;
   showWelcome(false);
   loadBooks();
@@ -332,7 +371,14 @@ function showWelcome(on){
 async function newBook(){
   const name = prompt('Name of the new book:');
   if(!name || !name.trim()) return;
-  const res = await api('new_book', {name: name.trim()}, 'Creating the book…');
+  const pages = parseInt(prompt(
+    'How many story pages to start with? (varied panel grids, cover and ' +
+    'back added for you)\n0 = minimal book (cover + one 4-panel page).',
+    '12') || '0', 10) || 0;
+  const manga = confirm('Manga reading direction (right → left)?\n' +
+    'OK = manga · Cancel = western (left → right)');
+  const res = await api('new_book', {name: name.trim(), pages: pages,
+                                     manga: manga}, 'Creating the book…');
   if(res) afterBookSwitch(res);
 }
 
@@ -344,7 +390,7 @@ async function load(){
     return;
   }
   IDX = res;
-  $('pname').textContent = res.name;
+  $('pname').textContent = res.name + (res.reading === 'rtl' ? '  ↤ manga' : '');
   document.title = 'comics2crispz — ' + res.name;
   renderNav(); renderFlat();
   if(SEL && bookPos(SEL.cid, SEL.pid) < 0) SEL = null;
@@ -390,6 +436,11 @@ function renderNav(){
       nav.appendChild(d);
     });
   });
+  const addch = document.createElement('button');
+  addch.className = 'addch';
+  addch.textContent = '➕ New chapter';
+  addch.onclick = addChapter;
+  nav.appendChild(addch);
 }
 
 /* ---------- flatplan ---------- */
@@ -434,6 +485,14 @@ function renderFlat(){
       const sep = document.createElement('div');
       sep.className = 'chsep';
       sep.textContent = chapName;
+      const cid = first !== null ? IDX.book[first].cid : null;
+      if(cid){
+        const add = document.createElement('button');
+        add.textContent = '➕ Add pages';
+        add.title = 'Add pages to this chapter (pick a panel grid)';
+        add.onclick = () => openLayoutPicker({mode: 'add', cid: cid});
+        sep.appendChild(add);
+      }
       flat.appendChild(sep);
     }
     const sp = document.createElement('div');
@@ -713,6 +772,94 @@ $('newbook').onclick = newBook;
 $('welcomenew').onclick = newBook;
 $('regenbtn').onclick = regenPanel;
 $('savepnbtn').onclick = savePanelAndCompose;
+
+/* ---------- structure: gabarits, planches, chapitres ---------- */
+let LAYCTX = null, LAYSEL = null;
+
+function layoutPreviewEl(name, cells){
+  const d = document.createElement('div');
+  d.className = 'laypre';
+  d.dataset.lay = name;
+  d.title = name + ' — ' + cells.length + ' panel' + (cells.length > 1 ? 's' : '');
+  cells.forEach(c => {
+    const i = document.createElement('i');
+    i.style.left = (c[0] * 96 + 2) + '%';
+    i.style.top = (c[1] * 96 + 2) + '%';
+    i.style.width = (c[2] * 96 - 1) + '%';
+    i.style.height = (c[3] * 96 - 1) + '%';
+    d.appendChild(i);
+  });
+  const nm = document.createElement('span');
+  nm.className = 'nm';
+  nm.textContent = name;
+  d.appendChild(nm);
+  d.onclick = () => selectLayout(name);
+  return d;
+}
+function selectLayout(name){
+  LAYSEL = name;
+  document.querySelectorAll('.laypre').forEach(x =>
+    x.classList.toggle('sel', x.dataset.lay === name));
+}
+function openLayoutPicker(ctx){
+  LAYCTX = ctx; LAYSEL = null;
+  $('layhead').textContent = ctx.mode === 'add'
+    ? 'Add pages — chapter ' + ctx.cid
+    : 'Change layout — ' + ctx.cid + '.' + ctx.pid;
+  $('layaddopts').style.display = ctx.mode === 'add' ? '' : 'none';
+  $('layhint').textContent = ctx.mode === 'add'
+    ? 'Pick the panel grid of the new page(s) — or ✨ varied for a ready-to-fill mix.'
+    : 'A bigger grid adds empty panels; a smaller one reports the removed panels and their text — nothing is lost silently.';
+  const g = $('laygrid');
+  g.innerHTML = '';
+  if(ctx.mode === 'add'){
+    const v = document.createElement('div');
+    v.className = 'laypre varied';
+    v.dataset.lay = 'varied';
+    v.title = 'varied mix (alternating grids)';
+    v.textContent = '✨';
+    const nm = document.createElement('span');
+    nm.className = 'nm'; nm.textContent = 'varied';
+    v.appendChild(nm);
+    v.onclick = () => selectLayout('varied');
+    g.appendChild(v);
+  }
+  Object.keys(IDX.layouts || {}).sort().forEach(n =>
+    g.appendChild(layoutPreviewEl(n, IDX.layouts[n])));
+  $('laymodal').classList.add('on');
+}
+$('layclose').onclick = () => $('laymodal').classList.remove('on');
+$('laymodal').onclick = ev => { if(ev.target === $('laymodal'))
+                                $('laymodal').classList.remove('on'); };
+$('layok').onclick = async () => {
+  if(!LAYCTX || !LAYSEL){ status('Pick a grid first', 'warn'); return; }
+  $('laymodal').classList.remove('on');
+  if(LAYCTX.mode === 'add'){
+    const res = await api('add_page', {cid: LAYCTX.cid, layout: LAYSEL,
+      role: $('layrole').value,
+      count: parseInt($('laycount').value || '1', 10)}, 'Adding page(s)…');
+    if(res){ IDX = res; renderNav(); renderFlat();
+             status((res.created || []).length + ' page(s) added — click one '
+                    + 'to write its panels', 'ok'); }
+  }else{
+    const res = await api('set_layout', {cid: LAYCTX.cid, pid: LAYCTX.pid,
+      layout: LAYSEL}, 'Changing layout…');
+    if(res){ IDX = res;
+             const warn = (res.warnings || []).join(' ');
+             showPage(LAYCTX.cid, LAYCTX.pid);
+             status(warn || 'Layout changed', warn ? 'warn' : 'ok'); }
+  }
+};
+$('laybtn').onclick = () => { if(SEL)
+  openLayoutPicker({mode: 'change', cid: SEL.cid, pid: SEL.pid}); };
+async function addChapter(){
+  const name = prompt('Name of the new chapter:');
+  if(!name || !name.trim()) return;
+  const res = await api('add_chapter', {name: name.trim()}, 'Adding chapter…');
+  if(res){ IDX = res; renderNav(); renderFlat();
+           status('Chapter “' + name.trim() + '” added — give it pages with '
+                  + '➕ Add pages', 'ok'); }
+}
 
 /* ---------- ✨ Improve (Ollama) ---------- */
 let PREVTEXT = null;

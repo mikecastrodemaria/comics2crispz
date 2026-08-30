@@ -78,19 +78,29 @@ def book_index(project, project_dir):
                                if os.path.isfile(pp) else 0),
                      **prog})
     pg_conf = cz_comic.page_size(project.get("page"))
+    rtl = str(pg_conf.get("reading") or "ltr").lower() == "rtl"
     pos = {id(p): i for i, p in enumerate(book)}
     sp = [[(pos[id(p)] if p is not None else None) for p in row]
-          for row in spreads(book)]
+          for row in spreads(book, rtl=rtl)]
     return {"ok": True, "name": project.get("name") or "Untitled",
+            "reading": "rtl" if rtl else "ltr",
             "page": {"width": pg_conf["width"], "height": pg_conf["height"]},
-            "chapters": chapters, "book": book, "spreads": sp}
+            "chapters": chapters, "book": book, "spreads": sp,
+            # cellules des gabarits en fractions: la SPA dessine les
+            # mini-apercus cliquables du selecteur de layout avec ca
+            "layouts": {name: [list(c) for c in cz_comic.layout_cells(name)]
+                        for name in cz_comic.layout_names()}}
 
 
-def spreads(book):
+def spreads(book, rtl=False):
     """Facing-page spreads from the index: the cover (and any 'cover'/'back'
     page) stands ALONE, the body goes in [verso, recto] pairs - the recto
     (right-hand page) carries the beat. A 'title' page consumes its slot in
-    the parity (that is the point: SEE where right-hand pages land)."""
+    the parity (that is the point: SEE where right-hand pages land).
+
+    rtl=True (manga - project['page']['reading'] = 'rtl'): the book reads
+    right to left. Same pairing, but the order INSIDE each spread is
+    mirrored: the first-read page is the right-hand side of the book."""
     out, body = [], []
     for p in book:
         if p["role"] in ("cover", "back"):
@@ -102,6 +112,8 @@ def spreads(book):
             body.append(p)
     if body:
         out.extend(_pair(body))
+    if rtl:
+        out = [list(reversed(row)) for row in out]
     return out
 
 
