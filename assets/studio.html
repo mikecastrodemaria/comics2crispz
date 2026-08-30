@@ -28,6 +28,13 @@ box-shadow:0 0 0 2px #4d82c433}
 .field{margin-top:10px}
 .field .lbl,.lbl{display:block;font-size:11px;color:var(--mut);
 margin:0 0 4px;letter-spacing:.3px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.grid2 button{width:100%}
+select.w100,.w100{max-width:none;width:100%}
+input[type=range]{width:100%;padding:0;border:none;background:transparent;
+box-shadow:none;accent-color:var(--acc);height:22px;cursor:pointer}
+input[type=range]:focus{box-shadow:none;border:none}
+#bubbox h3{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #modal,#laymodal,#wizmodal,#helpmodal{position:fixed;inset:0;background:#000b;
 display:none;z-index:50;align-items:center;justify-content:center}
 #modal.on,#laymodal.on,#wizmodal.on,#helpmodal.on{display:flex}
@@ -397,30 +404,37 @@ font-size:11px}
         </div>
         <div class="box" id="bubbox" style="display:none">
           <h3 id="bubhead">Balloon</h3>
-          <div class="row" style="align-items:center">
-            <span class="lbl" style="margin:0">Type</span>
-            <select id="bubkind">
-              <option value="speech">💬 speech (tail)</option>
-              <option value="thought">💭 thought (circles)</option>
-              <option value="caption">📜 caption (box)</option>
-              <option value="sfx">💥 SFX</option>
-            </select>
-            <span class="lbl" style="margin:0 0 0 8px">Shape</span>
-            <select id="bubstyle">
-              <option value="">(book default)</option>
-              <option value="round">round</option>
-              <option value="rounded">rounded</option>
-              <option value="angular">angular</option>
-            </select>
+          <div class="grid2">
+            <div class="field" style="margin-top:6px">
+              <span class="lbl">Type</span>
+              <select id="bubkind" class="w100">
+                <option value="speech">💬 speech (tail)</option>
+                <option value="thought">💭 thought (circles)</option>
+                <option value="caption">📜 caption (box)</option>
+                <option value="sfx">💥 SFX</option>
+              </select>
+            </div>
+            <div class="field" style="margin-top:6px">
+              <span class="lbl">Shape</span>
+              <select id="bubstyle" class="w100">
+                <option value="">(book default)</option>
+                <option value="round">round</option>
+                <option value="rounded">rounded</option>
+                <option value="angular">angular</option>
+              </select>
+            </div>
           </div>
           <div class="field">
-            <span class="lbl">Size ×<span id="bubscaleval">1.0</span> —
-            balloon and text scale together
-              <button class="helpb" data-help="The balloon size slider: a per-line homothety (0.4x to 3x) - the font, padding, tail and balloon grow together, proportions kept. Type switches speech (tail) / thought (little circles) / caption (narration box) / SFX; Shape picks the balloon outline for speech and thought.">?</button></span>
+            <span class="lbl" style="display:flex;align-items:center;gap:6px">
+              Size <b id="bubscaleval" style="color:var(--fg)">×1.0</b>
+              <button class="helpb" style="margin-left:0"
+                data-help="The balloon size slider: a per-line homothety (0.4x to 3x) - the font, padding, tail and balloon grow together, proportions kept. Type switches speech (tail) / thought (little circles) / caption (narration box) / SFX; Shape picks the balloon outline for speech and thought.">?</button>
+              <span style="margin-left:auto">balloon + text together</span>
+            </span>
             <input id="bubscale" type="range" min="0.4" max="3" step="0.1"
                    value="1">
           </div>
-          <div class="row" style="margin-top:8px">
+          <div class="grid2" style="margin-top:10px">
             <button id="bubapply" class="primary">✔ Apply</button>
             <button id="bubauto"
                     title="Forget the pinned position and tail — back to automatic placement">♻ Auto place</button>
@@ -1167,11 +1181,11 @@ function renderBubBox(){
   $('bubstyle').value = dlg.style || '';
   const sc = dlg.scale || 1.0;
   $('bubscale').value = sc;
-  $('bubscaleval').textContent = Number(sc).toFixed(1);
+  $('bubscaleval').textContent = '×' + Number(sc).toFixed(1);
   $('bubstyle').disabled = ['caption', 'sfx'].includes(dlg.kind || 'speech');
 }
 $('bubscale').oninput = () =>
-  $('bubscaleval').textContent = Number($('bubscale').value).toFixed(1);
+  $('bubscaleval').textContent = '×' + Number($('bubscale').value).toFixed(1);
 $('bubkind').onchange = () =>
   $('bubstyle').disabled = ['caption', 'sfx'].includes($('bubkind').value);
 $('bubapply').onclick = async () => {
