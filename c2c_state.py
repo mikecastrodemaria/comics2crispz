@@ -17,6 +17,7 @@ position in the array, the folio is what readers see).
 """
 
 import os
+import re
 import json
 
 from PIL import Image
@@ -274,6 +275,85 @@ def merge_dialogue(old, new):
                 if k in old[best] and k not in nd:
                     nd[k] = old[best][k]
     return new
+
+
+# ----------------------------------------------------------------------------
+# Fun mode: build a book from an LLM outline (repairs are NEVER silent)
+# ----------------------------------------------------------------------------
+_NAME_OK = re.compile(r"[^A-Za-z0-9_\-]+")
+
+
+def _closest_layout(n_panels):
+    """Layout whose panel count is closest to n_panels (ties: fewer panels)."""
+    names = cz_comic.layout_names()
+    return min(names, key=lambda x: (abs(len(cz_comic.layout_cells(x))
+                                         - n_panels),
+                                     len(cz_comic.layout_cells(x))))
+
+
+def build_from_outline(project, outline, chapter_name="Story"):
+    """Fills `project` from an LLM outline (✨ fun mode): casting, one
+    chapter, story pages with panel texts and dialogues. EVERY repair is
+    reported in the returned warnings list - an invalid layout is swapped
+    for the closest one, extra panels are dropped WITH their text quoted,
+    invalid dialogue kinds fall back to speech. Nothing disappears
+    silently, the family rule."""
+    warnings = []
+    for c in (outline.get("casting") or [])[:8]:
+        raw = str(c.get("name") or "").strip()
+        name = _NAME_OK.sub("", raw)
+        if not name:
+            warnings.append("casting entry without a usable name - skipped")
+            continue
+        kind = c.get("kind") if c.get("kind") in ("character", "setting") \
+            else "character"
+        if c.get("kind") not in ("character", "setting", None):
+            warnings.append(f"casting '{name}': unknown kind "
+                            f"'{c.get('kind')}' - treated as character")
+        project.setdefault("casting", {})[name] = cz_comic.new_character(
+            str(c.get("desc") or "").strip(), kind=kind)
+    ch = cz_comic.add_chapter(project, chapter_name,
+                              str(outline.get("synopsis") or "").strip())
+    for i, pd in enumerate(outline.get("pages") or []):
+        if not isinstance(pd, dict):
+            warnings.append(f"page {i + 1}: not an object - skipped")
+            continue
+        panels_data = [p for p in (pd.get("panels") or [])
+                       if isinstance(p, dict)]
+        layout = pd.get("layout")
+        try:
+            n_cells = len(cz_comic.layout_cells(layout))
+        except (ValueError, TypeError):
+            layout = _closest_layout(max(1, len(panels_data)))
+            n_cells = len(cz_comic.layout_cells(layout))
+            warnings.append(f"page {i + 1}: unknown layout "
+                            f"'{pd.get('layout')}' - using {layout}")
+        page = cz_comic.add_page(project, ch["id"], layout)
+        if len(panels_data) > n_cells:
+            lost = "; ".join((str(x.get("text") or "(empty)")[:60])
+                             for x in panels_data[n_cells:])
+            warnings.append(f"page {i + 1} ({page['id']}): "
+                            f"{len(panels_data) - n_cells} panel(s) beyond "
+                            f"the {layout} grid dropped - their text: {lost}")
+        for j, pnd in enumerate(panels_data[:n_cells]):
+            panel = page["panels"][j]
+            panel["text"] = str(pnd.get("text") or "").strip()
+            for d in (pnd.get("dialogue") or [])[:6]:
+                if not isinstance(d, dict):
+                    continue
+                text = str(d.get("text") or "").strip()
+                if not text:
+                    continue
+                kind = d.get("kind") \
+                    if d.get("kind") in cz_comic.DIALOGUE_KINDS else "speech"
+                if d.get("kind") not in cz_comic.DIALOGUE_KINDS:
+                    warnings.append(f"{page['id']}.{panel['id']}: unknown "
+                                    f"dialogue kind '{d.get('kind')}' - "
+                                    f"treated as speech")
+                cz_comic.add_dialogue(panel, text,
+                                      speaker=str(d.get("speaker") or ""),
+                                      kind=kind)
+    return ch, warnings
 
 
 # ----------------------------------------------------------------------------

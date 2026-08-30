@@ -44,6 +44,78 @@ def models(cfg, timeout=5):
                          f"Ollama app running?"}
 
 
+def _resolve_model(cfg):
+    """(url, model|None, err|None) - modele de la config ou premier installe."""
+    cfg = cfg or {}
+    url = (cfg.get("url") or DEFAULT_URL).rstrip("/")
+    model = (cfg.get("model") or "").strip()
+    if model:
+        return url, model, None
+    m = models(cfg, timeout=5)
+    if not m.get("ok"):
+        return url, None, m
+    if not m["models"]:
+        return url, None, {"ok": False,
+                           "error": "Ollama runs but has no model installed "
+                                    "- e.g. run: ollama pull llama3.2"}
+    return url, m["models"][0], None
+
+
+def fun_book(title, pages, layout_counts, cfg, timeout=600):
+    """✨ Mode fun: un TITRE -> l'outline complet d'un petit livre (synopsis,
+    casting, planches avec gabarits, prompts de cases @Name, dialogues).
+    Ollama est force en JSON (format: 'json'). Renvoie {ok, outline, model}
+    ou {ok: False, error}. La VALIDATION/reparation de l'outline est faite
+    par c2c_state.build_from_outline (pur, testable) - ici on ne verifie que
+    la forme grossiere."""
+    title = (title or "").strip()
+    if not title:
+        return {"ok": False, "error": "give the book a title first"}
+    url, model, err = _resolve_model(cfg)
+    if err:
+        return err
+    lays = ", ".join(f"{n}={c}" for n, c in sorted(layout_counts.items()))
+    prompt = (
+        f"You invent a short, fun comic book from its title: \"{title}\".\n"
+        f"Answer with ONE JSON object EXACTLY shaped like this:\n"
+        f'{{"synopsis": "...",\n'
+        f' "casting": [{{"name": "Lea", "kind": "character" or "setting", '
+        f'"desc": "concrete visual description, in English"}}],\n'
+        f' "pages": [{{"layout": "4-grid", "panels": [{{"text": "...", '
+        f'"dialogue": [{{"speaker": "Lea", "kind": "speech", '
+        f'"text": "..."}}]}}]}}]}}\n'
+        f"Rules:\n"
+        f"- exactly {int(pages)} pages; allowed layouts with their panel "
+        f"counts: {lays}; each page's panels array has EXACTLY as many items "
+        f"as its layout's count\n"
+        f"- panel text = a concrete VISUAL image-generation prompt in "
+        f"English (subject, action, framing, lighting), naming characters "
+        f"as @Name matching the casting names (2 to 5 casting entries)\n"
+        f"- dialogue kind is one of speech, thought, caption, sfx; speaker "
+        f"empty for caption/sfx; dialogue text in the LANGUAGE OF THE TITLE; "
+        f"1-3 short lines per panel, not every panel needs dialogue\n"
+        f"- no text or lettering described inside the image prompts")
+    try:
+        req = urllib.request.Request(
+            url + "/api/generate",
+            data=json.dumps({"model": model, "stream": False,
+                             "format": "json",
+                             "keep_alive": (cfg or {}).get("keep_alive", 0),
+                             "prompt": prompt}).encode("utf-8"),
+            headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            res = json.loads(r.read().decode("utf-8"))
+        outline = json.loads(res.get("response") or "{}")
+    except Exception as e:
+        return {"ok": False,
+                "error": f"fun-mode call failed ({model} at {url}): {e}"}
+    if not isinstance(outline, dict) or not outline.get("pages"):
+        return {"ok": False,
+                "error": f"{model} answered without any pages - try again "
+                         f"or pick another model in ⚙"}
+    return {"ok": True, "outline": outline, "model": model}
+
+
 def improve(text, cfg, timeout=180):
     """Ameliore une description de case. Renvoie {ok, improved, model,
     warnings?} - warning si le modele a perdu un @Name ou un tag <lora:>."""

@@ -237,6 +237,7 @@ font-size:11px}
             <button id="composeone" class="primary">🧩 Compose</button>
             <button id="genmissing" title="Generate the panels without an image through the configured engine (family CLI protocol)">🎨 Generate missing</button>
             <button id="laybtn" title="Change this page's panel grid — removed panels report their text, nothing is lost silently">🔲 Layout</button>
+            <button id="delpagebtn" title="Remove this page from the book (generated files stay on disk, recoverable)">🗑</button>
           </div>
           <div class="hint" style="margin-top:8px"><b>Click a panel</b> to
           edit its text and redraw it. <b>Drag a balloon</b> to pin it where
@@ -371,15 +372,26 @@ function showWelcome(on){
 async function newBook(){
   const name = prompt('Name of the new book:');
   if(!name || !name.trim()) return;
+  const fun = confirm('✨ Fun mode?\nOK = the AI (Ollama) invents the whole ' +
+    'book from the title — story, characters, panel prompts, dialogue — ' +
+    'and you edit everything after.\nCancel = an empty structure to fill ' +
+    'yourself.');
   const pages = parseInt(prompt(
-    'How many story pages to start with? (varied panel grids, cover and ' +
-    'back added for you)\n0 = minimal book (cover + one 4-panel page).',
-    '12') || '0', 10) || 0;
+    (fun ? 'How many story pages should the AI invent?'
+         : 'How many story pages to start with? (varied panel grids, cover ' +
+           'and back added for you)\n0 = minimal book (cover + one 4-panel ' +
+           'page).'),
+    fun ? '6' : '12') || '0', 10) || 0;
   const manga = confirm('Manga reading direction (right → left)?\n' +
     'OK = manga · Cancel = western (left → right)');
   const res = await api('new_book', {name: name.trim(), pages: pages,
-                                     manga: manga}, 'Creating the book…');
-  if(res) afterBookSwitch(res);
+                                     manga: manga, fun: fun},
+    fun ? 'The AI is inventing your book… (can take a minute)'
+        : 'Creating the book…');
+  if(!res) return;
+  afterBookSwitch(res);
+  const warn = (res.warnings || []).join(' · ');
+  if(warn) status(warn, 'warn');
 }
 
 async function load(){
@@ -852,6 +864,18 @@ $('layok').onclick = async () => {
 };
 $('laybtn').onclick = () => { if(SEL)
   openLayoutPicker({mode: 'change', cid: SEL.cid, pid: SEL.pid}); };
+$('delpagebtn').onclick = async () => {
+  if(!SEL) return;
+  if(!confirm('Remove page ' + SEL.cid + '.' + SEL.pid + ' from the book?\n' +
+              'Its panel texts will be shown in the status bar, and the ' +
+              'generated files stay on disk (recoverable).')) return;
+  const res = await api('delete_page', {cid: SEL.cid, pid: SEL.pid},
+                        'Removing page…');
+  if(!res) return;
+  IDX = res;
+  backToFlat(); renderNav(); renderFlat();
+  status((res.warnings || []).join(' '), 'warn');
+};
 async function addChapter(){
   const name = prompt('Name of the new chapter:');
   if(!name || !name.trim()) return;

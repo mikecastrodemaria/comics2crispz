@@ -283,6 +283,27 @@ class Studio:
                           for p in removed)]
         return idx
 
+    def op_delete_page(self, data):
+        """Supprime une planche du livre: {cid, pid}. Le project.json ne la
+        reference plus, mais les FICHIERS (cases generees, planche composee)
+        restent sur disque dans panels/ et pages/ - recuperables a la main.
+        La reponse recapitule les textes des cases supprimees (regle
+        maison: rien ne disparait sans trace)."""
+        with _LOCK:
+            project = self.load()
+            ch = cz_comic.find_chapter(project, data["cid"])
+            page = cz_comic.find_page(project, data["cid"], data["pid"])
+            ch["pages"].remove(page)
+            cz_comic.save_project(project, self.dir)
+        idx = c2c_state.book_index(project, self.dir)
+        texts = [f"{pn['id']}: {(pn.get('text') or '(empty)')[:60]}"
+                 for pn in page["panels"]]
+        idx["warnings"] = [
+            f"page {data['cid']}.{data['pid']} removed from the book - its "
+            f"panel texts: " + "; ".join(texts) + ". Generated files stay "
+            f"on disk under panels/ and pages/ (recoverable)."]
+        return idx
+
     def op_save_panel(self, data):
         """Sauve le TEXTE d'une case avant regeneration: {cid, pid, pnid,
         text?, dialogue?, seed?}. Le dialogue est reparse (syntaxe
@@ -592,6 +613,7 @@ def books_op(op, data):
     Toujours {ok: ...}; apres open/new, le livre devient le livre OUVERT et
     la reponse contient son index (l'UI bascule sans recharger)."""
     try:
+        warnings = []
         with _LOCK:
             if op == "books":
                 return list_books()
@@ -619,19 +641,51 @@ def books_op(op, data):
                 p["page"]["page_numbers"] = True
                 if data.get("manga"):
                     p["page"]["reading"] = "rtl"   # sens manga (droite→gauche)
-                ch = cz_comic.add_chapter(p, "Chapter 1")
-                cz_comic.add_page(p, ch["id"], "splash", role="cover")
-                # structure de depart optionnelle: N planches d'histoire aux
-                # gabarits varies + dos - un livre pret a remplir case par
-                # case (le mode script .czs viendra completer, etape 2)
                 pages = max(0, min(int(data.get("pages") or 0), 100))
-                if pages:
-                    cycle = Studio.LAYOUT_CYCLE
-                    for i in range(pages):
-                        cz_comic.add_page(p, ch["id"], cycle[i % len(cycle)])
-                    cz_comic.add_page(p, ch["id"], "splash", role="back")
-                else:
-                    cz_comic.add_page(p, ch["id"], "4-grid")
+                if data.get("fun"):
+                    # ✨ mode fun: Ollama invente tout depuis le titre. En cas
+                    # d'echec -> structure variee + warning, jamais de livre
+                    # casse ni d'erreur seche au premier lancement.
+                    lay_counts = {n: len(cz_comic.layout_cells(n))
+                                  for n in cz_comic.layout_names()}
+                    fb = c2c_ollama.fun_book(title, pages or 6, lay_counts,
+                                             cfg.get("ollama"))
+                    if fb.get("ok"):
+                        cov = cz_comic.add_chapter(p, "Cover")
+                        pg = cz_comic.add_page(p, cov["id"], "splash",
+                                               role="cover")
+                        cz_comic.add_dialogue(pg["panels"][0], title.upper(),
+                                              kind="sfx")
+                        pg["panels"][0]["text"] = (
+                            f"dramatic comic book cover for a story titled "
+                            f"'{title}'")
+                        _ch, ol_warnings = c2c_state.build_from_outline(
+                            p, fb["outline"])
+                        warnings.extend(ol_warnings)
+                        back = cz_comic.add_page(p, _ch["id"], "splash",
+                                                 role="back")
+                        back["panels"][0]["text"] = \
+                            "minimalist comic back cover"
+                        warnings.insert(0, f"✨ invented by {fb['model']} - "
+                                           f"everything is editable")
+                    else:
+                        warnings.append(f"fun mode unavailable "
+                                        f"({fb.get('error')}) - built a "
+                                        f"varied structure instead")
+                        data = dict(data, fun=False)
+                if not data.get("fun"):
+                    ch = cz_comic.add_chapter(p, "Chapter 1")
+                    cz_comic.add_page(p, ch["id"], "splash", role="cover")
+                    # structure de depart optionnelle: N planches variees +
+                    # dos - un livre pret a remplir case par case
+                    if pages:
+                        cycle = Studio.LAYOUT_CYCLE
+                        for i in range(pages):
+                            cz_comic.add_page(p, ch["id"],
+                                              cycle[i % len(cycle)])
+                        cz_comic.add_page(p, ch["id"], "splash", role="back")
+                    else:
+                        cz_comic.add_page(p, ch["id"], "4-grid")
                 cz_comic.save_project(p, d)
                 for c, pg in cz_comic.book_order(p):
                     c2c_state.compose_one(p, d, c["id"], pg["id"])
@@ -641,6 +695,8 @@ def books_op(op, data):
             Handler.studio = studio
         idx = c2c_state.book_index(studio.load(), studio.dir)
         idx["opened"] = os.path.basename(studio.dir)
+        if warnings:
+            idx["warnings"] = warnings
         return idx
     except Exception as e:
         return {"ok": False, "error": str(e)}
