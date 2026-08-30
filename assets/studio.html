@@ -172,6 +172,18 @@ font-size:11px}
       <span class="lbl">Drawing engine (which crispz app draws the panels)</span>
       <select id="cfgengine" style="max-width:none;width:100%"></select>
     </div>
+    <div id="cfgbook" style="display:none">
+      <div class="field">
+        <span class="lbl">THIS book's engine
+          <button class="helpb" data-help="Per-book engine and model in the settings dialog: the open book records which crispz engine and which checkpoint model it wants (set at creation by the wizard, editable here). The app never swaps the running instance's model - it warns at generation time when the loaded model differs.">?</button></span>
+        <select id="cfgbookengine" style="max-width:none;width:100%"></select>
+      </div>
+      <div class="field">
+        <span class="lbl">THIS book's model (from the engine's own list)</span>
+        <select id="cfgbookmodel" style="max-width:none;width:100%"></select>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--bd);margin:14px 0">
+    </div>
     <div class="field">
       <span class="lbl">Ollama address (local AI that improves your panel
       texts — leave as-is if Ollama runs on this computer)</span>
@@ -1179,7 +1191,43 @@ async function openSettings(){
   $('cfgollamaurl').value = res.ollama.url;
   $('cfgollamamodel').value = res.ollama.model;
   renderOllamaStatus(res.ollama_status);
+  // moteur/modele DU LIVRE ouvert (ce que le wizard enregistre a la creation)
+  $('cfgbook').style.display = IDX ? '' : 'none';
+  if(IDX){
+    const cur = IDX.engine || {};
+    $('cfgbookengine').innerHTML =
+      '<option value="">(default engine: ' + esc(res.engine || '—') +
+      ')</option>' + res.engines.map(e =>
+        '<option' + (cur.name === e ? ' selected' : '') + '>' + esc(e) +
+        '</option>').join('');
+    renderBookModels(cur.model || '');
+    $('cfgbookengine').onchange = () => renderBookModels('');
+  }
   $('modal').classList.add('on');
+}
+async function renderBookModels(selected){
+  const eng = $('cfgbookengine').value;
+  const dd = $('cfgbookmodel');
+  if(!eng){
+    dd.innerHTML = '<option value="">(the engine keeps its model)</option>';
+    return;
+  }
+  dd.innerHTML = '<option value="">probing the engine…</option>';
+  try{
+    const r = await fetch('/api/engines', {method: 'POST',
+      headers: {'Content-Type': 'application/json'}, body: '{}'});
+    const res = await r.json();
+    const caps = ((res && res.engines) || {})[eng] || {};
+    const ms = caps.models || [];
+    dd.innerHTML = '<option value="">(keep the engine’s current model' +
+      (caps.model_loaded ? ': ' + esc(caps.model_loaded) : '') +
+      ')</option>' + ms.map(m => '<option' +
+        (m === selected ? ' selected' : '') + '>' + esc(m) +
+        '</option>').join('');
+  }catch(_){
+    dd.innerHTML = '<option value="">(engine unreachable — start its app)' +
+                   '</option>';
+  }
 }
 function renderOllamaStatus(st){
   const el = $('cfgstatus');
@@ -1210,8 +1258,16 @@ $('cfgsave').onclick = async () => {
      ollama: {url: $('cfgollamaurl').value,
               model: $('cfgollamamodel').value}}, 'Saving settings…');
   if(!res) return;
+  if(IDX){
+    const r2 = await api('set_book_engine',
+      {engine: $('cfgbookengine').value,
+       model: $('cfgbookmodel').value}, 'Saving the book engine…');
+    if(r2) IDX = r2;
+  }
   $('modal').classList.remove('on');
-  status('Settings saved (engine: ' + (res.engine || '—') + ')', 'ok');
+  const be = IDX && IDX.engine;
+  status('Settings saved' + (be ? ' — this book: ' + be.name +
+         (be.model ? ' / ' + be.model : '') : ''), 'ok');
 };
 $('composeall').onclick = async () => {
   const res = await api('compose_book', {}, 'Composing the whole book…');

@@ -337,6 +337,25 @@ class Studio:
             panel.get("text") or "", project.get("casting"))["unknown"]
         return idx
 
+    def op_set_book_engine(self, data):
+        """Moteur/modele voulus par le LIVRE OUVERT (edition apres coup de ce
+        que le wizard enregistre a la creation): {engine, model}. engine
+        vide = retour au moteur par defaut de la config."""
+        with _LOCK:
+            project = self.load()
+            name = str(data.get("engine") or "").strip()
+            if name and name not in self.engines:
+                return {"ok": False,
+                        "error": f"unknown engine '{name}' (config.json "
+                                 f"'engines')"}
+            if name:
+                project["engine"] = {"name": name,
+                                     "model": str(data.get("model") or "")}
+            else:
+                project.pop("engine", None)
+            cz_comic.save_project(project, self.dir)
+        return c2c_state.book_index(project, self.dir)
+
     def op_set_bubble(self, data):
         """Deplace une bulle: {cid, pid, pnid, index, pos|anchor: [fx, fy]}
         ou {clear: ["pos", "anchor"]}. pos = coin haut-gauche de la bulle,
