@@ -54,6 +54,10 @@ BOOKS_ROOT = os.path.join(HERE, "books")
 CONFIG_PATH = os.path.join(HERE, "config.json")
 
 _LOCK = threading.Lock()
+# Empreinte du code CHARGE (mtime de ce fichier a l'import): un serveur qui
+# tourne sur du code plus vieux que le disque est PERIME - le relancement
+# doit le dire au lieu de le reutiliser (symptome sinon: 'unknown op').
+_CODE_MTIME = os.path.getmtime(os.path.abspath(__file__))
 
 
 def load_config():
@@ -612,6 +616,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"ok": False, "error": f"bad JSON body: {e}"}, 400)
             return
         # Ops de niveau serveur (selecteur de livres) - dispo meme sans livre
+        if op == "ping":
+            self._send_json({"ok": True, "mtime": _CODE_MTIME})
+            return
         if op in ("books", "open_book", "new_book", "delete_book"):
             self._send_json(books_op(op, data))
             return
@@ -853,8 +860,31 @@ def main(argv=None):
     config = load_config()
     port = args.port or int(config.get("port") or DEFAULT_PORT)
     if already_running(port):
+        # Perime ? (le process qui tient le port a charge un c2c_server.py
+        # plus vieux que celui sur le disque)
+        stale = False
+        try:
+            import urllib.request
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{port}/api/ping", data=b"{}",
+                headers={"Content-Type": "application/json"})
+            with urllib.request.urlopen(req, timeout=2) as r:
+                other = json.loads(r.read().decode("utf-8"))
+            stale = float(other.get("mtime") or 0) < _CODE_MTIME - 1
+        except Exception:
+            stale = True                     # vieux serveur sans /api/ping
+        if stale:
+            print(f"[c2c] a comics2crispz server runs on port {port} with "
+                  f"OLDER code than this folder. Close it (its window / "
+                  f"Ctrl+C), or run:")
+            print("        powershell -Command \"Get-CimInstance "
+                  "Win32_Process -Filter \\\"Name='python.exe'\\\" | "
+                  "Where-Object {$_.CommandLine -like '*c2c_server*'} | "
+                  "ForEach-Object { Stop-Process -Id $_.ProcessId -Force }\"")
+            print("      then start again.")
+            return 1
         print(f"[c2c] a comics2crispz server ALREADY runs on port {port} - "
-              f"reusing it (close it first if you just updated the code).")
+              f"reusing it.")
         if args.open:
             import webbrowser
             webbrowser.open(f"http://127.0.0.1:{port}/")
