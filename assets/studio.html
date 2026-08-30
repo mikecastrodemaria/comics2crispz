@@ -567,9 +567,10 @@ function renderWizEngines(){
       '<b>' + esc(n) + '</b> <span class="hint">' +
       (running ? '— running, model loaded: ' +
                  esc(caps.model_loaded || '(none)')
-       : mism ? '— NOT running: the app on this port is ' +
-                esc(caps.tool || '?') + '. Start ' + esc(n) +
-                '’s own app (own port), then 🔌 Re-test.'
+       : mism ? '— NOT running: the app currently open is ' +
+                esc(caps.tool || '?') + ' (one engine at a time on the ' +
+                'GPU). Close it, start ' + esc(n) + '’s run.bat, then ' +
+                '🔌 Re-test.'
        : caps.ok ? '— app not started. Start it, then 🔌 Re-test (models ' +
                    'and LoRAs come from the running app).'
        : '— unreachable: ' + esc(caps.error || 'no route')) + '</span>';
@@ -1224,9 +1225,9 @@ async function renderBookModels(selected){
     const res = await r.json();
     const caps = ((res && res.engines) || {})[eng] || {};
     if(caps.tool_mismatch){
-      dd.innerHTML = '<option value="">(the app on this port is ' +
-        esc(caps.tool || '?') + ' — start ' + esc(eng) + '’s own app)' +
-        '</option>';
+      dd.innerHTML = '<option value="">(the app currently open is ' +
+        esc(caps.tool || '?') + ' — close it and start ' + esc(eng) +
+        '’s app to list its models)</option>';
       return;
     }
     const ms = caps.models || [];

@@ -167,11 +167,11 @@ class Engine:
             # GPU: refus explicite, l'utilisateur choisit.
             return {"ok": False,
                     "error": f"the app answering at {self.url} is "
-                             f"'{caps.get('tool')}', not {self.name} - "
-                             f"start {self.name}'s own app (each app can "
-                             f"run on its own port: run.bat then update "
-                             f"config.json urls), or pick "
-                             f"'{caps.get('tool')}' as the engine"}
+                             f"'{caps.get('tool')}', not {self.name}. One "
+                             f"engine at a time on this GPU: close the "
+                             f"running app, start {self.name}'s own "
+                             f"run.bat, then retry - or switch this book "
+                             f"to the running engine (⚙)"}
         if caps:
             try:
                 return _gradio_call(self.url, "cli_gen", [json.dumps(spec)])
