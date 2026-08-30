@@ -84,6 +84,7 @@ def book_index(project, project_dir):
     sp = [[(pos[id(p)] if p is not None else None) for p in row]
           for row in spreads(book, rtl=rtl)]
     return {"ok": True, "name": project.get("name") or "Untitled",
+            "engine": project.get("engine") or None,
             "reading": "rtl" if rtl else "ltr",
             "page": {"width": pg_conf["width"], "height": pg_conf["height"]},
             "chapters": chapters, "book": book, "spreads": sp,

@@ -28,11 +28,23 @@ box-shadow:0 0 0 2px #4d82c433}
 .field{margin-top:10px}
 .field .lbl,.lbl{display:block;font-size:11px;color:var(--mut);
 margin:0 0 4px;letter-spacing:.3px}
-#modal,#laymodal{position:fixed;inset:0;background:#000b;display:none;
-z-index:50;align-items:center;justify-content:center}
-#modal.on,#laymodal.on{display:flex}
-#modal h3,#laymodal h3{margin:0 0 4px;font-size:13px;text-transform:uppercase;
-color:var(--mut)}
+#modal,#laymodal,#wizmodal,#helpmodal{position:fixed;inset:0;background:#000b;
+display:none;z-index:50;align-items:center;justify-content:center}
+#modal.on,#laymodal.on,#wizmodal.on,#helpmodal.on{display:flex}
+#helpmodal{z-index:60}
+#modal h3,#laymodal h3,#wizmodal h3,#helpmodal h3{margin:0 0 4px;
+font-size:13px;text-transform:uppercase;color:var(--mut)}
+.helpb{width:20px;height:20px;padding:0;border-radius:50%;font-size:11px;
+line-height:1;color:var(--mut);vertical-align:2px;margin-left:6px}
+.helpb:hover{color:#fff;border-color:var(--acc)}
+.engcard{border:1px solid var(--bd);border-radius:6px;padding:8px 10px;
+margin-top:6px;cursor:pointer}
+.engcard:hover{border-color:var(--acc)}
+.engcard.sel{border-color:var(--warn);background:#ffd27a0d}
+#wizloras{max-height:130px;overflow-y:auto;border:1px solid var(--bd);
+border-radius:6px;padding:6px 8px;margin-top:4px}
+.lorarow{display:block;font-size:12px;padding:2px 0;cursor:pointer}
+.lorarow:hover{color:#fff}
 #laygrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;
 margin-top:10px}
 .laypre{position:relative;aspect-ratio:2/3;background:#f4f1ea;border:2px solid
@@ -154,7 +166,8 @@ font-size:11px}
 </header>
 <div id="modal">
   <div class="box" style="width:420px">
-    <h3>⚙ Settings</h3>
+    <h3>⚙ Settings
+      <button class="helpb" data-help="The settings dialog: the drawing engine is the crispz family app that generates panel images (its own app must run for the warm route); Ollama is the local AI used by the Improve button, the fun mode and this very helper — its address is local, and the model list comes from what is installed in Ollama.">?</button></h3>
     <div class="field">
       <span class="lbl">Drawing engine (which crispz app draws the panels)</span>
       <select id="cfgengine" style="max-width:none;width:100%"></select>
@@ -204,7 +217,90 @@ font-size:11px}
         </div>
       </div>
     </div>
-    <div id="laymodal">
+    <div id="helpmodal">
+  <div class="box" style="width:460px">
+    <h3>❓ Ask the helper</h3>
+    <div class="hint" id="helpctx" style="margin-bottom:8px"></div>
+    <textarea id="helpq" rows="2"
+      placeholder="Your question… e.g. “qu'est-ce que je dois écrire ici ?”, “comment bien décrire cette case ?”"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button id="helpask" class="primary">Ask</button>
+      <button id="helpclose" style="margin-left:auto">Close</button>
+    </div>
+    <div id="helpanswer" class="hint"
+         style="margin-top:10px;white-space:pre-wrap;max-height:40vh;
+                overflow-y:auto"></div>
+  </div>
+</div>
+<div id="wizmodal">
+  <div class="box" style="width:530px;max-height:88vh;overflow-y:auto">
+    <h3 id="wizhead">New book — 1/3 · The book</h3>
+    <div id="wizstep1">
+      <div class="field"><span class="lbl">Title of the book
+        <button class="helpb" data-help="The user is naming a new comic book in the creation wizard. The title also seeds the fun mode (AI invents the story from it).">?</button></span>
+        <input id="wizname" placeholder="Plein Écran">
+      </div>
+      <div class="row" style="align-items:center;margin-top:10px">
+        <span class="lbl" style="margin:0">Story pages</span>
+        <input id="wizpages" type="number" min="0" max="100" value="12"
+               style="width:80px">
+        <span class="hint">cover &amp; back added for you</span>
+      </div>
+      <label class="lorarow" style="margin-top:10px"><input type="checkbox"
+        id="wizfun"> ✨ Fun mode — the AI invents the whole book from the
+        title (story, characters, panels); you edit everything after
+        <button class="helpb" data-help="The fun mode checkbox in the book creation wizard: Ollama invents synopsis, casting, page layouts, panel prompts and dialogue from the title alone. Everything stays editable afterwards.">?</button></label>
+      <label class="lorarow"><input type="checkbox" id="wizmanga"> ↤ Manga
+        reading direction (right → left)</label>
+    </div>
+    <div id="wizstep2" style="display:none">
+      <div class="lbl">Drawing engine — which crispz app draws the panels
+        <button class="helpb" data-help="The engine step of the book creation wizard: the user picks which crispz family tool (crispz-studio, krea2, qwen-edit...) will generate the panel images. A green engine is running (its loaded model is shown); a yellow one is installed but its app is not started; models and LoRAs can only be picked from a running engine.">?</button></div>
+      <div id="wizengines"></div>
+      <div class="row" style="margin-top:8px">
+        <button id="wizretest">🔌 Re-test</button>
+        <span class="hint" style="align-self:center">engine off? start its
+        app, then Re-test</span>
+      </div>
+      <div class="field"><span class="lbl">Model for this book
+        <button class="helpb" data-help="Model picker in the wizard: the book records which checkpoint model it wants. The app never swaps the running instance's model - it WARNS at generation time if the loaded model differs, so pages don't silently mix styles.">?</button></span>
+        <select id="wizmodel" style="max-width:none;width:100%"></select>
+      </div>
+      <div class="field"><span class="lbl">Global LoRAs (applied to every
+        panel; a character LoRA still wins on the same file)
+        <button class="helpb" data-help="Global LoRA checklist in the wizard: selected LoRA files go to the book's style.loras and are hot-swapped on every panel generation, giving the whole book a consistent style. Per-character LoRAs (in the casting) win over a style LoRA on the same file.">?</button></span>
+        <div id="wizloras"></div>
+      </div>
+    </div>
+    <div id="wizstep3" style="display:none">
+      <div class="field"><span class="lbl">Style preset
+        <button class="helpb" data-help="Style presets in the wizard fill the book's global style suffix and negative prompt (ligne claire, US ink, manga black and white, watercolor, cartoon). The suffix is appended to every panel prompt; it can be edited freely below and changed later in the book style.">?</button></span>
+        <select id="wizpreset" style="max-width:none;width:100%"></select>
+      </div>
+      <div class="field"><span class="lbl">Style suffix (appended to every
+        panel prompt)</span>
+        <textarea id="wizsuffix" rows="2"></textarea>
+      </div>
+      <div class="field"><span class="lbl">Negative (what you never want)</span>
+        <input id="wizneg">
+      </div>
+      <div class="row" style="align-items:center;margin-top:10px">
+        <span class="lbl" style="margin:0">Balloon shape</span>
+        <select id="wizbubble">
+          <option value="round" selected>round</option>
+          <option value="rounded">rounded</option>
+          <option value="angular">angular</option>
+        </select>
+      </div>
+    </div>
+    <div class="row" style="margin-top:14px">
+      <button id="wizback" style="display:none">← Back</button>
+      <button id="wizcancel">Cancel</button>
+      <button id="wiznext" class="primary" style="margin-left:auto">Next →</button>
+    </div>
+  </div>
+</div>
+<div id="laymodal">
   <div class="box" style="width:470px">
     <h3 id="layhead">Add pages</h3>
     <div id="laygrid"></div>
@@ -248,7 +344,8 @@ font-size:11px}
         <div class="box" id="pnbox" style="display:none">
           <h3 id="pnhead">Panel</h3>
           <div class="field">
-            <span class="lbl">What to draw — @Name casting works here</span>
+            <span class="lbl">What to draw — @Name casting works here
+              <button class="helpb" data-help="The panel description box: a visual image-generation prompt in English describing WHAT the panel shows (subject, action, framing like close-up or wide shot, lighting). Characters and places are referenced as @Name from the casting; the book's global style suffix is appended automatically; the Improve button asks Ollama to enrich the draft.">?</button></span>
             <textarea id="pntext" rows="3"
               placeholder="wide shot of @Sam typing, fans everywhere…"></textarea>
             <div class="row" style="margin-top:6px">
@@ -260,7 +357,8 @@ font-size:11px}
           </div>
           <div class="field">
             <span class="lbl">Dialogue — one balloon per line
-            (Sam: … · Tom (think): … · CAP: … · SFX: …)</span>
+            (Sam: … · Tom (think): … · CAP: … · SFX: …)
+              <button class="helpb" data-help="The dialogue box, one balloon per line in writer syntax: 'Name: text' for speech, 'Name (think): text' for a thought balloon, 'Name (angular): text' for a harsh/mechanical voice shape, 'CAP: text' for a narration caption, 'SFX: TEXT' for a sound effect. Balloons are drawn as vector lettering over the image, never generated by the model.">?</button></span>
             <textarea id="pndlg" rows="3"
               placeholder="Sam: On y va."></textarea>
           </div>
@@ -369,23 +467,150 @@ function showWelcome(on){
   if(on){ $('nav').innerHTML = ''; $('pname').textContent = ''; }
 }
 
-async function newBook(){
-  const name = prompt('Name of the new book:');
-  if(!name || !name.trim()) return;
-  const fun = confirm('✨ Fun mode?\nOK = the AI (Ollama) invents the whole ' +
-    'book from the title — story, characters, panel prompts, dialogue — ' +
-    'and you edit everything after.\nCancel = an empty structure to fill ' +
-    'yourself.');
-  const pages = parseInt(prompt(
-    (fun ? 'How many story pages should the AI invent?'
-         : 'How many story pages to start with? (varied panel grids, cover ' +
-           'and back added for you)\n0 = minimal book (cover + one 4-panel ' +
-           'page).'),
-    fun ? '6' : '12') || '0', 10) || 0;
-  const manga = confirm('Manga reading direction (right → left)?\n' +
-    'OK = manga · Cancel = western (left → right)');
-  const res = await api('new_book', {name: name.trim(), pages: pages,
-                                     manga: manga, fun: fun},
+function newBook(){ openWizard(); }
+
+/* ---------- wizard de création (3 étapes) ---------- */
+const STYLE_PRESETS = {
+  "none":        {label: "No preset (free text below)", suffix: "",
+                  negative: ""},
+  "ligne-claire":{label: "Ligne claire (Tintin-like)",
+                  suffix: "ligne claire comic style, clean uniform ink " +
+                          "lines, flat colors, no hatching, clear daylight",
+                  negative: "photo, photorealistic, blurry, watermark, text"},
+  "us-ink":      {label: "US comics (bold ink)",
+                  suffix: "american comic book style, bold ink lines, " +
+                          "dramatic shading, saturated colors, halftone dots",
+                  negative: "photo, photorealistic, blurry, watermark, text"},
+  "manga-bw":    {label: "Manga (black & white)",
+                  suffix: "black and white manga style, screentone " +
+                          "shading, sharp ink lines, speed lines",
+                  negative: "color, photo, blurry, watermark, text"},
+  "watercolor":  {label: "Watercolor",
+                  suffix: "watercolor comic illustration, soft edges, " +
+                          "textured paper, gentle muted palette",
+                  negative: "photo, harsh lines, blurry, watermark, text"},
+  "cartoon":     {label: "Flat cartoon",
+                  suffix: "flat cartoon style, thick outlines, vivid " +
+                          "colors, cel shading, simple shapes",
+                  negative: "photo, photorealistic, blurry, watermark, text"}};
+
+let WIZ = null, ENGDATA = {};
+
+function openWizard(){
+  WIZ = {step: 1, engine: '', model: '', loras: []};
+  $('wizname').value = ''; $('wizpages').value = '12';
+  $('wizfun').checked = false; $('wizmanga').checked = false;
+  $('wizpreset').innerHTML = Object.keys(STYLE_PRESETS).map(k =>
+    '<option value="' + k + '">' + esc(STYLE_PRESETS[k].label) +
+    '</option>').join('');
+  $('wizsuffix').value = ''; $('wizneg').value = '';
+  $('wizbubble').value = 'round';
+  wizShow(1);
+  $('wizmodal').classList.add('on');
+  loadWizEngines();
+}
+function wizShow(step){
+  WIZ.step = step;
+  const heads = {1: '1/3 · The book', 2: '2/3 · Engine & model',
+                 3: '3/3 · Global style'};
+  $('wizhead').textContent = 'New book — ' + heads[step];
+  for(const s of [1, 2, 3])
+    $('wizstep' + s).style.display = (s === step ? '' : 'none');
+  $('wizback').style.display = step > 1 ? '' : 'none';
+  $('wiznext').textContent = step < 3 ? 'Next →' : '📖 Create the book';
+}
+async function loadWizEngines(){
+  $('wizengines').innerHTML = '<span class="spin"></span> probing engines…';
+  try{
+    const r = await fetch('/api/engines', {method: 'POST',
+      headers: {'Content-Type': 'application/json'}, body: '{}'});
+    const res = await r.json();
+    ENGDATA = (res && res.engines) || {};
+    if(!WIZ.engine){
+      const running = Object.keys(ENGDATA).filter(n =>
+        ENGDATA[n].ok && ENGDATA[n].route === 'remote');
+      WIZ.engine = running[0] || res.default ||
+        Object.keys(ENGDATA)[0] || '';
+    }
+  }catch(_){ ENGDATA = {}; }
+  renderWizEngines();
+  renderWizModels();
+}
+function renderWizEngines(){
+  const c = $('wizengines');
+  const names = Object.keys(ENGDATA);
+  c.innerHTML = names.length ? '' :
+    '<div class="hint">No engine configured (config.json "engines") — you ' +
+    'can still create the book and set this later in ⚙.</div>';
+  names.forEach(n => {
+    const caps = ENGDATA[n] || {};
+    const running = caps.ok && caps.route === 'remote';
+    const d = document.createElement('div');
+    d.className = 'engcard' + (WIZ.engine === n ? ' sel' : '');
+    d.innerHTML = (running ? '🟢 ' : (caps.ok ? '🟡 ' : '🔴 ')) +
+      '<b>' + esc(n) + '</b> <span class="hint">' +
+      (running ? '— running, model loaded: ' +
+                 esc(caps.model_loaded || '(none)') +
+                 (caps.tool && !String(caps.tool).endsWith(n)
+                  ? ' · ⚠ the app answering on this port is ' +
+                    esc(caps.tool) + ', not ' + esc(n)
+                  : '')
+       : caps.ok ? '— app not started. Start it, then 🔌 Re-test (models ' +
+                   'and LoRAs come from the running app).'
+       : '— unreachable: ' + esc(caps.error || 'no route')) + '</span>';
+    d.onclick = () => { WIZ.engine = n; renderWizEngines(); renderWizModels(); };
+    c.appendChild(d);
+  });
+}
+function renderWizModels(){
+  const caps = ENGDATA[WIZ.engine] || {};
+  const models = caps.models || [], loras = caps.loras || [];
+  $('wizmodel').innerHTML =
+    '<option value="">(keep the engine’s current model' +
+    (caps.model_loaded ? ': ' + esc(caps.model_loaded) : '') + ')</option>' +
+    models.map(m => '<option' + (WIZ.model === m ? ' selected' : '') + '>' +
+                    esc(m) + '</option>').join('');
+  $('wizloras').innerHTML = loras.length
+    ? loras.map(l => '<label class="lorarow"><input type="checkbox" ' +
+        'value="' + esc(l) + '"' + (WIZ.loras.includes(l) ? ' checked' : '') +
+        '> ' + esc(l) + '</label>').join('')
+    : '<span class="hint">(none listed' +
+      (caps.ok ? '' : ' — engine unreachable') + ')</span>';
+}
+$('wizretest').onclick = loadWizEngines;
+$('wizpreset').onchange = () => {
+  const p = STYLE_PRESETS[$('wizpreset').value];
+  if(p){ $('wizsuffix').value = p.suffix; $('wizneg').value = p.negative; }
+};
+$('wizback').onclick = () => wizShow(WIZ.step - 1);
+$('wizcancel').onclick = () => $('wizmodal').classList.remove('on');
+$('wiznext').onclick = async () => {
+  if(WIZ.step === 1 && !$('wizname').value.trim()){
+    status('Give the book a title first', 'warn'); return;
+  }
+  if(WIZ.step < 3){
+    if(WIZ.step === 2){
+      WIZ.model = $('wizmodel').value;
+      WIZ.loras = [...document.querySelectorAll('#wizloras input:checked')]
+        .map(x => x.value);
+    }
+    wizShow(WIZ.step + 1);
+    return;
+  }
+  WIZ.model = $('wizmodel').value;
+  WIZ.loras = [...document.querySelectorAll('#wizloras input:checked')]
+    .map(x => x.value);
+  const fun = $('wizfun').checked;
+  $('wizmodal').classList.remove('on');
+  const res = await api('new_book', {
+    name: $('wizname').value.trim(),
+    pages: parseInt($('wizpages').value || '0', 10) || 0,
+    fun: fun, manga: $('wizmanga').checked,
+    engine: WIZ.engine || null, model: WIZ.model || null,
+    loras: WIZ.loras,
+    style_suffix: $('wizsuffix').value,
+    style_negative: $('wizneg').value,
+    bubble: $('wizbubble').value},
     fun ? 'The AI is inventing your book… (can take a minute)'
         : 'Creating the book…');
   if(!res) return;
@@ -393,6 +618,45 @@ async function newBook(){
   const warn = (res.warnings || []).join(' · ');
   if(warn) status(warn, 'warn');
 }
+
+/* ---------- ❓ aide contextuelle (Ollama) ---------- */
+document.addEventListener('click', ev => {
+  const h = ev.target.closest('.helpb');
+  if(h){ ev.preventDefault(); ev.stopPropagation(); openHelp(h.dataset.help); }
+}, true);
+function openHelp(ctx){
+  $('helpctx').textContent = '';
+  $('helpmodal').dataset.ctx = ctx || '';
+  $('helpq').value = '';
+  $('helpanswer').textContent = '';
+  $('helpmodal').classList.add('on');
+  $('helpq').focus();
+}
+$('helpclose').onclick = () => $('helpmodal').classList.remove('on');
+$('helpmodal').onclick = ev => { if(ev.target === $('helpmodal'))
+                                 $('helpmodal').classList.remove('on'); };
+$('helpask').onclick = async () => {
+  const q = $('helpq').value.trim();
+  if(!q) return;
+  $('helpanswer').innerHTML = '<span class="spin"></span> the helper is ' +
+    'thinking…';
+  try{
+    const r = await fetch('/api/ask', {method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({question: q,
+                            context: $('helpmodal').dataset.ctx || ''})});
+    const res = await r.json();
+    $('helpanswer').textContent = res.ok
+      ? res.answer + '\n\n— ' + res.model
+      : '⚠️ ' + (res.error || 'no answer');
+  }catch(err){
+    $('helpanswer').textContent = '⚠️ ' + err.message;
+  }
+};
+$('helpq').addEventListener('keydown', ev => {
+  if(ev.key === 'Enter' && !ev.shiftKey){ ev.preventDefault();
+                                          $('helpask').click(); }
+});
 
 async function load(){
   const books = await loadBooks();

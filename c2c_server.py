@@ -172,6 +172,13 @@ class Studio:
                                       face_detector=fd, char_embeddings=emb)
         return c2c_state.book_index(project, self.dir)
 
+    def op_ask(self, data):
+        """Aide contextuelle '?' (Ollama): {question, context}. Le contexte
+        decrit le champ/ecran d'ou vient la question."""
+        return c2c_ollama.ask(str(data.get("question") or ""),
+                              str(data.get("context") or ""),
+                              self.config.get("ollama"))
+
     def op_improve(self, data):
         """✨ Improve du texte d'une case via Ollama (config 'ollama').
         Warning explicite si le modele a perdu un @Name ou un <lora:>."""
@@ -369,12 +376,28 @@ class Studio:
         end."""
         cid, pid = data["cid"], data["pid"]
         only, force = data.get("pnid"), bool(data.get("force"))
-        name, eng = self._default_engine(data.get("engine"))
+        project = self.load()
+        # priorite du moteur: demande explicite > moteur du LIVRE (wizard) >
+        # defaut de la config
+        book_eng = (project.get("engine") or {}).get("name")
+        name, eng = self._default_engine(
+            data.get("engine") or (book_eng if book_eng in self.engines
+                                   else None))
         if eng is None:
             return {"ok": False,
                     "error": f"no engine '{name}' (config.json 'engines')"}
         done, warnings = [], []
-        project = self.load()
+        # divergence de modele: le livre a un modele voulu, l'instance en a
+        # un autre charge -> on PREVIENT (jamais de swap sous les pieds)
+        want = ((project.get("engine") or {}).get("model") or "").strip()
+        caps = eng.alive() if hasattr(eng, "alive") else None
+        loaded = str((caps or {}).get("model_loaded") or "")
+        if want and loaded and \
+                os.path.basename(want).lower() != os.path.basename(loaded).lower():
+            warnings.append(
+                f"this book is set to model '{os.path.basename(want)}' but "
+                f"the running {name} instance has '{loaded}' loaded - switch "
+                f"it in the app or the pages will mix styles")
         page = cz_comic.find_page(project, cid, pid)
         for i in range(len(page["panels"])):
             panel = page["panels"][i]
@@ -382,6 +405,13 @@ class Studio:
                 continue
             if (panel.get("image") and os.path.isfile(panel["image"])
                     and not force):
+                continue
+            # garde-fou sur le TEXTE de la case, pas le prompt resolu: une
+            # case vide + un suffixe de style global donnerait un prompt
+            # 'style seulement' qui partirait au moteur pour rien
+            if not (panel.get("text") or "").strip():
+                warnings.append(f"{panel['id']}: empty panel text - skipped "
+                                f"(write the panel description first)")
                 continue
             spec = cz_comic.resolve_panel(project, page, panel, index=i)
             if not (spec["prompt"] or "").strip():
@@ -686,6 +716,24 @@ def books_op(op, data):
                         cz_comic.add_page(p, ch["id"], "splash", role="back")
                     else:
                         cz_comic.add_page(p, ch["id"], "4-grid")
+                # Reglages du wizard: moteur/modele voulus par CE livre (le
+                # modele est un SOUHAIT verifie a la generation - on ne swap
+                # jamais le modele de l'instance, on PREVIENT si ca diverge)
+                # + style global (suffixe/negatif/LoRAs/bulle).
+                if data.get("engine"):
+                    p["engine"] = {"name": str(data["engine"]),
+                                   "model": str(data.get("model") or "")}
+                loras = [str(x) for x in (data.get("loras") or []) if x]
+                if loras:
+                    p["style"]["loras"] = loras
+                if data.get("style_suffix") is not None:
+                    p["style"]["prompt_suffix"] = \
+                        str(data.get("style_suffix") or "").strip()
+                if data.get("style_negative") is not None:
+                    p["style"]["negative"] = \
+                        str(data.get("style_negative") or "").strip()
+                if data.get("bubble") in cz_comic.BUBBLE_STYLES:
+                    p["style"]["bubble"] = data["bubble"]
                 cz_comic.save_project(p, d)
                 for c, pg in cz_comic.book_order(p):
                     c2c_state.compose_one(p, d, c["id"], pg["id"])
