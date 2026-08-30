@@ -593,7 +593,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"ok": False, "error": f"bad JSON body: {e}"}, 400)
             return
         # Ops de niveau serveur (selecteur de livres) - dispo meme sans livre
-        if op in ("books", "open_book", "new_book"):
+        if op in ("books", "open_book", "new_book", "delete_book"):
             self._send_json(books_op(op, data))
             return
         if self.studio is None:
