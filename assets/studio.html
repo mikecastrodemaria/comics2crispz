@@ -43,6 +43,24 @@ margin-top:6px;cursor:pointer}
 .engcard.sel{border-color:var(--warn);background:#ffd27a0d}
 #wizloras{max-height:130px;overflow-y:auto;border:1px solid var(--bd);
 border-radius:6px;padding:6px 8px;margin-top:4px}
+#libgrid{display:grid;grid-template-columns:repeat(auto-fill,
+minmax(170px,1fr));gap:16px}
+.bookcard{background:var(--pan);border:1px solid var(--bd);border-radius:8px;
+overflow:hidden;cursor:pointer;position:relative;transition:border-color .12s}
+.bookcard:hover{border-color:var(--acc)}
+.bookcard.current{border-color:var(--warn)}
+.bookcard .cov{width:100%;aspect-ratio:210/297;object-fit:cover;display:block;
+background:#fff}
+.bookcard .nocov{width:100%;aspect-ratio:210/297;display:flex;
+align-items:center;justify-content:center;font-size:34px;
+background:repeating-linear-gradient(45deg,#1a1e26,#1a1e26 12px,#1e2330 12px,
+#1e2330 24px)}
+.bookcard .meta{padding:7px 10px}
+.bookcard .t{font-size:13px;font-weight:600;overflow:hidden;
+text-overflow:ellipsis;white-space:nowrap}
+.bookcard .m{font-size:11px;color:var(--mut);margin-top:2px}
+.bookcard.newcard .nocov{font-size:44px;color:var(--mut)}
+.bookcard.newcard:hover .nocov{color:#fff}
 .lorarow{display:flex;align-items:flex-start;gap:8px;font-size:12px;
 padding:3px 0;cursor:pointer;line-height:1.4}
 .lorarow:hover{color:#fff}
@@ -158,6 +176,7 @@ font-size:11px}
   <button id="newbook" title="Create a new book">➕ New book</button>
   <span id="pname" style="color:var(--mut);font-size:12px"></span>
   <div class="tabs">
+    <button id="tab-lib" title="All your books">📚 Library</button>
     <button id="tab-flat" class="on">Flatplan</button>
     <button id="tab-script" disabled title="Coming with step 2">Script</button>
     <button id="tab-page" disabled title="Select a page first">Page</button>
@@ -231,17 +250,18 @@ font-size:11px}
       </div>
       <div id="flat"></div>
     </div>
-    <div id="welcome" style="display:none">
-      <div class="box" style="max-width:460px;margin:12vh auto;text-align:center;
-                              padding:28px 30px">
-        <h2 style="margin:0 0 10px">📚 Welcome to comics2crispz</h2>
-        <p class="hint" style="font-size:13px">No book is open yet. Create your
-        first one — it starts with a cover and a 4-panel page, ready to fill —
-        or pick an existing book in the 📚 menu at the top.</p>
-        <div class="row" style="justify-content:center;margin-top:14px">
-          <button id="welcomenew" class="primary">➕ Create my first book</button>
-        </div>
+    <div id="library" style="display:none">
+      <div class="row" style="align-items:center;margin-bottom:14px">
+        <h2 style="margin:0;font-size:16px">📚 Library</h2>
+        <select id="libsort" title="Sort the books">
+          <option value="updated" selected>Last updated</option>
+          <option value="oldest">Oldest update</option>
+          <option value="title">Title A→Z</option>
+          <option value="pages">Most pages</option>
+        </select>
+        <span class="hint" id="libcount" style="margin-left:auto"></span>
       </div>
+      <div id="libgrid"></div>
     </div>
     <div id="helpmodal">
   <div class="box" style="width:460px">
@@ -487,11 +507,63 @@ function afterBookSwitch(res){
   status('Book “' + res.name + '” opened', 'ok');
 }
 
-function showWelcome(on){
-  $('welcome').style.display = on ? '' : 'none';
-  $('flatview').style.display = on ? 'none' : '';
-  if(on){ $('nav').innerHTML = ''; $('pname').textContent = ''; }
+/* ---------- 📚 bibliotheque (la home) ---------- */
+let LIBBOOKS = [];
+
+function showWelcome(on){            // compat: l'accueil EST la bibliotheque
+  if(on) showLibrary();
+  else $('library').style.display = 'none';
 }
+async function showLibrary(){
+  $('page').classList.remove('on');
+  $('flatview').style.display = 'none';
+  $('library').style.display = '';
+  $('tab-page').disabled = true;
+  const res = await loadBooks();
+  LIBBOOKS = (res && res.books) || [];
+  renderLibrary();
+}
+function renderLibrary(){
+  const sort = $('libsort').value;
+  const books = [...LIBBOOKS];
+  if(sort === 'updated') books.sort((a, b) => b.mtime - a.mtime);
+  else if(sort === 'oldest') books.sort((a, b) => a.mtime - b.mtime);
+  else if(sort === 'title') books.sort((a, b) =>
+    a.title.localeCompare(b.title, undefined, {sensitivity: 'base'}));
+  else if(sort === 'pages') books.sort((a, b) => b.pages - a.pages);
+  $('libcount').textContent = books.length
+    ? books.length + ' book' + (books.length > 1 ? 's' : '')
+    : 'No book yet — create your first one!';
+  const g = $('libgrid');
+  g.innerHTML = '';
+  const add = document.createElement('div');
+  add.className = 'bookcard newcard';
+  add.innerHTML = '<div class="nocov">➕</div><div class="meta">' +
+    '<div class="t">New book</div><div class="m">wizard: engine, model, ' +
+    'style…</div></div>';
+  add.onclick = newBook;
+  g.appendChild(add);
+  books.forEach(b => {
+    const c = document.createElement('div');
+    c.className = 'bookcard' + (b.current ? ' current' : '');
+    c.title = b.title + (b.current ? ' (open)' : '');
+    c.innerHTML =
+      '<img class="cov" loading="lazy" src="/bookcover/' +
+      encodeURIComponent(b.book) + '.jpg?t=' + b.mtime + '" ' +
+      'onerror="this.outerHTML=\'<div class=nocov>📖</div>\'">' +
+      '<div class="meta"><div class="t">' + esc(b.title) + '</div>' +
+      '<div class="m">' + b.pages + ' page' + (b.pages > 1 ? 's' : '') +
+      ' · ' + new Date(b.mtime * 1000).toLocaleDateString() +
+      (b.current ? ' · open' : '') + '</div></div>';
+    c.onclick = async () => {
+      const res = await api('open_book', {book: b.book}, 'Opening book…');
+      if(res) afterBookSwitch(res);
+    };
+    g.appendChild(c);
+  });
+}
+$('libsort').onchange = renderLibrary;
+$('tab-lib').onclick = showLibrary;
 
 function newBook(){ openWizard(); }
 
@@ -687,11 +759,13 @@ $('helpq').addEventListener('keydown', ev => {
                                           $('helpask').click(); }
 });
 
+let BOOTED = false;
 async function load(){
-  const books = await loadBooks();
+  await loadBooks();
   const res = await api('index', {}, 'Loading project…');
   if(!res){
-    if(books && !books.open) showWelcome(true);
+    BOOTED = true;
+    showLibrary();
     return;
   }
   IDX = res;
@@ -699,8 +773,17 @@ async function load(){
   document.title = 'comics2crispz — ' + res.name;
   renderNav(); renderFlat();
   if(SEL && bookPos(SEL.cid, SEL.pid) < 0) SEL = null;
-  if($('page').classList.contains('on') && SEL) showPage(SEL.cid, SEL.pid);
-  else applyHash();          // deep link: #ch01.p03 opens that page directly
+  if(!BOOTED){
+    BOOTED = true;
+    // la HOME est la bibliotheque - sauf lien profond #cid.pid
+    if(!applyHash()) showLibrary();
+  }else if($('page').classList.contains('on') && SEL){
+    showPage(SEL.cid, SEL.pid);
+  }else if($('library').style.display === ''){
+    showLibrary();
+  }else{
+    applyHash();             // deep link: #ch01.p03 opens that page directly
+  }
   status(res.book.length + ' page(s)', 'ok');
 }
 
@@ -942,6 +1025,7 @@ async function showPage(cid, pid){
 }
 function backToFlat(){
   $('page').classList.remove('on');
+  $('library').style.display = 'none';
   $('flatview').style.display = '';
   $('tab-page').disabled = true;
   SEL = null; SELPN = null; renderNav();
@@ -1074,7 +1158,6 @@ $('bookdd').onchange = async () => {
   else loadBooks();              // met la selection en face du livre courant
 };
 $('newbook').onclick = newBook;
-$('welcomenew').onclick = newBook;
 $('regenbtn').onclick = regenPanel;
 $('savepnbtn').onclick = savePanelAndCompose;
 
@@ -1304,9 +1387,8 @@ $('cfgdelbook').onclick = async () => {
   $('modal').classList.remove('on');
   if(res.no_book){
     IDX = null;
-    backToFlat();
-    showWelcome(true);
-    loadBooks();
+    $('pname').textContent = '';
+    showLibrary();
   }else{
     afterBookSwitch(res);
   }

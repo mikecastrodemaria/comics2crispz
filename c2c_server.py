@@ -565,6 +565,25 @@ class Handler(BaseHTTPRequestHandler):
             self._send_file(_safe_join(ASSETS, path[len("/assets/"):]))
         elif path.startswith("/file/"):
             self._send_file(_safe_join(self.studio.dir, path[len("/file/"):]))
+        elif path.startswith("/bookcover/"):
+            # vignette de COUVERTURE d'un livre (galerie bibliotheque):
+            # la 1re planche de l'ordre de publication, si composee (404
+            # sinon -> la SPA montre un placeholder)
+            name = os.path.basename(path[len("/bookcover/"):])
+            if name.endswith(".jpg"):
+                name = name[:-4]
+            d = os.path.join(BOOKS_ROOT, name)
+            t = None
+            try:
+                if os.path.isfile(cz_comic.project_json_path(d)):
+                    proj = cz_comic.load_project(d)
+                    order = cz_comic.book_order(proj)
+                    if order:
+                        ch0, pg0 = order[0]
+                        t = c2c_state.page_thumb(d, ch0["id"], pg0["id"])
+            except Exception:
+                t = None
+            self._send_file(t)
         elif path.startswith("/thumb/"):
             parts = path[len("/thumb/"):].strip("/").split("/")
             if len(parts) != 2:
