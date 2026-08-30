@@ -462,11 +462,23 @@ class Studio:
                 else:
                     warnings.append(f"{panel['id']}: ref missing on disk, "
                                     f"dropped: {r}")
-            res = eng.gen({"prompt": spec["prompt"],
-                           "negative": spec["negative"],
-                           "width": spec["width"], "height": spec["height"],
-                           "seed": spec["seed"], "loras": spec["loras"],
-                           "refs": refs})
+            payload = {"prompt": spec["prompt"],
+                       "negative": spec["negative"],
+                       "width": spec["width"], "height": spec["height"],
+                       "seed": spec["seed"], "loras": spec["loras"],
+                       "refs": refs}
+            # Detailer auto: une case qui met en scene un PERSONNAGE du
+            # casting recoit la passe visages (ADetailer cote moteur).
+            # Absent sinon -> reglage par defaut de l'outil. Mains: opt-in
+            # global (config detail_hands: paquet ultralytics optionnel).
+            used = cz_comic.resolve_casting(
+                panel.get("text") or "", project.get("casting"))["used"]
+            if any((project.get("casting", {}).get(u) or {})
+                   .get("kind", "character") == "character" for u in used):
+                payload["detail_faces"] = True
+            if self.config.get("detail_hands"):
+                payload["detail_hands"] = True
+            res = eng.gen(payload)
             if not res.get("ok"):
                 return {"ok": False, "engine": name, "generated": done,
                         "error": f"{panel['id']}: {res.get('error')}"}
