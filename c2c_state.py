@@ -85,6 +85,8 @@ def book_index(project, project_dir):
           for row in spreads(book, rtl=rtl)]
     return {"ok": True, "name": project.get("name") or "Untitled",
             "engine": project.get("engine") or None,
+            "style_loras": list((project.get("style") or {}).get("loras")
+                                or []),
             "reading": "rtl" if rtl else "ltr",
             "page": {"width": pg_conf["width"], "height": pg_conf["height"]},
             "chapters": chapters, "book": book, "spreads": sp,

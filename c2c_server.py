@@ -353,6 +353,11 @@ class Studio:
                                      "model": str(data.get("model") or "")}
             else:
                 project.pop("engine", None)
+            # LoRAs globales du livre (style.loras): liste COMPLETE envoyee
+            # par l'UI - decocher = retirer. None/absent = pas touche.
+            if isinstance(data.get("loras"), list):
+                project.setdefault("style", {})["loras"] = \
+                    [str(x) for x in data["loras"] if str(x).strip()]
             cz_comic.save_project(project, self.dir)
         return c2c_state.book_index(project, self.dir)
 
