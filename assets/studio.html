@@ -43,8 +43,11 @@ margin-top:6px;cursor:pointer}
 .engcard.sel{border-color:var(--warn);background:#ffd27a0d}
 #wizloras{max-height:130px;overflow-y:auto;border:1px solid var(--bd);
 border-radius:6px;padding:6px 8px;margin-top:4px}
-.lorarow{display:block;font-size:12px;padding:2px 0;cursor:pointer}
+.lorarow{display:flex;align-items:flex-start;gap:8px;font-size:12px;
+padding:3px 0;cursor:pointer;line-height:1.4}
 .lorarow:hover{color:#fff}
+input[type=checkbox]{width:auto;flex-shrink:0;margin:2px 0 0;
+accent-color:var(--acc)}
 #laygrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;
 margin-top:10px}
 .laypre{position:relative;aspect-ratio:2/3;background:#f4f1ea;border:2px solid
@@ -556,17 +559,17 @@ function renderWizEngines(){
     'can still create the book and set this later in ⚙.</div>';
   names.forEach(n => {
     const caps = ENGDATA[n] || {};
-    const running = caps.ok && caps.route === 'remote';
+    const mism = !!caps.tool_mismatch;
+    const running = caps.ok && caps.route === 'remote' && !mism;
     const d = document.createElement('div');
     d.className = 'engcard' + (WIZ.engine === n ? ' sel' : '');
-    d.innerHTML = (running ? '🟢 ' : (caps.ok ? '🟡 ' : '🔴 ')) +
+    d.innerHTML = (running ? '🟢 ' : (mism ? '🟠 ' : (caps.ok ? '🟡 ' : '🔴 '))) +
       '<b>' + esc(n) + '</b> <span class="hint">' +
       (running ? '— running, model loaded: ' +
-                 esc(caps.model_loaded || '(none)') +
-                 (caps.tool && !String(caps.tool).endsWith(n)
-                  ? ' · ⚠ the app answering on this port is ' +
-                    esc(caps.tool) + ', not ' + esc(n)
-                  : '')
+                 esc(caps.model_loaded || '(none)')
+       : mism ? '— NOT running: the app on this port is ' +
+                esc(caps.tool || '?') + '. Start ' + esc(n) +
+                '’s own app (own port), then 🔌 Re-test.'
        : caps.ok ? '— app not started. Start it, then 🔌 Re-test (models ' +
                    'and LoRAs come from the running app).'
        : '— unreachable: ' + esc(caps.error || 'no route')) + '</span>';
@@ -575,7 +578,9 @@ function renderWizEngines(){
   });
 }
 function renderWizModels(){
-  const caps = ENGDATA[WIZ.engine] || {};
+  const caps0 = ENGDATA[WIZ.engine] || {};
+  // mismatch d'identite: la liste viendrait du MAUVAIS outil - on n'offre rien
+  const caps = caps0.tool_mismatch ? {} : caps0;
   const models = caps.models || [], loras = caps.loras || [];
   $('wizmodel').innerHTML =
     '<option value="">(keep the engine’s current model' +
@@ -1218,6 +1223,12 @@ async function renderBookModels(selected){
       headers: {'Content-Type': 'application/json'}, body: '{}'});
     const res = await r.json();
     const caps = ((res && res.engines) || {})[eng] || {};
+    if(caps.tool_mismatch){
+      dd.innerHTML = '<option value="">(the app on this port is ' +
+        esc(caps.tool || '?') + ' — start ' + esc(eng) + '’s own app)' +
+        '</option>';
+      return;
+    }
     const ms = caps.models || [];
     dd.innerHTML = '<option value="">(keep the engine’s current model' +
       (caps.model_loaded ? ': ' + esc(caps.model_loaded) : '') +

@@ -84,11 +84,26 @@ def _run_czp(czp_path, args, spec=None, timeout=3600):
 class Engine:
     """One family engine: an instance URL and/or a czp path."""
 
-    def __init__(self, name, url=None, czp=None):
+    def __init__(self, name, url=None, czp=None, tool=None):
         self.name = name
         self.url = (url or "").strip() or None
         self.czp = (czp or "").strip() or None
+        self.tool = (tool or "").strip() or None   # identite attendue (config)
         self._probe = (0.0, None)          # (timestamp, caps|None) cache
+
+    def _tool_matches(self, caps):
+        """L'app qui repond sur le port est-elle BIEN cet outil ? Plusieurs
+        entrees de config peuvent pointer le meme port (7860): sans ce
+        controle, choisir 'krea2' genererait chez crispz-studio sans un mot.
+        Heuristique nom config -> nom d'outil ('studio' ~ 'crispz-studio'),
+        surchargable par config engines.<n>.tool."""
+        t = str((caps or {}).get("tool") or "").lower()
+        if not t:
+            return True                     # vieux outil sans identite: on croit
+        if self.tool:
+            return t == self.tool.lower()
+        n = self.name.lower()
+        return t == n or t == "crispz-" + n or t.endswith("-" + n)
 
     def alive(self, ttl=20):
         """Cached instance probe: caps dict when the instance answers, else
@@ -128,6 +143,8 @@ class Engine:
             inst = probe(self.url)
             if inst:
                 inst["route"] = "remote"
+                if not self._tool_matches(inst):
+                    inst["tool_mismatch"] = True
                 return inst
         if self.czp and os.path.isfile(self.czp):
             res = _run_czp(self.czp, ["caps"], timeout=120)
@@ -143,7 +160,19 @@ class Engine:
         spec = dict(spec)
         spec.setdefault("protocol", PROTOCOL)
         spec.setdefault("op", "gen")
-        if self.url and self.alive():
+        caps = self.alive() if self.url else None
+        if caps and not self._tool_matches(caps):
+            # NE PAS generer chez le mauvais outil, et ne pas non plus
+            # charger un pipeline froid pendant qu'une autre app tient le
+            # GPU: refus explicite, l'utilisateur choisit.
+            return {"ok": False,
+                    "error": f"the app answering at {self.url} is "
+                             f"'{caps.get('tool')}', not {self.name} - "
+                             f"start {self.name}'s own app (each app can "
+                             f"run on its own port: run.bat then update "
+                             f"config.json urls), or pick "
+                             f"'{caps.get('tool')}' as the engine"}
+        if caps:
             try:
                 return _gradio_call(self.url, "cli_gen", [json.dumps(spec)])
             except Exception as e:
@@ -161,5 +190,6 @@ def load_engines(config):
     out = {}
     for name, e in (config.get("engines") or {}).items():
         if isinstance(e, dict):
-            out[name] = Engine(name, url=e.get("url"), czp=e.get("czp"))
+            out[name] = Engine(name, url=e.get("url"), czp=e.get("czp"),
+                               tool=e.get("tool"))
     return out
