@@ -252,6 +252,8 @@ font-size:11px}
         <span>· drag a page onto another = insert BEFORE it · onto a chapter
         header (navigator) = move to the end of that chapter</span>
         <button id="composeall" class="primary" style="margin-left:auto">🧩 Compose book</button>
+        <button id="printbtn"
+                title="Print output: every panel is upscaled to print resolution through the engine (ESRGAN + refine), pages are recomposed at A4 300dpi with crisp vector lettering, and a PDF is written to the book's print/ folder">🖨 Export print</button>
       </div>
       <div id="flat"></div>
     </div>
@@ -1446,6 +1448,20 @@ $('cfgsave').onclick = async () => {
   const be = IDX && IDX.engine;
   status('Settings saved' + (be ? ' — this book: ' + be.name +
          (be.model ? ' / ' + be.model : '') : ''), 'ok');
+};
+$('printbtn').onclick = async () => {
+  if(!confirm('Export for PRINT?\n\nEvery panel below print resolution goes ' +
+              'through the engine (ESRGAN + refine) — this uses the GPU and ' +
+              'can take several minutes. Pages are recomposed at A4 300dpi ' +
+              'and a PDF lands in the book’s print/ folder.')) return;
+  const res = await api('export_print', {},
+    'Print export… (upscaling panels through the engine, can take minutes)');
+  if(!res) return;
+  const warn = (res.warnings || []).join(' · ');
+  status('🖨 ' + res.pages + ' pages at ' + res.preset + ', ' + res.upscaled +
+         ' panel(s) upscaled via ' + res.engine +
+         (warn ? '  ⚠ ' + warn : ''), warn ? 'warn' : 'ok');
+  window.open('/file/' + res.pdf, '_blank');
 };
 $('composeall').onclick = async () => {
   const res = await api('compose_book', {}, 'Composing the whole book…');

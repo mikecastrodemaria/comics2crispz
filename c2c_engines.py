@@ -153,6 +153,30 @@ class Engine:
         return {"ok": False, "name": self.name,
                 "error": "no running instance and no czp path configured"}
 
+    def upscale(self, spec):
+        """Upscale UNE image via l'op 'upscale' du protocole (ESRGAN +
+        refine de l'outil) - la sortie print. Memes routes que gen()."""
+        spec = dict(spec)
+        spec.setdefault("protocol", PROTOCOL)
+        spec.setdefault("op", "upscale")
+        caps = self.alive() if self.url else None
+        if caps and not self._tool_matches(caps):
+            return {"ok": False,
+                    "error": f"the app answering at {self.url} is "
+                             f"'{caps.get('tool')}', not {self.name} - "
+                             f"close it and start {self.name}'s app"}
+        if caps:
+            try:
+                return _gradio_call(self.url, "cli_upscale",
+                                    [json.dumps(spec)])
+            except Exception as e:
+                return {"ok": False, "error": f"remote call failed: {e}"}
+        if self.czp and os.path.isfile(self.czp):
+            return _run_czp(self.czp, ["upscale", "--spec", "-"], spec=spec)
+        return {"ok": False,
+                "error": f"engine '{self.name}': no route (no instance at "
+                         f"{self.url or '?'} and no czp)"}
+
     def gen(self, spec):
         """Generate ONE image. spec = a protocol dict (protocol/prompt/...).
         Prefers the instance (warm model); falls back to czp (which retries

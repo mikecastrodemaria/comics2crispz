@@ -393,6 +393,106 @@ class Studio:
                                   face_detector=fd, char_embeddings=emb)
         return c2c_state.book_index(project, self.dir)
 
+    def op_export_print(self, data):
+        """🖨 Sortie PRINT: chaque case remonte a la resolution d'impression
+        via l'op upscale du protocole (ESRGAN + refine du moteur), puis les
+        planches sont recomposees en A4 300dpi (lettrage vectoriel = net) et
+        exportees en PDF. {engine?, page_preset?}. Reprise gratuite: une
+        case deja upscalee a la bonne taille n'est pas refaite."""
+        name, eng = self._default_engine(data.get("engine"))
+        if eng is None:
+            return {"ok": False,
+                    "error": f"no engine '{name}' (config.json 'engines')"}
+        preset = data.get("page_preset") or "A4 300dpi"
+        project = self.load()
+        src_pg = cz_comic.page_size(project.get("page"))
+        prj = dict(project)
+        pg = dict(cz_comic.page_size(preset))
+        pg["page_numbers"] = bool(src_pg.get("page_numbers", False))
+        if src_pg.get("reading"):
+            pg["reading"] = src_pg["reading"]
+        prj["page"] = pg
+        from PIL import Image
+        done_up, warnings, missing = 0, [], 0
+        out_dir = os.path.join(self.dir, "print")
+        folios = c2c_state._folios(prj)
+        numbers = bool(pg.get("page_numbers", False))
+        for ch, page in cz_comic.book_order(prj):
+            cells = cz_comic.layout_cells(page["layout"])
+            rects = cz_comic.panel_rects(cells, pg["width"], pg["height"],
+                                         pg["margin"], pg["gutter"])
+            images = {}
+            for i, panel in enumerate(page["panels"]):
+                srcp = panel.get("image")
+                if not (srcp and os.path.isfile(srcp)):
+                    missing += 1
+                    continue
+                if i >= len(rects):
+                    continue
+                tw = rects[i][2]
+                dst = os.path.join(out_dir, "panels", ch["id"], page["id"],
+                                   f"{panel['id']}.png")
+                with Image.open(srcp) as im:
+                    sw = im.width
+                need = tw / max(1, sw)
+                if need <= 1.02:
+                    images[panel["id"]] = Image.open(srcp)
+                    continue
+                if os.path.isfile(dst) and \
+                        os.path.getmtime(dst) >= os.path.getmtime(srcp):
+                    images[panel["id"]] = Image.open(dst)   # deja fait
+                    continue
+                # sujet LOCAL pour le refine (JAMAIS le prompt de scene sur
+                # un fragment - regle maison): description du personnage
+                subject = cz_comic.detail_prompt(prj, panel)
+                res = eng.upscale({"input": os.path.abspath(srcp),
+                                   "factor": min(8.0, round(need + 0.05, 2)),
+                                   "prompt": subject,
+                                   "out_dir": os.path.dirname(dst)})
+                if not res.get("ok"):
+                    return {"ok": False, "engine": name,
+                            "error": f"{ch['id']}.{page['id']}."
+                                     f"{panel['id']}: {res.get('error')}"}
+                up = (res.get("images") or [None])[0]
+                if not up or not os.path.isfile(up):
+                    return {"ok": False, "engine": name,
+                            "error": f"{panel['id']}: engine returned no "
+                                     f"readable image"}
+                os.makedirs(os.path.dirname(dst), exist_ok=True)
+                shutil.copy2(up, dst)
+                images[panel["id"]] = Image.open(dst)
+                done_up += 1
+            sheet = cz_comic.compose_page(prj, page, images=images)
+            for im in images.values():
+                try:
+                    im.close()
+                except Exception:
+                    pass
+            fd, emb = self._letter_kit(prj)
+            cz_comic.render_lettering(prj, page, sheet, face_detector=fd,
+                                      char_embeddings=emb)
+            folio = folios.get((ch["id"], page["id"]))
+            if folio and numbers:
+                cz_comic._draw_page_number(sheet, pg, folio)
+            pdst = os.path.join(out_dir, "pages", ch["id"],
+                                f"{page['id']}.png")
+            os.makedirs(os.path.dirname(pdst), exist_ok=True)
+            tmpf = pdst + f".{os.getpid()}.tmp"
+            sheet.save(tmpf, "PNG")
+            os.replace(tmpf, pdst)
+        paths = [os.path.join(out_dir, "pages", ch["id"], f"{p['id']}.png")
+                 for ch, p in cz_comic.book_order(prj)]
+        pdf = cz_comic.export_pdf(
+            [Image.open(x) for x in paths],
+            os.path.join(out_dir, "book-print.pdf"),
+            dpi=int(pg.get("dpi", 300)))
+        if missing:
+            warnings.append(f"{missing} panel(s) have no image yet - they "
+                            f"print as placeholders (Generate them first)")
+        return {"ok": True, "engine": name, "pdf": "print/book-print.pdf",
+                "upscaled": done_up, "pages": len(paths),
+                "preset": preset, "warnings": warnings}
+
     def op_generate(self, data):
         """Generate the panels of ONE page through a family engine (CLI
         protocol): {cid, pid, pnid?, engine?, force?}. Without pnid = every
