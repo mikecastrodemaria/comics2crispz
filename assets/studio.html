@@ -59,6 +59,11 @@ background:repeating-linear-gradient(45deg,#1a1e26,#1a1e26 12px,#1e2330 12px,
 .bookcard .t{font-size:13px;font-weight:600;overflow:hidden;
 text-overflow:ellipsis;white-space:nowrap}
 .bookcard .m{font-size:11px;color:var(--mut);margin-top:2px}
+.bookcard .del{position:absolute;top:6px;right:6px;width:26px;height:26px;
+padding:0;border-radius:50%;background:#000a;border-color:#0000;opacity:0;
+transition:opacity .12s;z-index:2}
+.bookcard:hover .del{opacity:1}
+.bookcard .del:hover{background:#5a2230;border-color:#7a2e40}
 .bookcard.newcard .nocov{font-size:44px;color:var(--mut)}
 .bookcard.newcard:hover .nocov{color:#fff}
 .lorarow{display:flex;align-items:flex-start;gap:8px;font-size:12px;
@@ -555,6 +560,24 @@ function renderLibrary(){
       '<div class="m">' + b.pages + ' page' + (b.pages > 1 ? 's' : '') +
       ' · ' + new Date(b.mtime * 1000).toLocaleDateString() +
       (b.current ? ' · open' : '') + '</div></div>';
+    const del = document.createElement('button');
+    del.className = 'del';
+    del.textContent = '🗑';
+    del.title = 'Move this book to the trash (recoverable: books/_trash)';
+    del.onclick = async ev => {
+      ev.stopPropagation();
+      if(!confirm('Move “' + b.title + '” to the trash?\n\nNothing is ' +
+                  'destroyed: the folder goes to books/_trash/ and moving ' +
+                  'it back into books/ restores it.')) return;
+      const res = await api('delete_book', {book: b.book},
+                            'Moving to trash…');
+      if(!res) return;
+      if(res.no_book) IDX = null;
+      else if(res.opened) IDX = res;
+      showLibrary();
+      status((res.warnings || []).join(' '), 'ok');
+    };
+    c.appendChild(del);
     c.onclick = async () => {
       const res = await api('open_book', {book: b.book}, 'Opening book…');
       if(res) afterBookSwitch(res);
