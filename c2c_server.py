@@ -681,6 +681,36 @@ def books_op(op, data):
                     raise ValueError(f"'{name}' has no project.json (was the "
                                      f"folder moved?)")
                 studio = Studio(d, cfg)
+            elif op == "delete_book":
+                # CORBEILLE, jamais de suppression definitive: le dossier
+                # part dans books/_trash/<nom[-n]> (le remettre a la racine
+                # de books/ le restaure). _trash n'a pas de project.json,
+                # le selecteur ne le liste donc jamais.
+                name = os.path.basename(str(data.get("book") or "").strip())
+                d = os.path.join(BOOKS_ROOT, name)
+                if not name or not os.path.isfile(
+                        cz_comic.project_json_path(d)):
+                    raise ValueError(f"'{name}' is not a book in books/")
+                trash = os.path.join(BOOKS_ROOT, "_trash")
+                os.makedirs(trash, exist_ok=True)
+                dst, n = os.path.join(trash, name), 1
+                while os.path.exists(dst):
+                    n += 1
+                    dst = os.path.join(trash, f"{name}-{n}")
+                if Handler.studio and \
+                        os.path.abspath(Handler.studio.dir) == os.path.abspath(d):
+                    Handler.studio = None
+                shutil.move(d, dst)
+                warnings.append(f"book '{name}' moved to books/_trash/"
+                                f"{os.path.basename(dst)} - move the folder "
+                                f"back into books/ to restore it")
+                nxt = find_latest_book()
+                if nxt and Handler.studio is None:
+                    Handler.studio = Studio(nxt, cfg)
+                studio = Handler.studio
+                if studio is None:
+                    return {"ok": True, "no_book": True, "deleted": name,
+                            "warnings": warnings}
             elif op == "new_book":
                 title = str(data.get("name") or "").strip()
                 slug = re.sub(r"[^A-Za-z0-9_-]+", "-", title.lower()).strip("-")

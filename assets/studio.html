@@ -192,6 +192,10 @@ font-size:11px}
              border:1px solid var(--bd);border-radius:6px;padding:6px 8px">
         </div>
       </div>
+      <div class="row" style="margin-top:10px">
+        <button id="cfgdelbook"
+                title="Move this book to books/_trash (recoverable: move the folder back into books/)">🗑 Delete this book (trash)</button>
+      </div>
       <hr style="border:none;border-top:1px solid var(--bd);margin:14px 0">
     </div>
     <div class="field">
@@ -1286,6 +1290,28 @@ function renderOllamaStatus(st){
     el.innerHTML = '⚠️ ' + esc((st && st.error) || 'Ollama not tested yet');
   }
 }
+$('cfgdelbook').onclick = async () => {
+  // retrouver le SLUG du livre ouvert via la liste (source de verite)
+  const books = await loadBooks();
+  const cur = books && books.books && books.books.find(b => b.current);
+  if(!cur){ status('No open book to delete', 'warn'); return; }
+  if(!confirm('Move the book “' + cur.title + '” to the trash?\n\n' +
+              'Nothing is destroyed: the folder goes to books/_trash/ and ' +
+              'moving it back into books/ restores it.')) return;
+  const res = await api('delete_book', {book: cur.book},
+                        'Moving the book to trash…');
+  if(!res) return;
+  $('modal').classList.remove('on');
+  if(res.no_book){
+    IDX = null;
+    backToFlat();
+    showWelcome(true);
+    loadBooks();
+  }else{
+    afterBookSwitch(res);
+  }
+  status((res.warnings || []).join(' '), 'ok');
+};
 $('cfgbtn').onclick = openSettings;
 $('cfgclose').onclick = () => $('modal').classList.remove('on');
 $('modal').onclick = ev => { if(ev.target === $('modal'))
