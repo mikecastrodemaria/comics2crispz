@@ -626,6 +626,21 @@ class Handler(BaseHTTPRequestHandler):
         sys.stderr.write("[c2c] %s\n" % (fmt % args))
 
 
+def already_running(port, timeout=1.5):
+    """Un comics2crispz repond-il deja sur ce port ? http.server accepte le
+    DOUBLE bind en silence (SO_REUSEADDR): deux serveurs lances par megarde
+    se partagent le port et l'un des deux sert du VIEUX code - symptome
+    classique: 'unknown op' apres une mise a jour. On verifie AVANT de
+    binder, et on reutilise l'existant."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/",
+                                    timeout=timeout) as r:
+            return b"comics2crispz" in r.read(4096)
+    except Exception:
+        return False
+
+
 def serve(project_dir, port=DEFAULT_PORT, config=None):
     """project_dir=None -> demarre SANS livre: l'UI montre l'ecran d'accueil
     (creer / ouvrir un livre), pour que le premier lancement d'un utilisateur
@@ -837,6 +852,13 @@ def main(argv=None):
     args = parser.parse_args(argv)
     config = load_config()
     port = args.port or int(config.get("port") or DEFAULT_PORT)
+    if already_running(port):
+        print(f"[c2c] a comics2crispz server ALREADY runs on port {port} - "
+              f"reusing it (close it first if you just updated the code).")
+        if args.open:
+            import webbrowser
+            webbrowser.open(f"http://127.0.0.1:{port}/")
+        return 0
     # Pas de livre ? On sert quand meme: l'UI accueille avec "creer/ouvrir".
     project = args.project or find_latest_book()
     try:
