@@ -66,6 +66,10 @@ background:repeating-linear-gradient(45deg,#1a1e26,#1a1e26 12px,#1e2330 12px,
 .bookcard .t{font-size:13px;font-weight:600;overflow:hidden;
 text-overflow:ellipsis;white-space:nowrap}
 .bookcard .m{font-size:11px;color:var(--mut);margin-top:2px}
+.jobbar{height:8px;background:#121722;border:1px solid var(--bd);
+border-radius:4px;overflow:hidden;margin-top:8px}
+.jobbar i{display:block;height:100%;width:0;background:var(--acc);
+transition:width .4s}
 .bookcard .del{position:absolute;top:6px;right:6px;width:26px;height:26px;
 padding:0;border-radius:50%;background:#000a;border-color:#0000;opacity:0;
 transition:opacity .12s;z-index:2}
@@ -259,9 +263,18 @@ font-size:11px}
         <span><span class="dot st-composed"></span>composed</span>
         <span>· drag a page onto another = insert BEFORE it · onto a chapter
         header (navigator) = move to the end of that chapter</span>
-        <button id="composeall" class="primary" style="margin-left:auto">🧩 Compose book</button>
+        <button id="genbook" class="primary" style="margin-left:auto"
+                title="Generate every panel without an image, page after page, in the background - progress below, Stop anytime">🎨 Generate book</button>
+        <button id="composeall">🧩 Compose book</button>
         <button id="printbtn"
                 title="Print output: every panel is upscaled to print resolution through the engine (ESRGAN + refine), pages are recomposed at A4 300dpi with crisp vector lettering, and a PDF is written to the book's print/ folder">🖨 Export print</button>
+      </div>
+      <div id="jobbox" class="box" style="display:none;margin-bottom:14px">
+        <div class="row" style="align-items:center">
+          <span id="jobtext" class="hint" style="flex:1"></span>
+          <button id="jobstop">⏹ Stop</button>
+        </div>
+        <div class="jobbar"><i id="jobfill"></i></div>
       </div>
       <div id="flat"></div>
     </div>
@@ -301,11 +314,32 @@ font-size:11px}
         <button class="helpb" data-help="The user is naming a new comic book in the creation wizard. The title also seeds the fun mode (AI invents the story from it).">?</button></span>
         <input id="wizname" placeholder="Plein Écran">
       </div>
-      <div class="row" style="align-items:center;margin-top:10px">
-        <span class="lbl" style="margin:0">Story pages</span>
-        <input id="wizpages" type="number" min="0" max="100" value="12"
-               style="width:80px">
-        <span class="hint">cover &amp; back added for you</span>
+      <div class="field">
+        <span class="lbl">Concept / pitch — what the book is about (story,
+        mood, setting, characters)
+          <button class="helpb" data-help="The concept / pitch box of the creation wizard: a few sentences about the story, the mood, the setting and the characters. It seeds the Story Bible of the book and drives the fun mode (the AI follows it closely). It never goes into image prompts directly - the visual style lives in step 3.">?</button></span>
+        <textarea id="wizconcept" rows="3"
+          placeholder="A girl wanders a surreal dream where huge flowers grow out of concrete ruins. Awe and a hint of terror; the mundane blends with the fantastical."></textarea>
+      </div>
+      <div class="grid2">
+        <div class="field" style="margin-top:8px">
+          <span class="lbl">Story pages <span class="hint">(cover &amp; back
+          added for you)</span></span>
+          <input id="wizpages" type="number" min="0" max="100" value="12">
+        </div>
+        <div class="field" style="margin-top:8px">
+          <span class="lbl">Dialogue language</span>
+          <select id="wizlang" class="w100">
+            <option value="">(same as the title)</option>
+            <option value="French">Français</option>
+            <option value="English">English</option>
+            <option value="Spanish">Español</option>
+            <option value="German">Deutsch</option>
+            <option value="Italian">Italiano</option>
+            <option value="Portuguese">Português</option>
+            <option value="Japanese">日本語</option>
+          </select>
+        </div>
       </div>
       <label class="lorarow" style="margin-top:10px"><input type="checkbox"
         id="wizfun"> ✨ Fun mode — the AI invents the whole book from the
@@ -681,6 +715,7 @@ let WIZ = null, ENGDATA = {};
 function openWizard(){
   WIZ = {step: 1, engine: '', model: '', loras: []};
   $('wizname').value = ''; $('wizpages').value = '12';
+  $('wizconcept').value = ''; $('wizlang').value = '';
   $('wizfun').checked = false; $('wizmanga').checked = false;
   $('wizpreset').innerHTML = Object.keys(STYLE_PRESETS).map(k =>
     '<option value="' + k + '">' + esc(STYLE_PRESETS[k].label) +
@@ -792,6 +827,8 @@ $('wiznext').onclick = async () => {
   $('wizmodal').classList.remove('on');
   const res = await api('new_book', {
     name: $('wizname').value.trim(),
+    concept: $('wizconcept').value.trim(),
+    language: $('wizlang').value,
     pages: parseInt($('wizpages').value || '0', 10) || 0,
     fun: fun, manga: $('wizmanga').checked,
     engine: WIZ.engine || null, model: WIZ.model || null,
@@ -1591,6 +1628,67 @@ $('cfgsave').onclick = async () => {
   status('Settings saved' + (be ? ' — this book: ' + be.name +
          (be.model ? ' / ' + be.model : '') : ''), 'ok');
 };
+/* ---------- 🎨 generation du livre entier (job de fond + progression) ---- */
+let JOBTIMER = null;
+async function rawPost(op, payload){
+  const r = await fetch('/api/' + op, {method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify(payload || {})});
+  return r.json();
+}
+function renderJob(job){
+  const box = $('jobbox');
+  const active = job.running || (job.finished && job.total &&
+                                 Date.now() / 1000 - job.finished < 15);
+  box.style.display = active ? '' : 'none';
+  if(!active) return;
+  const pct = job.total ? Math.round(job.done / job.total * 100) : 0;
+  $('jobfill').style.width = pct + '%';
+  $('jobtext').textContent = job.running
+    ? 'Generating the book… page ' + (job.done + 1) + '/' + job.total +
+      (job.current ? ' (' + job.current + ')' : '') + ' — ' +
+      job.generated + ' panel(s) drawn so far'
+    : (job.errors.length ? '⚠ stopped: ' + job.errors[0]
+       : (job.stop ? '⏹ stopped by you — ' : '✅ done — ') +
+         job.generated + ' panel(s) drawn, ' + job.done + '/' + job.total +
+         ' pages');
+  $('jobstop').style.display = job.running ? '' : 'none';
+}
+async function pollJob(){
+  try{
+    const res = await rawPost('job_status');
+    if(!res.ok) return;
+    renderJob(res.job);
+    // les pastilles / vignettes suivent en direct
+    const idx = await rawPost('index');
+    if(idx.ok && !BUSY){ IDX = idx; renderNav();
+      if($('flatview').style.display !== 'none') renderFlat(); }
+    if(!res.job.running){
+      clearInterval(JOBTIMER); JOBTIMER = null;
+      const j = res.job;
+      status(j.errors.length ? '⚠ ' + j.errors[0]
+             : 'Book generation finished: ' + j.generated + ' panel(s)' +
+               (j.warnings.length ? '  ⚠ ' + j.warnings.slice(0, 3).join(' · ') : ''),
+             j.errors.length || j.warnings.length ? 'warn' : 'ok');
+    }
+  }catch(_){}
+}
+$('genbook').onclick = async () => {
+  if(!confirm('Generate every missing panel of the whole book?\n\nRuns in ' +
+              'the background through the engine, page after page - you ' +
+              'can keep browsing and press Stop anytime.')) return;
+  const res = await rawPost('generate_all', {});
+  if(!res.ok){ status('⚠️ ' + res.error, 'err'); return; }
+  renderJob(res.job);
+  if(JOBTIMER) clearInterval(JOBTIMER);
+  JOBTIMER = setInterval(pollJob, 3000);
+};
+$('jobstop').onclick = async () => { await rawPost('job_stop');
+                                     status('Stopping after the current page…', 'warn'); };
+// un job deja en cours quand la page s'ouvre (F5 pendant une generation)
+rawPost('job_status').then(res => { if(res.ok && res.job.running){
+  renderJob(res.job); JOBTIMER = setInterval(pollJob, 3000); } }).catch(() => {});
+
 $('printbtn').onclick = async () => {
   if(!confirm('Export for PRINT?\n\nEvery panel below print resolution goes ' +
               'through the engine (ESRGAN + refine) — this uses the GPU and ' +

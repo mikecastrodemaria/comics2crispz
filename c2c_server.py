@@ -31,6 +31,7 @@ import os
 import re
 import sys
 import json
+import time
 import shutil
 import argparse
 import threading
@@ -413,6 +414,63 @@ class Studio:
             c2c_state.compose_one(project, self.dir, data["cid"], data["pid"],
                                   face_detector=fd, char_embeddings=emb)
         return c2c_state.book_index(project, self.dir)
+
+    # ---- generation du livre ENTIER en tache de fond (progression, stop) ----
+    JOB = {"running": False, "stop": False, "total": 0, "done": 0,
+           "current": "", "generated": 0, "errors": [], "warnings": [],
+           "started": 0.0, "finished": 0.0}
+
+    def op_generate_all(self, data):
+        """🎨 Genere toutes les cases manquantes du livre, planche par
+        planche, dans un thread: l'UI suit via job_status (compteurs, page
+        courante) et peut arreter avec job_stop (fin de la planche en
+        cours). Arret a la premiere erreur moteur - jamais un trou
+        silencieux."""
+        job = Studio.JOB
+        if job["running"]:
+            return {"ok": False,
+                    "error": "a book generation is already running - wait "
+                             "or press Stop"}
+        project = self.load()
+        pages = [(ch["id"], pg["id"]) for ch, pg in cz_comic.book_order(project)]
+        job.update({"running": True, "stop": False, "total": len(pages),
+                    "done": 0, "current": "", "generated": 0, "errors": [],
+                    "warnings": [], "started": time.time(), "finished": 0.0})
+        engine = data.get("engine")
+
+        def worker():
+            try:
+                for cid, pid in pages:
+                    if job["stop"]:
+                        break
+                    job["current"] = f"{cid}.{pid}"
+                    res = self.op_generate({"cid": cid, "pid": pid,
+                                            "engine": engine})
+                    if not res.get("ok"):
+                        job["errors"].append(f"{cid}.{pid}: "
+                                             f"{res.get('error')}")
+                        break
+                    job["generated"] += len(res.get("generated") or [])
+                    for w in res.get("warnings") or []:
+                        if w not in job["warnings"] and len(job["warnings"]) < 40:
+                            job["warnings"].append(w)
+                    job["done"] += 1
+            except Exception as e:                  # jamais un thread muet
+                job["errors"].append(f"{type(e).__name__}: {e}")
+            finally:
+                job["running"] = False
+                job["current"] = ""
+                job["finished"] = time.time()
+
+        threading.Thread(target=worker, daemon=True).start()
+        return {"ok": True, "job": dict(job)}
+
+    def op_job_status(self, _data):
+        return {"ok": True, "job": dict(Studio.JOB)}
+
+    def op_job_stop(self, _data):
+        Studio.JOB["stop"] = True
+        return {"ok": True, "job": dict(Studio.JOB)}
 
     def op_edit_panel(self, data):
         """✏️ Retoucher UNE case par INSTRUCTION (op edit du protocole:
@@ -973,6 +1031,14 @@ def books_op(op, data):
                 if data.get("manga"):
                     p["page"]["reading"] = "rtl"   # sens manga (droite→gauche)
                 pages = max(0, min(int(data.get("pages") or 0), 100))
+                # Story Bible (amorce): concept/pitch + langue des dialogues.
+                # Ne part JAMAIS dans un prompt image - nourrit le mode fun
+                # et les aides Ollama.
+                concept = str(data.get("concept") or "").strip()
+                language = str(data.get("language") or "").strip()
+                if concept or language:
+                    p["bible"] = {"story": {"concept": concept,
+                                            "language": language}}
                 if data.get("fun"):
                     # ✨ mode fun: Ollama invente tout depuis le titre. En cas
                     # d'echec -> structure variee + warning, jamais de livre
@@ -980,7 +1046,9 @@ def books_op(op, data):
                     lay_counts = {n: len(cz_comic.layout_cells(n))
                                   for n in cz_comic.layout_names()}
                     fb = c2c_ollama.fun_book(title, pages or 6, lay_counts,
-                                             cfg.get("ollama"))
+                                             cfg.get("ollama"),
+                                             concept=concept,
+                                             language=language)
                     if fb.get("ok"):
                         cov = cz_comic.add_chapter(p, "Cover")
                         pg = cz_comic.add_page(p, cov["id"], "splash",

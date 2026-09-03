@@ -61,13 +61,14 @@ def _resolve_model(cfg):
     return url, m["models"][0], None
 
 
-def fun_book(title, pages, layout_counts, cfg, timeout=600):
-    """✨ Mode fun: un TITRE -> l'outline complet d'un petit livre (synopsis,
-    casting, planches avec gabarits, prompts de cases @Name, dialogues).
-    Ollama est force en JSON (format: 'json'). Renvoie {ok, outline, model}
-    ou {ok: False, error}. La VALIDATION/reparation de l'outline est faite
-    par c2c_state.build_from_outline (pur, testable) - ici on ne verifie que
-    la forme grossiere."""
+def fun_book(title, pages, layout_counts, cfg, concept="", language="",
+             timeout=600):
+    """✨ Mode fun: un TITRE (+ concept/pitch, + langue des dialogues) ->
+    l'outline complet d'un petit livre (synopsis, casting, planches avec
+    gabarits, prompts de cases @Name, dialogues). Ollama est force en JSON
+    (format: 'json'). Renvoie {ok, outline, model} ou {ok: False, error}.
+    La VALIDATION/reparation de l'outline est faite par
+    c2c_state.build_from_outline (pur, testable)."""
     title = (title or "").strip()
     if not title:
         return {"ok": False, "error": "give the book a title first"}
@@ -75,9 +76,16 @@ def fun_book(title, pages, layout_counts, cfg, timeout=600):
     if err:
         return err
     lays = ", ".join(f"{n}={c}" for n, c in sorted(layout_counts.items()))
+    concept = (concept or "").strip()
+    language = (language or "").strip()
+    lang_rule = (f"dialogue text in {language}" if language
+                 else "dialogue text in the LANGUAGE OF THE TITLE")
     prompt = (
         f"You invent a short, fun comic book from its title: \"{title}\".\n"
-        f"Answer with ONE JSON object EXACTLY shaped like this:\n"
+        + (f"Concept / pitch given by the author (follow it closely - "
+           f"story, mood, setting, characters):\n{concept}\n" if concept
+           else "")
+        + f"Answer with ONE JSON object EXACTLY shaped like this:\n"
         f'{{"synopsis": "...",\n'
         f' "casting": [{{"name": "Lea", "kind": "character" or "setting", '
         f'"desc": "concrete visual description, in English"}}],\n'
@@ -92,7 +100,7 @@ def fun_book(title, pages, layout_counts, cfg, timeout=600):
         f"English (subject, action, framing, lighting), naming characters "
         f"as @Name matching the casting names (2 to 5 casting entries)\n"
         f"- dialogue kind is one of speech, thought, caption, sfx; speaker "
-        f"empty for caption/sfx; dialogue text in the LANGUAGE OF THE TITLE; "
+        f"empty for caption/sfx; {lang_rule}; "
         f"1-3 short lines per panel, not every panel needs dialogue\n"
         f"- no text or lettering described inside the image prompts")
     try:
