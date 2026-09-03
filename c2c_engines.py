@@ -191,11 +191,17 @@ class Engine:
                              f"'{caps.get('tool')}', not {self.name} - "
                              f"close it and start {self.name}'s app"}
         if caps:
-            if not (caps.get("supports") or {}).get("edit", True):
+            sup = caps.get("supports") or {}
+            if "edit" not in sup:
+                return {"ok": False,
+                        "error": f"the running {self.name} app is older than "
+                                 f"the edit feature - restart it with the "
+                                 f"current code"}
+            if not sup.get("edit"):
                 return {"ok": False,
                         "error": f"{self.name} has no edit model "
-                                 f"(supports.edit is false) - use qwen-edit "
-                                 f"or configure an omni model"}
+                                 f"(supports.edit is false) - use qwen-edit, "
+                                 f"or configure an omni model on this engine"}
             try:
                 return _gradio_call(self.url, "cli_edit", [json.dumps(spec)])
             except Exception as e:
