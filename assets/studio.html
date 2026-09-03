@@ -695,10 +695,13 @@ async function loadWizEngines(){
       headers: {'Content-Type': 'application/json'}, body: '{}'});
     const res = await r.json();
     ENGDATA = (res && res.engines) || {};
-    if(!WIZ.engine){
-      const running = Object.keys(ENGDATA).filter(n =>
-        ENGDATA[n].ok && ENGDATA[n].route === 'remote');
-      WIZ.engine = running[0] || res.default ||
+    // preselection = le moteur VRAIMENT en marche (identite verifiee),
+    // sinon le defaut config - jamais une carte orange
+    const running = Object.keys(ENGDATA).filter(n =>
+      ENGDATA[n].ok && ENGDATA[n].route === 'remote' &&
+      !ENGDATA[n].tool_mismatch);
+    if(!WIZ.engine || !running.includes(WIZ.engine)){
+      WIZ.engine = running[0] || WIZ.engine || res.default ||
         Object.keys(ENGDATA)[0] || '';
     }
   }catch(_){ ENGDATA = {}; }

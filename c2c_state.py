@@ -317,6 +317,8 @@ def build_from_outline(project, outline, chapter_name="Story"):
             str(c.get("desc") or "").strip(), kind=kind)
     ch = cz_comic.add_chapter(project, chapter_name,
                               str(outline.get("synopsis") or "").strip())
+    cast_names = sorted(project.get("casting") or {}, key=len, reverse=True)
+    at_fixes = 0
     for i, pd in enumerate(outline.get("pages") or []):
         if not isinstance(pd, dict):
             warnings.append(f"page {i + 1}: not an object - skipped")
@@ -341,6 +343,15 @@ def build_from_outline(project, outline, chapter_name="Story"):
         for j, pnd in enumerate(panels_data[:n_cells]):
             panel = page["panels"][j]
             panel["text"] = str(pnd.get("text") or "").strip()
+            # Les LLM ecrivent souvent 'Lea' au lieu de '@Lea': sans le @,
+            # le casting n'est PAS substitue (pas de desc, refs, LoRA,
+            # detailer). On prefixe les noms du casting cites tels quels.
+            for cname in cast_names:
+                fixed = re.sub(r"(?<![@\w])" + re.escape(cname) + r"\b",
+                               "@" + cname, panel["text"])
+                if fixed != panel["text"]:
+                    panel["text"] = fixed
+                    at_fixes += 1
             for d in (pnd.get("dialogue") or [])[:6]:
                 if not isinstance(d, dict):
                     continue
@@ -356,6 +367,10 @@ def build_from_outline(project, outline, chapter_name="Story"):
                 cz_comic.add_dialogue(panel, text,
                                       speaker=str(d.get("speaker") or ""),
                                       kind=kind)
+    if at_fixes:
+        warnings.append(f"{at_fixes} panel text(s): casting names written "
+                        f"without @ were fixed (e.g. Lea -> @Lea) so the "
+                        f"casting applies")
     return ch, warnings
 
 

@@ -920,6 +920,13 @@ def books_op(op, data):
                         _ch, ol_warnings = c2c_state.build_from_outline(
                             p, fb["outline"])
                         warnings.extend(ol_warnings)
+                        got = len(fb["outline"].get("pages") or [])
+                        want = pages or 6
+                        if got < want:
+                            warnings.append(
+                                f"you asked for {want} story pages, the AI "
+                                f"wrote {got} - add pages from the flatplan "
+                                f"(➕ Add pages) or run the fun mode again")
                         back = cz_comic.add_page(p, _ch["id"], "splash",
                                                  role="back")
                         back["panels"][0]["text"] = \
