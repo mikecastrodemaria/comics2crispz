@@ -523,6 +523,61 @@ class Studio:
                     "warnings": res.get("warnings") or []})
         return idx
 
+    def op_vary_panel(self, data):
+        """🔁 VARIATION d'une case (img2img): on repart de l'image existante
+        avec une force de denoise - 0.3 = meme composition legerement
+        redessinee, 0.6 = variation franche. Passe par l'op upscale du
+        protocole (facteur 1, ESRGAN saute par le facteur, refine guide
+        par le TEXTE de la case: c'est l'image entiere, pas un fragment).
+        Marche sur TOUS les moteurs, pas seulement ceux qui savent editer.
+        {cid, pid, pnid, strength?, engine?} ; ancienne image gardee (↩)."""
+        cid, pid, pnid = data["cid"], data["pid"], data["pnid"]
+        try:
+            strength = float(data.get("strength", 0.45))
+        except (TypeError, ValueError):
+            strength = 0.45
+        strength = max(0.1, min(0.9, strength))
+        project = self.load()
+        name, eng = self._default_engine(data.get("engine"))
+        book_eng = (project.get("engine") or {}).get("name")
+        if not data.get("engine") and book_eng in self.engines:
+            name, eng = self._default_engine(book_eng)
+        if eng is None or not hasattr(eng, "upscale"):
+            return {"ok": False,
+                    "error": f"no engine '{name}' able to refine images"}
+        panel = cz_comic.find_panel(project, cid, pid, pnid)
+        src = panel.get("image")
+        if not (src and os.path.isfile(src)):
+            return {"ok": False,
+                    "error": f"{pnid} has no image yet - generate it first"}
+        page = cz_comic.find_page(project, cid, pid)
+        spec = cz_comic.resolve_panel(project, page, panel,
+                                      index=page["panels"].index(panel))
+        res = eng.upscale({"input": os.path.abspath(src), "factor": 1.0,
+                           "denoise": strength, "prompt": spec["prompt"],
+                           "out_dir": os.path.dirname(os.path.abspath(src))})
+        if not res.get("ok"):
+            return {"ok": False, "engine": name,
+                    "error": f"{pnid}: {res.get('error')}"}
+        out = (res.get("images") or [None])[0]
+        if not out or not os.path.isfile(out):
+            return {"ok": False, "engine": name,
+                    "error": f"{pnid}: engine returned no readable image"}
+        with _LOCK:
+            prev = os.path.splitext(src)[0] + ".prev.png"
+            shutil.copy2(src, prev)
+            tmp = src + f".{os.getpid()}.tmp"
+            shutil.copy2(out, tmp)
+            os.replace(tmp, src)
+            cz_comic.save_project(project, self.dir)
+            fd, emb = self._letter_kit(project)
+            c2c_state.compose_one(project, self.dir, cid, pid,
+                                  face_detector=fd, char_embeddings=emb)
+        idx = c2c_state.book_index(project, self.dir)
+        idx.update({"engine": name, "varied": pnid, "strength": strength,
+                    "warnings": res.get("warnings") or []})
+        return idx
+
     def op_restore_panel(self, data):
         """↩ Revenir a l'image d'avant la derniere retouche (<pnid>.prev.png
         <-> image courante: un second ↩ re-applique la retouche)."""
