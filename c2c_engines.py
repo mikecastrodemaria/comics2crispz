@@ -177,6 +177,35 @@ class Engine:
                 "error": f"engine '{self.name}': no route (no instance at "
                          f"{self.url or '?'} and no czp)"}
 
+    def edit(self, spec):
+        """Image + instruction -> image via l'op 'edit' du protocole
+        (Qwen-Image-Edit, Z-Image Omni). Memes routes/garde-fous que gen():
+        un outil sans modele d'edition repond par un refus explicite."""
+        spec = dict(spec)
+        spec.setdefault("protocol", PROTOCOL)
+        spec.setdefault("op", "edit")
+        caps = self.alive() if self.url else None
+        if caps and not self._tool_matches(caps):
+            return {"ok": False,
+                    "error": f"the app answering at {self.url} is "
+                             f"'{caps.get('tool')}', not {self.name} - "
+                             f"close it and start {self.name}'s app"}
+        if caps:
+            if not (caps.get("supports") or {}).get("edit", True):
+                return {"ok": False,
+                        "error": f"{self.name} has no edit model "
+                                 f"(supports.edit is false) - use qwen-edit "
+                                 f"or configure an omni model"}
+            try:
+                return _gradio_call(self.url, "cli_edit", [json.dumps(spec)])
+            except Exception as e:
+                return {"ok": False, "error": f"remote call failed: {e}"}
+        if self.czp and os.path.isfile(self.czp):
+            return _run_czp(self.czp, ["edit", "--spec", "-"], spec=spec)
+        return {"ok": False,
+                "error": f"engine '{self.name}': no route (no instance at "
+                         f"{self.url or '?'} and no czp)"}
+
     def gen(self, spec):
         """Generate ONE image. spec = a protocol dict (protocol/prompt/...).
         Prefers the instance (warm model); falls back to czp (which retries

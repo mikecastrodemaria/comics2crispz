@@ -473,6 +473,19 @@ font-size:11px}
           <button id="regenbtn" class="primary"
                   style="width:100%;margin-top:10px"
                   title="Save, then draw this panel again through the engine and recompose the page">🎲 Regenerate this panel</button>
+          <div id="editbox" style="display:none">
+            <div class="field">
+              <span class="lbl">✏️ Edit by instruction — keeps the drawing,
+              changes what you ask
+                <button class="helpb" data-help="Edit a generated panel by instruction (the engine's image-edit model: qwen-edit, or Z-Image Omni when configured): describe the CHANGE in English, e.g. 'add rain', 'she looks to the left', 'make it night'. The previous version is kept - Previous swaps back. Engines without an edit model say so.">?</button></span>
+              <textarea id="pnedit" rows="2"
+                placeholder="add heavy rain, keep everything else"></textarea>
+            </div>
+            <div class="grid2" style="margin-top:8px">
+              <button id="editbtn" class="primary">✏️ Edit panel</button>
+              <button id="prevbtn" title="Swap back to the version before the last edit">↩ Previous</button>
+            </div>
+          </div>
           <div class="hint" style="margin-top:8px">Regenerate redraws JUST
           this panel (the rest of the page is untouched). Save alone updates
           text and balloons without redrawing.</div>
@@ -1222,6 +1235,9 @@ function renderPanelBox(p){
   $('pntext').value = pn.text || '';
   $('pndlg').value = pn.dialogue_text || '';
   $('pnseed').value = pn.seed;
+  // retouche par instruction: seulement pour une case deja dessinee
+  $('editbox').style.display = pn.img ? '' : 'none';
+  $('prevbtn').disabled = !pn.has_prev;
 }
 
 async function savePanel(){
@@ -1284,6 +1300,33 @@ $('bookdd').onchange = async () => {
 $('newbook').onclick = newBook;
 $('regenbtn').onclick = regenPanel;
 $('savepnbtn').onclick = savePanelAndCompose;
+
+/* ---------- ✏️ retouche par instruction (op edit du protocole) ---------- */
+$('editbtn').onclick = async () => {
+  if(!SEL || !SELPN) return;
+  const instr = $('pnedit').value.trim();
+  if(!instr){ status('Write the edit instruction first', 'warn'); return; }
+  const pnid = SELPN;
+  const res = await api('edit_panel', {cid: SEL.cid, pid: SEL.pid,
+    pnid: pnid, instruction: instr},
+    'Editing ' + pnid + ' by instruction… (image-edit model, can take a minute)');
+  if(!res) return;
+  IDX = res; SELPN = pnid;
+  showPage(SEL.cid, SEL.pid);
+  const warn = (res.warnings || []).join(' · ');
+  status(pnid + ' edited via ' + res.engine + ' — ↩ Previous swaps back' +
+         (warn ? '  ⚠ ' + warn : ''), warn ? 'warn' : 'ok');
+};
+$('prevbtn').onclick = async () => {
+  if(!SEL || !SELPN) return;
+  const pnid = SELPN;
+  const res = await api('restore_panel', {cid: SEL.cid, pid: SEL.pid,
+                                          pnid: pnid}, 'Swapping versions…');
+  if(!res) return;
+  IDX = res; SELPN = pnid;
+  showPage(SEL.cid, SEL.pid);
+  status(pnid + ': previous version restored (↩ again to redo)', 'ok');
+};
 
 /* ---------- structure: gabarits, planches, chapitres ---------- */
 let LAYCTX = null, LAYSEL = null;

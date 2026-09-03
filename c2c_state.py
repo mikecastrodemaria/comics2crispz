@@ -178,6 +178,8 @@ def chapter_state(project, project_dir, cid):
                 "status": pn.get("status", "draft"),
                 "img": (_rel(img, project_dir)
                         if img and os.path.isfile(img) else None),
+                "has_prev": bool(img and os.path.isfile(
+                    os.path.splitext(img)[0] + ".prev.png")),
                 "dialogue": pn.get("dialogue") or [],
                 "dialogue_text": fmt_dialogue(pn.get("dialogue")),
                 "rect": ([rects[i][0] / W, rects[i][1] / H,

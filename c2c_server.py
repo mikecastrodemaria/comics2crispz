@@ -414,6 +414,79 @@ class Studio:
                                   face_detector=fd, char_embeddings=emb)
         return c2c_state.book_index(project, self.dir)
 
+    def op_edit_panel(self, data):
+        """✏️ Retoucher UNE case par INSTRUCTION (op edit du protocole:
+        image + instruction -> image, Qwen-Image-Edit / Z-Image Omni).
+        {cid, pid, pnid, instruction, engine?}. L'image precedente est
+        gardee en <pnid>.prev.png (↩ restore_panel), la planche recomposee."""
+        cid, pid, pnid = data["cid"], data["pid"], data["pnid"]
+        instr = str(data.get("instruction") or "").strip()
+        if not instr:
+            return {"ok": False, "error": "write the edit instruction first "
+                                          "(e.g. 'add rain', 'she looks left')"}
+        project = self.load()
+        name, eng = self._default_engine(data.get("engine"))
+        book_eng = (project.get("engine") or {}).get("name")
+        if not data.get("engine") and book_eng in self.engines:
+            name, eng = self._default_engine(book_eng)
+        if eng is None:
+            return {"ok": False,
+                    "error": f"no engine '{name}' (config.json 'engines')"}
+        if not hasattr(eng, "edit"):
+            return {"ok": False, "error": f"engine '{name}' cannot edit"}
+        panel = cz_comic.find_panel(project, cid, pid, pnid)
+        src = panel.get("image")
+        if not (src and os.path.isfile(src)):
+            return {"ok": False,
+                    "error": f"{pnid} has no image yet - generate it first, "
+                             f"then edit it"}
+        res = eng.edit({"input": os.path.abspath(src), "prompt": instr,
+                        "out_dir": os.path.dirname(os.path.abspath(src))})
+        if not res.get("ok"):
+            return {"ok": False, "engine": name,
+                    "error": f"{pnid}: {res.get('error')}"}
+        out = (res.get("images") or [None])[0]
+        if not out or not os.path.isfile(out):
+            return {"ok": False, "engine": name,
+                    "error": f"{pnid}: engine returned no readable image"}
+        with _LOCK:
+            prev = os.path.splitext(src)[0] + ".prev.png"
+            shutil.copy2(src, prev)                     # ↩ toujours possible
+            tmp = src + f".{os.getpid()}.tmp"
+            shutil.copy2(out, tmp)
+            os.replace(tmp, src)
+            panel["status"] = "rendered"
+            cz_comic.save_project(project, self.dir)
+            fd, emb = self._letter_kit(project)
+            c2c_state.compose_one(project, self.dir, cid, pid,
+                                  face_detector=fd, char_embeddings=emb)
+        idx = c2c_state.book_index(project, self.dir)
+        idx.update({"engine": name, "edited": pnid,
+                    "warnings": res.get("warnings") or []})
+        return idx
+
+    def op_restore_panel(self, data):
+        """↩ Revenir a l'image d'avant la derniere retouche (<pnid>.prev.png
+        <-> image courante: un second ↩ re-applique la retouche)."""
+        cid, pid, pnid = data["cid"], data["pid"], data["pnid"]
+        with _LOCK:
+            project = self.load()
+            panel = cz_comic.find_panel(project, cid, pid, pnid)
+            src = panel.get("image")
+            prev = os.path.splitext(src)[0] + ".prev.png" if src else None
+            if not (prev and os.path.isfile(prev)):
+                return {"ok": False,
+                        "error": f"{pnid}: no previous version to restore"}
+            swap = src + f".{os.getpid()}.swap"
+            os.replace(src, swap)
+            os.replace(prev, src)
+            os.replace(swap, prev)
+            cz_comic.save_project(project, self.dir)
+            fd, emb = self._letter_kit(project)
+            c2c_state.compose_one(project, self.dir, cid, pid,
+                                  face_detector=fd, char_embeddings=emb)
+        return c2c_state.book_index(project, self.dir)
+
     def op_export_print(self, data):
         """🖨 Sortie PRINT: chaque case remonte a la resolution d'impression
         via l'op upscale du protocole (ESRGAN + refine du moteur), puis les
