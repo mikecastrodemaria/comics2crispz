@@ -34,8 +34,8 @@
 |---|---|---|
 | `caps` | announce the tool's capabilities | all |
 | `gen`  | txt2img / omni multi-reference from a spec | studio, qwen-edit, krea, krea2 |
-| `edit` | image editing (img+prompt→img) | reserved (exit 3), qwen-edit first |
-| `upscale` | upscale/refine an image | reserved (exit 3) |
+| `edit` | image + instruction → image (`input`, `prompt`) | qwen-edit; studio when an omni model is configured; krea/krea2 answer exit 3 (`supports.edit` false) |
+| `upscale` | upscale/refine an image (`input`, `factor`, `denoise`); **factor 1 = pure img2img** (variation, no ESRGAN stage) | all |
 
 ## 3. The spec (input)
 
@@ -66,6 +66,23 @@ Rules:
 - An unknown field is **ignored with a warning** (`warnings[]`), never an
   error: a spec written for qwen-edit must go through studio.
 - `count` other than 1 → warning + forced to 1 (the caller loops).
+- `detail_faces` / `detail_hands` (bool, `gen` only): after the render, the
+  tool's detailer re-draws faces/hands (comics2crispz sets `detail_faces`
+  when the panel stages a casting character). Missing detector → warning,
+  never an error.
+
+### upscale / edit specific fields
+
+| Field | Op | Meaning |
+|---|---|---|
+| `input` | upscale, edit | local absolute path of the source image (missing → exit 2) |
+| `factor` | upscale | scale (`2.0` default). `1.0` = **no ESRGAN at all**, the refine pass alone (img2img variation) |
+| `denoise` | upscale | refine strength 0–1 (tool default when absent). With `factor` 1 it is the variation strength |
+| `model` | upscale | ESRGAN model file name (from `caps.models`); absent → the config `default_esrgan_model`, else the first model matching the factor's scale (never a 16x by accident) |
+| `prompt` | upscale | LOCAL description guiding the refine — never the scene prompt on a crop |
+| `prompt` | edit | the instruction ("add heavy rain, keep the ink style") |
+
+`edit` keeps the input size (aligned to 32); `width`/`height` are ignored.
 
 ### loras — style / character consistency
 
@@ -121,9 +138,11 @@ UI, so every image is replayable).
 ```json
 {
   "ok": true, "protocol": 1, "tool": "crispz-qwen-edit", "version": "1.16.0",
-  "ops": ["caps", "gen"],
+  "ops": ["caps", "gen", "upscale", "edit"],
+  "models": ["4x-UltraSharp.pth", "…"], "loras": ["…"], "model_loaded": true,
   "supports": {"loras": true, "refs": true, "max_refs": 4, "seed": true,
-               "negative": true, "arbitrary_size": true},
+               "negative": true, "arbitrary_size": true, "faces": true,
+               "detail_faces": true, "detail_hands": false, "edit": true},
   "instance": {"running": true, "url": "http://127.0.0.1:7860",
                "tool": "crispz-qwen-edit", "version": "1.16.0"}
 }
