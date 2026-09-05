@@ -247,16 +247,21 @@ def fmt_dialogue(dlg):
     lines = []
     for x in dlg or []:
         k, t, s = x.get("kind", "speech"), x.get("text", ""), x.get("speaker", "")
-        if k == "caption":
-            lines.append(f"CAP: {t}")
-        elif k == "sfx":
-            lines.append(f"SFX: {t}")
+        extra = []
+        if x.get("hidden"):
+            extra.append("hidden")
+        if x.get("font"):
+            extra.append("font=" + str(x["font"]))
+        if k in ("caption", "sfx"):
+            head = "CAP" if k == "caption" else "SFX"
+            lines.append(f"{head} ({', '.join(extra)}): {t}" if extra else f"{head}: {t}")
         else:
             mods = []
             if k == "thought":
                 mods.append("think")
             if x.get("style"):
                 mods.append(x["style"])
+            mods += extra
             lines.append(f"{s} ({', '.join(mods)}): {t}" if mods else f"{s}: {t}")
     return "\n".join(lines)
 
@@ -712,7 +717,8 @@ def bible_state(project, project_dir):
             "style": {"prompt_suffix": style.get("prompt_suffix") or "",
                       "negative": style.get("negative") or "",
                       "loras": list(style.get("loras") or []),
-                      "mood": style.get("mood") or ""},
+                      "mood": style.get("mood") or "",
+                      "font": style.get("font") or ""},
             "chapters": [{"id": ch["id"], "name": ch.get("name") or ch["id"],
                           "mood": ch.get("mood") or "",
                           "pages": len(ch.get("pages") or [])}

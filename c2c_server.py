@@ -551,13 +551,20 @@ class Studio:
         res.update({"removed_ref": ref, "name": key})
         return res
 
+    def op_fonts(self, _data):
+        """Polices utilisables pour les bulles: candidates systeme qui se
+        chargent + fonts/ du module + fonts/ du livre."""
+        return {"ok": True,
+                "fonts": cz_comic.available_fonts(
+                    extra_dirs=[os.path.join(self.dir, "fonts")])}
+
     def op_save_style(self, data):
         """Style global + moods: {prompt_suffix?, negative?, loras?, mood?,
         chapter_moods? {cid: mood}}. Les cles absentes ne bougent pas."""
         with _LOCK:
             project = self.load()
             style = project.setdefault("style", {})
-            for k in ("prompt_suffix", "negative", "mood"):
+            for k in ("prompt_suffix", "negative", "mood", "font"):
                 if k in data:
                     style[k] = str(data.get(k) or "").strip()
             if "loras" in data:
@@ -618,8 +625,21 @@ class Studio:
                     dlg[idx].pop("scale", None)   # ~1.0 = pas d'override
                 else:
                     dlg[idx]["scale"] = round(sc, 2)
+            # 👁 masquee: gardee dans le scenario, pas lettree (le texte est
+            # deja dans l'image, ou la case doit rester muette)
+            if data.get("hidden") is not None:
+                if data["hidden"]:
+                    dlg[idx]["hidden"] = True
+                else:
+                    dlg[idx].pop("hidden", None)
+            if "font" in data:
+                f = str(data.get("font") or "").strip()
+                if f:
+                    dlg[idx]["font"] = f
+                else:
+                    dlg[idx].pop("font", None)      # police du livre
             for key in data.get("clear") or []:
-                if key in ("pos", "anchor", "scale", "style"):
+                if key in ("pos", "anchor", "scale", "style", "hidden", "font"):
                     dlg[idx].pop(key, None)
             cz_comic.save_project(project, self.dir)
             fd, emb = self._letter_kit(project)

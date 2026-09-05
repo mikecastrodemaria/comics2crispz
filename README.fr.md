@@ -77,6 +77,18 @@ Clavier en vue Page : **← →** (ou ↑ ↓, PageUp/PageDown) planche précéd
 suivante dans l'ordre du livre (en manga, ← → suivent le sens de lecture) ;
 **Esc** retourne au chemin de fer.
 
+### Bulles — ajouter, masquer, police
+
+Sous la zone de dialogue d'une case, **➕ balloon** ajoute une ligne
+(`Nom: texte` ; `CAP:` cartouche, `SFX:` bruit, `Nom (think):` pensée), 💾 Save
+recompose. Un clic sur une bulle de la planche change son type, sa forme, sa
+taille, sa **police** et sa **visibilité** : une bulle masquée reste dans le
+scénario (affichée `Nom (hidden): …` dans la zone de dialogue) mais n'est pas
+lettrée, pour un titre que le modèle a déjà dessiné dans l'image ou une case
+muette. La police par défaut du livre est dans 📖 Bible › Style ; déposez des
+polices BD `.ttf`/`.otf` dans un dossier `fonts/` à côté de l'app ou dans le
+livre pour les choisir.
+
 ### Corriger une case — Régénérer, Retoucher, Variation, Versions
 
 Cliquer une case sur la planche ouvre son panneau :

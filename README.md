@@ -129,6 +129,17 @@ recomposes with lettering:
 The status bar reports the engine, the seeds (replayable) and any warnings
 (unknown casting names, empty panels, dropped refs — never silent).
 
+### 5a. Balloons — add, hide, font
+
+Under the panel's dialogue box, **➕ balloon** appends a line (`Name: text`;
+`CAP:` caption, `SFX:` sound, `Name (think):` thought) — 💾 Save recomposes.
+Click a balloon on the page to change its type, shape, size, **font** and
+**visibility**: a hidden balloon stays in the script (shown as
+`Name (hidden): …` in the dialogue box) but is not lettered — for a title the
+model already drew inside the image, or a silent panel. The book's default
+balloon font lives in 📖 Bible › Style; drop `.ttf`/`.otf` comic fonts in a
+`fonts/` folder next to the app or inside the book to pick them.
+
 ### 5b. Fix one panel — Regenerate, Edit, Variation, Versions
 
 Select a panel on the page (click it) to open its box:
