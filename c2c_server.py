@@ -367,6 +367,217 @@ class Studio:
             cz_comic.save_project(project, self.dir)
         return c2c_state.book_index(project, self.dir)
 
+    # ------------------------------------------------------------------
+    # 📖 Bible visuelle: casting (personnages + decors), style, moods
+    # ------------------------------------------------------------------
+    def op_bible(self, _data):
+        return c2c_state.bible_state(self.load(), self.dir)
+
+    @staticmethod
+    def _cast_name(raw):
+        return c2c_state.name_token(raw)
+
+    def op_save_cast(self, data):
+        """Cree/modifie une fiche: {name, desc, kind, loras[], negative,
+        rename_from?}. Un renommage reecrit les @Ancien dans TOUTES les
+        cases (compte renvoye) - rien ne se perd. Le nom est un token
+        @Name: lettres, chiffres, _ et - (les autres caracteres sont
+        retires, l'utilisateur voit le nom retenu)."""
+        name = self._cast_name(data.get("name"))
+        if not name:
+            return {"ok": False, "error": "give the character/setting a name "
+                                          "(letters, digits, _ or -): it is "
+                                          "what you type as @Name in the panels"}
+        kind = data.get("kind") if data.get("kind") in ("character", "setting") \
+            else "character"
+        loras = [str(x).strip() for x in (data.get("loras") or []) if str(x).strip()]
+        with _LOCK:
+            project = self.load()
+            casting = project.setdefault("casting", {})
+            old = self._cast_name(data.get("rename_from"))
+            renamed = 0
+            if old and old != name:
+                key, fiche = cz_comic._casting_lookup(casting, old)
+                if key is None:
+                    return {"ok": False, "error": f"no entry named @{old}"}
+                if cz_comic._casting_lookup(casting, name)[0]:
+                    return {"ok": False,
+                            "error": f"@{name} already exists - pick another "
+                                     f"name or edit that entry"}
+                casting.pop(key)
+                pat = re.compile(r"(?<!@)@" + re.escape(key) + r"(?![A-Za-z0-9_\-])",
+                                 re.IGNORECASE)
+                for ch in project.get("chapters") or []:
+                    for pg in ch.get("pages") or []:
+                        for pn in pg.get("panels") or []:
+                            t = pn.get("text") or ""
+                            t2, n = pat.subn("@" + name, t)
+                            if n:
+                                pn["text"] = t2
+                                renamed += n
+                            for d in pn.get("dialogue") or []:
+                                if isinstance(d, dict) and \
+                                        str(d.get("speaker") or "").lower() == key.lower():
+                                    d["speaker"] = name
+                cur = fiche
+            else:
+                key, cur = cz_comic._casting_lookup(casting, name)
+                if key and key != name:          # meme nom, autre casse
+                    casting.pop(key)
+                cur = dict(cur or cz_comic.new_character("", kind=kind))
+            # cles absentes = inchangees (un renommage seul ne vide rien)
+            if "desc" in data:
+                cur["desc"] = str(data.get("desc") or "").strip()
+            if "kind" in data:
+                cur["kind"] = kind
+            if "loras" in data:
+                cur["loras"] = loras
+            if "negative" in data:
+                cur["negative"] = str(data.get("negative") or "").strip()
+            cur.setdefault("kind", kind)
+            cur.setdefault("refs", [])
+            casting[name] = cur
+            cz_comic.save_project(project, self.dir)
+        res = c2c_state.bible_state(project, self.dir)
+        res.update({"saved": name, "renamed_mentions": renamed})
+        return res
+
+    def op_delete_cast(self, data):
+        """Supprime une fiche {name, force?}. Refus si des cases la citent,
+        sauf force (les @Nom restent dans les textes et sont signales comme
+        inconnus - rien n'est reecrit en douce). Les images de reference
+        restent sur disque (refs/)."""
+        name = self._cast_name(data.get("name"))
+        with _LOCK:
+            project = self.load()
+            casting = project.get("casting") or {}
+            key, _f = cz_comic._casting_lookup(casting, name)
+            if key is None:
+                return {"ok": False, "error": f"no entry named @{name}"}
+            uses = c2c_state.casting_uses(project).get(key) or []
+            if uses and not data.get("force"):
+                where = ", ".join(f"{u['cid']}.{u['pid']}/{u['pnid']}"
+                                  for u in uses[:6])
+                return {"ok": False, "needs_force": True,
+                        "error": f"@{key} is used by {len(uses)} panel(s) "
+                                 f"({where}{'…' if len(uses) > 6 else ''}) - "
+                                 f"delete anyway? Their @{key} will show as "
+                                 f"unknown until you edit them"}
+            casting.pop(key)
+            cz_comic.save_project(project, self.dir)
+        res = c2c_state.bible_state(project, self.dir)
+        res.update({"deleted": key, "orphans": len(uses)})
+        return res
+
+    def op_add_ref(self, data):
+        """Ajoute une image de reference a une fiche: {name, image (data
+        URL / base64 PNG-JPEG)} OU {name, cid, pid, pnid} (la case dessinee
+        devient reference). Fichier en refs/<Name>/<n>.png, chemin relatif
+        POSIX dans la fiche (le protocole recoit l'absolu au moment voulu)."""
+        name = self._cast_name(data.get("name"))
+        with _LOCK:
+            project = self.load()
+            casting = project.get("casting") or {}
+            key, fiche = cz_comic._casting_lookup(casting, name)
+            if key is None:
+                return {"ok": False, "error": f"no entry named @{name} - save "
+                                              f"the entry first"}
+            from PIL import Image
+            import io
+            if data.get("pnid"):
+                pn = cz_comic.find_panel(project, data["cid"], data["pid"],
+                                         data["pnid"])
+                src = pn.get("image")
+                if not (src and os.path.isfile(src)):
+                    return {"ok": False,
+                            "error": f"{data['pnid']} has no image yet"}
+                with Image.open(src) as im:
+                    img = im.convert("RGB")
+                    img.load()
+                note = f"from {data['cid']}.{data['pid']}/{data['pnid']}"
+            else:
+                raw = str(data.get("image") or "")
+                if "," in raw and raw.startswith("data:"):
+                    raw = raw.split(",", 1)[1]
+                try:
+                    img = Image.open(io.BytesIO(base64.b64decode(raw)))
+                    img = img.convert("RGB")
+                    img.load()
+                except Exception as e:
+                    return {"ok": False, "error": f"unreadable image: {e}"}
+                note = "uploaded"
+            if max(img.size) > 2048:                 # une ref n'a pas besoin de plus
+                img.thumbnail((2048, 2048))
+            d = os.path.join(self.dir, "refs", key)
+            os.makedirs(d, exist_ok=True)
+            n = 1
+            while os.path.exists(os.path.join(d, f"{n:02d}.png")):
+                n += 1
+            path = os.path.join(d, f"{n:02d}.png")
+            img.save(path + ".tmp", "PNG")
+            os.replace(path + ".tmp", path)
+            rel = f"refs/{key}/{n:02d}.png"
+            fiche.setdefault("refs", []).append(rel)
+            cz_comic.save_project(project, self.dir)
+        res = c2c_state.bible_state(project, self.dir)
+        res.update({"added_ref": rel, "name": key, "note": note})
+        return res
+
+    def op_remove_ref(self, data):
+        """Retire une reference d'une fiche {name, ref}. Le fichier part
+        dans refs/_trash/ (jamais supprime)."""
+        name = self._cast_name(data.get("name"))
+        ref = str(data.get("ref") or "")
+        with _LOCK:
+            project = self.load()
+            key, fiche = cz_comic._casting_lookup(project.get("casting") or {},
+                                                  name)
+            if key is None or ref not in (fiche.get("refs") or []):
+                return {"ok": False, "error": f"@{name}: no such reference"}
+            fiche["refs"] = [r for r in fiche["refs"] if r != ref]
+            ap = ref if os.path.isabs(ref) else os.path.join(
+                self.dir, *ref.replace("\\", "/").split("/"))
+            if os.path.isfile(ap):
+                tr = os.path.join(self.dir, "refs", "_trash")
+                os.makedirs(tr, exist_ok=True)
+                dst = os.path.join(tr, f"{key}_{os.path.basename(ap)}")
+                k = 1
+                while os.path.exists(dst):
+                    k += 1
+                    dst = os.path.join(tr, f"{key}_{k}_{os.path.basename(ap)}")
+                shutil.move(ap, dst)
+            cz_comic.save_project(project, self.dir)
+        res = c2c_state.bible_state(project, self.dir)
+        res.update({"removed_ref": ref, "name": key})
+        return res
+
+    def op_save_style(self, data):
+        """Style global + moods: {prompt_suffix?, negative?, loras?, mood?,
+        chapter_moods? {cid: mood}}. Les cles absentes ne bougent pas."""
+        with _LOCK:
+            project = self.load()
+            style = project.setdefault("style", {})
+            for k in ("prompt_suffix", "negative", "mood"):
+                if k in data:
+                    style[k] = str(data.get(k) or "").strip()
+            if "loras" in data:
+                style["loras"] = [str(x).strip() for x in (data.get("loras") or [])
+                                  if str(x).strip()]
+            cm = data.get("chapter_moods")
+            unknown = []
+            if isinstance(cm, dict):
+                for cid, mood in cm.items():
+                    ch = next((c for c in project.get("chapters") or []
+                               if c["id"] == cid), None)
+                    if ch is None:
+                        unknown.append(cid)
+                        continue
+                    ch["mood"] = str(mood or "").strip()
+            cz_comic.save_project(project, self.dir)
+        res = c2c_state.bible_state(project, self.dir)
+        res["warnings"] = [f"unknown chapter '{c}' ignored" for c in unknown]
+        return res
+
     def op_set_bubble(self, data):
         """Deplace une bulle: {cid, pid, pnid, index, pos|anchor: [fx, fy]}
         ou {clear: ["pos", "anchor"]}. pos = coin haut-gauche de la bulle,
@@ -433,19 +644,32 @@ class Studio:
                     "error": "a book generation is already running - wait "
                              "or press Stop"}
         project = self.load()
-        pages = [(ch["id"], pg["id"]) for ch, pg in cz_comic.book_order(project)]
-        job.update({"running": True, "stop": False, "total": len(pages),
+        force = bool(data.get("force"))
+        # taches = (cid, pid, pnid|None): tout le livre planche par planche,
+        # ou une liste de cases precises ({cid, pid, pnid}) - p.ex. "redessiner
+        # les 7 cases ou @Lea apparait" apres un changement de fiche
+        if isinstance(data.get("panels"), list) and data["panels"]:
+            tasks = []
+            for t in data["panels"]:
+                if isinstance(t, dict) and t.get("cid") and t.get("pid"):
+                    tasks.append((t["cid"], t["pid"], t.get("pnid")))
+            force = True                          # on redessine ce qu'on cite
+        else:
+            tasks = [(ch["id"], pg["id"], None)
+                     for ch, pg in cz_comic.book_order(project)]
+        job.update({"running": True, "stop": False, "total": len(tasks),
                     "done": 0, "current": "", "generated": 0, "errors": [],
                     "warnings": [], "started": time.time(), "finished": 0.0})
         engine = data.get("engine")
 
         def worker():
             try:
-                for cid, pid in pages:
+                for cid, pid, pnid in tasks:
                     if job["stop"]:
                         break
-                    job["current"] = f"{cid}.{pid}"
+                    job["current"] = f"{cid}.{pid}" + (f"/{pnid}" if pnid else "")
                     res = self.op_generate({"cid": cid, "pid": pid,
+                                            "pnid": pnid, "force": force,
                                             "engine": engine})
                     if not res.get("ok"):
                         job["errors"].append(f"{cid}.{pid}: "

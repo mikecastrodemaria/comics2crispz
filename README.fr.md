@@ -87,6 +87,31 @@ Cliquer une case sur la planche ouvre son panneau :
   remet, la version courante est archivée à son tour : rien n'est jamais
   perdu. **↩ Previous** = raccourci vers la plus récente.
 
+### La Bible visuelle — personnages, décors, style et mood
+
+**📖 Bible** (en-tête) est la seule source des prompts image :
+
+- **Personnages** et **Décors** sont des fiches : `@Nom` (ce qu'on tape dans
+  les cases), description visuelle en anglais (ce que le moteur dessine pour
+  `@Nom`, l'apparence seulement, ✨ Improve via Ollama), LoRA de la fiche,
+  négatif, et **images de référence** (import, ou « utiliser cette case » pour
+  faire d'un dessin réussi la référence ; les refs partent aux moteurs omni).
+  Chaque fiche liste les cases où elle apparaît ; **🎨 Redraw its panels** les
+  redessine après un changement (les anciens dessins restent dans l'historique).
+  Renommer une fiche réécrit tous les `@AncienNom` des cases et des locuteurs ;
+  supprimer une fiche encore utilisée demande confirmation. Sous le texte de
+  chaque case, des puces insèrent `@Nom` au curseur, et 📌 ajoute le dessin
+  courant comme référence d'une fiche.
+- **Style & mood** : suffixe de style du livre (presets ou texte libre),
+  négatif global, LoRA du livre (recherche dans la liste du moteur), et le
+  **mood** (palette, lumière, époque, météo) ajouté après le style, qu'un
+  chapitre peut surcharger (chapitre 1 lumineux, chapitre 3 nocturne). Un
+  exemple en direct montre ce que le moteur recevra ; **🎨 Redraw the whole
+  book** applique un nouveau look.
+
+L'histoire (synopsis, arcs) n'entre jamais dans les prompts image ; le mode
+fun remplit le casting et un mood depuis le concept.
+
 ## Tests
 
 ```bat

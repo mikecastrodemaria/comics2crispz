@@ -170,6 +170,30 @@ wins over the style LoRA on the same file), per book (`style.loras` in
 `@Lea runs in the rain <lora:ink-style.safetensors:0.8>` — the tag is
 extracted by the protocol and never reaches the text encoder.
 
+### 7b. The Visual Bible — characters, settings, style & mood
+
+**📖 Bible** (header) is the single source of every image prompt:
+
+- **Characters** and **Settings** (places) are cards: `@Name` (what you
+  type in the panels), a visual description in English (what the engine
+  draws for `@Name`, looks only — ✨ Improve asks Ollama), card LoRA
+  (file:weight), a negative, and **reference images** (upload, or "use that
+  panel" to turn a drawing you like into the reference — refs v2 go to
+  omni-capable engines). Each card lists the panels where it appears;
+  **🎨 Redraw its panels** regenerates them after a change (old drawings
+  stay in each panel's history). Renaming a card rewrites every `@OldName`
+  in the panels and dialogue speakers; deleting a card that is still used
+  asks first. Under every panel text, chips insert `@Name` at the cursor,
+  and 📌 adds the current drawing as a reference of a card.
+- **Style & mood**: the book's style suffix (presets or free text), global
+  negative, book LoRAs (search the engine's list), and the **mood** (palette,
+  light, era, weather) appended after the style — a chapter can override it
+  (chapter 1 bright, chapter 3 nocturnal). A live example shows what the
+  engine will receive; **🎨 Redraw the whole book** applies a new look.
+
+The story (synopsis, arcs) never goes into image prompts; the fun mode
+fills the casting and a mood from the concept.
+
 ### 8. Export
 
 The project stays fully compatible with crispz-studio, so its CLI finishes

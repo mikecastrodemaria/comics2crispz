@@ -87,6 +87,8 @@ def fun_book(title, pages, layout_counts, cfg, concept="", language="",
            else "")
         + f"Answer with ONE JSON object EXACTLY shaped like this:\n"
         f'{{"synopsis": "...",\n'
+        f' "mood": "visual mood of the whole book in English: palette, '
+        f'light, era, weather (one line)",\n'
         f' "casting": [{{"name": "Lea", "kind": "character" or "setting", '
         f'"desc": "concrete visual description, in English"}}],\n'
         f' "pages": [{{"layout": "4-grid", "panels": [{{"text": "...", '

@@ -35,11 +35,11 @@ input[type=range]{width:100%;padding:0;border:none;background:transparent;
 box-shadow:none;accent-color:var(--acc);height:22px;cursor:pointer}
 input[type=range]:focus{box-shadow:none;border:none}
 #bubbox h3{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#modal,#laymodal,#wizmodal,#helpmodal{position:fixed;inset:0;background:#000b;
+#modal,#laymodal,#wizmodal,#helpmodal,#biblemodal{position:fixed;inset:0;background:#000b;
 display:none;z-index:50;align-items:center;justify-content:center}
-#modal.on,#laymodal.on,#wizmodal.on,#helpmodal.on{display:flex}
+#modal.on,#laymodal.on,#wizmodal.on,#helpmodal.on,#biblemodal.on{display:flex}
 #helpmodal{z-index:60}
-#modal h3,#laymodal h3,#wizmodal h3,#helpmodal h3{margin:0 0 4px;
+#modal h3,#laymodal h3,#wizmodal h3,#helpmodal h3,#biblemodal h3{margin:0 0 4px;
 font-size:13px;text-transform:uppercase;color:var(--mut)}
 .helpb{width:20px;height:20px;padding:0;border-radius:50%;font-size:11px;
 line-height:1;color:var(--mut);vertical-align:2px;margin-left:6px}
@@ -193,6 +193,30 @@ font-size:11px}
   overflow:hidden;text-overflow:ellipsis;margin-top:2px}
 #maskcv{position:absolute;z-index:30;cursor:crosshair;touch-action:none}
 #inpbox .row button.on{background:var(--acc);color:#111}
+.btabs{display:flex;gap:4px;margin:6px 0 10px}
+.btabs button{border-radius:6px;padding:5px 12px}
+.btabs button.on{background:var(--bg);border-color:var(--acc);color:#fff}
+.bcols{display:grid;grid-template-columns:200px 1fr;gap:14px;min-height:360px}
+.blist{border:1px solid var(--bd);border-radius:6px;padding:4px;max-height:60vh;overflow-y:auto}
+.blist .bi{padding:6px 8px;border-radius:5px;cursor:pointer;font-size:12px;
+  display:flex;justify-content:space-between;gap:6px;align-items:center}
+.blist .bi:hover{background:var(--pan2)}
+.blist .bi.sel{background:#ffd27a14;outline:1px solid var(--warn)}
+.blist .bi small{color:var(--mut)}
+.refgrid{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.refgrid .rf{position:relative;width:72px;height:72px;border:1px solid var(--bd);
+  border-radius:6px;overflow:hidden;background:var(--pan2)}
+.refgrid .rf img{width:100%;height:100%;object-fit:cover;display:block}
+.refgrid .rf b{position:absolute;top:2px;right:2px;background:#000c;color:#fff;
+  border-radius:50%;width:16px;height:16px;font-size:10px;line-height:16px;
+  text-align:center;cursor:pointer}
+.refgrid .rf.missing{outline:2px solid var(--err)}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:6px}
+.chips button{padding:2px 8px;font-size:11px;border-radius:12px;width:auto}
+.chips button.setting{border-style:dashed}
+.uses{font-size:11px;color:var(--mut);margin-top:4px;line-height:1.5}
+.moodrow{display:grid;grid-template-columns:130px 1fr;gap:8px;align-items:center;margin-top:6px}
+.moodrow span{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -209,6 +233,7 @@ font-size:11px}
     <button id="tab-prod" disabled title="Coming with step 3">Production</button>
   </div>
   <span id="status"></span>
+  <button id="biblebtn" disabled title="Visual Bible — characters, settings (places), style &amp; mood of this book">📖 Bible</button>
   <button id="cfgbtn" title="Settings — engine & Ollama (AI prompt help)">⚙</button>
   <button id="reload" title="Reload project.json">↻</button>
 </header>
@@ -313,6 +338,115 @@ font-size:11px}
     <div id="helpanswer" class="hint"
          style="margin-top:10px;white-space:pre-wrap;max-height:40vh;
                 overflow-y:auto"></div>
+  </div>
+</div>
+<div id="biblemodal">
+  <div class="box" style="width:780px;max-height:90vh;overflow-y:auto">
+    <h3>📖 Visual Bible
+      <button class="helpb" data-help="The Visual Bible is the ONLY source of the image prompts: characters and settings (places) are cards with a visual description, reference images, LoRA and negative; @Name in a panel text is replaced by the card's description and its references travel to the engine. The Style tab holds the book-wide style suffix, negative, LoRAs and the mood (palette, light, weather), which a chapter can override. The story itself (synopsis, arcs) never goes into image prompts.">?</button>
+      <span id="bcount" class="hint" style="margin-left:8px"></span></h3>
+    <div class="btabs">
+      <button id="btab-character" class="on">👤 Characters</button>
+      <button id="btab-setting">🏞 Settings</button>
+      <button id="btab-style">🎨 Style &amp; mood</button>
+    </div>
+    <div id="bcast" class="bcols">
+      <div>
+        <button id="bnew" class="primary" style="width:100%;margin-bottom:6px">➕ New</button>
+        <div id="blist" class="blist"></div>
+      </div>
+      <div id="bform">
+        <div class="field" style="margin-top:0">
+          <span class="lbl" id="bnamelbl">Name — typed as @Name in the panels
+            <button class="helpb" data-help="The card name is the @Name token used in panel texts (letters, digits, _ and -; other characters are dropped). Renaming a card rewrites every @OldName in the book's panels and dialogue speakers - nothing is lost.">?</button></span>
+          <input id="bname" placeholder="Lea">
+        </div>
+        <div class="field">
+          <span class="lbl">Visual description (English) — what the engine draws for @Name
+            <button class="helpb" data-help="A concrete VISUAL description in English of this character or place (age, hair, clothes, colors, distinctive marks - or for a setting: the place, materials, light). It replaces @Name in every panel prompt, so keep it about looks only, never the story. Improve asks Ollama to enrich it.">?</button></span>
+          <textarea id="bdesc" rows="3" placeholder="a 10-year-old girl with long black hair, grey coat, satchel, red boots"></textarea>
+          <div class="row" style="margin-top:6px">
+            <button id="bimprove" title="Ollama enriches the description (visual only)">✨ Improve</button>
+            <button id="bimproveundo" style="display:none">↩ Undo</button>
+          </div>
+        </div>
+        <div class="grid2">
+          <div class="field">
+            <span class="lbl">LoRA of this card (file:weight, one per line)
+              <button class="helpb" data-help="Optional LoRAs applied when this card appears in a panel (a character LoRA for identity, a place LoRA for a recurring set). One per line as file.safetensors:0.8; the list below the box shows the files the running engine has. A card LoRA wins over a style LoRA on the same file.">?</button></span>
+            <textarea id="bloras" rows="2" placeholder="lea-v2.safetensors:0.8"></textarea>
+            <input id="blorafind" placeholder="find a LoRA of the engine…" style="margin-top:4px">
+            <div id="benglora" class="chips"></div>
+          </div>
+          <div class="field">
+            <span class="lbl">Negative for this card
+              <button class="helpb" data-help="What to avoid when this card is drawn (e.g. 'beard, hat' for a character who must never wear them). Appended to the panel's negative prompt.">?</button></span>
+            <textarea id="bneg" rows="2" placeholder="beard, hat"></textarea>
+          </div>
+        </div>
+        <div class="field">
+          <span class="lbl">Reference images — identity/consistency (refs v2)
+            <button class="helpb" data-help="Reference images of this character or place. Engines with a multi-reference (omni) model receive them with every panel that names the card - the strongest way to keep a face or a set consistent; other engines ignore them with a warning. Add a file, or pick a panel you already like ('from a panel'). Removed refs go to refs/_trash, never deleted.">?</button></span>
+          <div id="brefs" class="refgrid"></div>
+          <div class="row" style="margin-top:6px;gap:6px;flex-wrap:wrap;align-items:center">
+            <button id="brefupload">📁 Add image…</button>
+            <input id="breffile" type="file" accept="image/*" style="display:none">
+            <select id="brefpanel" style="max-width:260px"><option value="">from a panel…</option></select>
+            <button id="brefaddpanel">📌 Use that panel</button>
+          </div>
+        </div>
+        <div id="buses" class="uses"></div>
+        <div class="row" style="margin-top:10px;gap:6px;flex-wrap:wrap">
+          <button id="bsave" class="primary">💾 Save card</button>
+          <button id="bredraw" title="Redraw every panel where this card appears (the old drawings go to their history)">🎨 Redraw its panels</button>
+          <button id="bdelete" style="margin-left:auto;color:var(--err)">🗑 Delete</button>
+        </div>
+      </div>
+    </div>
+    <div id="bstyle" style="display:none">
+      <div class="field" style="margin-top:0">
+        <span class="lbl">Style preset (fills the suffix and negative below)</span>
+        <select id="bpreset" class="w100"></select>
+      </div>
+      <div class="field">
+        <span class="lbl">Style suffix — appended to EVERY panel prompt
+          <button class="helpb" data-help="The book's visual style, appended after each panel text: drawing technique, line, colors ('black and white manga style, screentone shading'). Keep it about style, not content. Changing it only affects future generations - use Redraw to update existing panels (their previous versions stay in the history).">?</button></span>
+        <textarea id="bsuffix" rows="2"></textarea>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <span class="lbl">Global negative</span>
+          <textarea id="bsneg" rows="2" placeholder="photo, blurry, watermark, text"></textarea>
+        </div>
+        <div class="field">
+          <span class="lbl">Book LoRAs (file:weight, one per line)
+            <button class="helpb" data-help="Style LoRAs applied to every panel of the book (a consistent look). One per line as file.safetensors:0.7. The files known to the running engine are listed under the box; a card LoRA wins over these on the same file.">?</button></span>
+          <textarea id="bsloras" rows="2"></textarea>
+          <input id="bslorafind" placeholder="find a LoRA of the engine…" style="margin-top:4px">
+          <div id="bsenglora" class="chips"></div>
+        </div>
+      </div>
+      <div class="field">
+        <span class="lbl">Mood of the book — palette, light, era, weather
+          <button class="helpb" data-help="The visual mood, one line appended after the style on every panel: 'warm summer light, pastel palette', 'cold night, blue moonlight, rain'. A chapter can override it below (chapter 1 bright, chapter 3 nocturnal) without rewriting each panel. Leave empty for none.">?</button></span>
+        <input id="bmood" placeholder="warm summer light, pastel palette">
+      </div>
+      <div class="field">
+        <span class="lbl">Mood per chapter (empty = the book's mood)</span>
+        <div id="bchmoods"></div>
+      </div>
+      <div class="field">
+        <span class="lbl">What the engine will receive for a panel (example)</span>
+        <div id="bpreview" class="hint" style="white-space:pre-wrap;border:1px solid var(--bd);border-radius:6px;padding:6px 8px"></div>
+      </div>
+      <div class="row" style="margin-top:10px;gap:6px">
+        <button id="bstylesave" class="primary">💾 Save style</button>
+        <button id="bstyleredraw" title="Redraw the whole book with the new style/mood (every previous drawing stays in its panel history)">🎨 Redraw the whole book</button>
+      </div>
+    </div>
+    <div class="row" style="margin-top:12px;justify-content:flex-end">
+      <button id="bclose">Close</button>
+    </div>
   </div>
 </div>
 <div id="wizmodal">
@@ -490,6 +624,7 @@ font-size:11px}
               <button class="helpb" data-help="The panel description box: a visual image-generation prompt in English describing WHAT the panel shows (subject, action, framing like close-up or wide shot, lighting). Characters and places are referenced as @Name from the casting; the book's global style suffix is appended automatically; the Improve button asks Ollama to enrich the draft.">?</button></span>
             <textarea id="pntext" rows="3"
               placeholder="wide shot of @Sam typing, fans everywhere…"></textarea>
+            <div id="castchips" class="chips" title="Click to insert @Name at the cursor — dashed = setting (place). Edit the cards in 📖 Bible."></div>
             <div class="row" style="margin-top:6px">
               <button id="improvebtn"
                       title="Ollama rewrites your draft into a richer visual prompt (keeps the @Names)">✨ Improve</button>
@@ -533,6 +668,10 @@ font-size:11px}
                     title="img2img: redraw this panel FROM its current image with the strength below (0.3 = same composition redrawn, 0.6 = a real variation). Works on every engine. Previous version kept.">🔁 Variation</button>
             <span class="lbl" style="margin:0 0 0 8px">strength <b id="varyval" style="color:var(--fg)">0.45</b></span>
             <input id="varystr" type="range" min="0.1" max="0.9" step="0.05" value="0.45" style="flex:1;min-width:90px">
+          </div>
+          <div class="row" style="align-items:center;margin-top:8px;gap:6px">
+            <select id="pnrefcast" style="flex:1"><option value="">📌 use this drawing as a reference of…</option></select>
+            <button id="pnrefadd" title="Add this panel's image to that card's references (Visual Bible)">📌 Add</button>
           </div>
           <div id="inpbox" style="margin-top:10px">
             <span class="lbl">🖌 Inpaint — paint the area to redraw
@@ -967,6 +1106,7 @@ window.addEventListener('hashchange', applyHash);
 function renderNav(){
   const nav = $('nav');
   nav.innerHTML = '';
+  $('biblebtn').disabled = !IDX;
   IDX.chapters.forEach(ch => {
     const h = document.createElement('div');
     h.className = 'ch';
@@ -1320,6 +1460,7 @@ function renderPanelBox(p){
   $('editbox').style.display = pn.img ? '' : 'none';
   $('prevbtn').disabled = !pn.has_prev;
   renderHistory(pn);
+  renderCastChips();
 }
 
 const OPICON = {regenerate: '🎲', edit: '✏️', variation: '🔁', inpaint: '🖌',
@@ -1791,6 +1932,326 @@ $('cfgdelbook').onclick = async () => {
   status((res.warnings || []).join(' '), 'ok');
 };
 $('cfgbtn').onclick = openSettings;
+
+/* ---------- 📖 Bible visuelle: casting, decors, style & mood ---------- */
+let BIBLE = null, BTAB = 'character', BSEL = null, BENGLORAS = null;
+
+function loraLines(list){ return (list || []).join('\n'); }
+function parseLoras(text){
+  return text.split('\n').map(x => x.trim()).filter(Boolean);
+}
+async function engineLoras(){
+  // LoRAs connues du moteur DU LIVRE (cache par ouverture de la Bible)
+  if(BENGLORAS !== null) return BENGLORAS;
+  BENGLORAS = [];
+  try{
+    const r = await fetch('/api/engines', {method: 'POST',
+      headers: {'Content-Type': 'application/json'}, body: '{}'});
+    const res = await r.json();
+    const eng = (IDX && IDX.engine && IDX.engine.name) || (res && res.default);
+    const caps = ((res && res.engines) || {})[eng] || {};
+    if(!caps.tool_mismatch) BENGLORAS = caps.loras || [];
+  }catch(_){}
+  return BENGLORAS;
+}
+async function openBible(tab){
+  if(!IDX) return;
+  const res = await api('bible', {}, 'Loading the Bible…');
+  if(!res) return;
+  BIBLE = res; BENGLORAS = null;
+  if(tab) BTAB = tab;
+  if(BSEL && !BIBLE.casting.find(c => c.name === BSEL)) BSEL = null;
+  $('biblemodal').classList.add('on');
+  renderBible();
+  const ls = await engineLoras();
+  loraFinder('blorafind', 'benglora', 'bloras', ls);
+  loraFinder('bslorafind', 'bsenglora', 'bsloras', ls);
+}
+function loraFinder(inputId, boxId, taId, list){
+  // le moteur peut avoir des centaines de LoRA: on cherche, on clique, ca
+  // s'ajoute au champ (file:0.8) - jamais une liste de 300 lignes
+  const inp = $(inputId), box = $(boxId), ta = $(taId);
+  inp.style.display = list.length ? '' : 'none';
+  const render = () => {
+    const q = inp.value.trim().toLowerCase();
+    box.innerHTML = '';
+    if(!list.length){
+      box.innerHTML = '<span class="hint">(engine LoRA list unavailable — start the book’s engine app)</span>';
+      return;
+    }
+    const hits = list.filter(l => !q || l.toLowerCase().includes(q)).slice(0, 8);
+    if(!hits.length){ box.innerHTML = '<span class="hint">no match among ' + list.length + ' LoRAs</span>'; return; }
+    hits.forEach(l => {
+      const b = document.createElement('button');
+      b.textContent = l; b.title = 'add ' + l + ' at weight 0.8';
+      b.onclick = () => {
+        const cur = parseLoras(ta.value);
+        if(!cur.some(x => x.split(':')[0] === l)) cur.push(l + ':0.8');
+        ta.value = cur.join('\n');
+      };
+      box.appendChild(b);
+    });
+    if(!q && list.length > 8)
+      box.insertAdjacentHTML('beforeend', '<span class="hint">… ' + (list.length - 8) + ' more — type to search</span>');
+  };
+  inp.oninput = render;
+  render();
+}
+function renderBible(){
+  ['character', 'setting', 'style'].forEach(t =>
+    $('btab-' + t).classList.toggle('on', BTAB === t));
+  $('bcast').style.display = BTAB === 'style' ? 'none' : '';
+  $('bstyle').style.display = BTAB === 'style' ? '' : 'none';
+  const nchar = BIBLE.casting.filter(c => c.kind === 'character').length;
+  $('bcount').textContent = nchar + ' character(s) · ' +
+    (BIBLE.casting.length - nchar) + ' setting(s)';
+  if(BTAB === 'style'){ renderStyleTab(); return; }
+  const list = BIBLE.casting.filter(c => c.kind === BTAB);
+  const el = $('blist');
+  el.innerHTML = '';
+  if(!list.length){
+    el.innerHTML = '<div class="hint" style="padding:8px">No ' + BTAB +
+      ' yet — ➕ New, or the fun mode invents them.</div>';
+  }
+  list.forEach(c => {
+    const d = document.createElement('div');
+    d.className = 'bi' + (BSEL === c.name ? ' sel' : '');
+    d.innerHTML = '<span>@' + esc(c.name) + '</span><small>' +
+      (c.refs.length ? '🖼' + c.refs.length + ' ' : '') + c.uses.length + '×</small>';
+    d.onclick = () => { BSEL = c.name; renderBible(); };
+    el.appendChild(d);
+  });
+  renderCastForm(list.find(c => c.name === BSEL) || null);
+}
+function renderCastForm(c){
+  const f = $('bform');
+  f.style.display = (c || BSEL === '') ? '' : 'none';
+  if(!c && BSEL !== '') return;
+  $('bnamelbl').firstChild.textContent = (BTAB === 'setting' ?
+    'Name of the place — typed as @Name in the panels' :
+    'Name — typed as @Name in the panels') + ' ';
+  $('bname').value = c ? c.name : '';
+  $('bname').dataset.orig = c ? c.name : '';
+  $('bdesc').value = c ? c.desc : '';
+  $('bloras').value = c ? loraLines(c.loras) : '';
+  $('bneg').value = c ? c.negative : '';
+  $('bimproveundo').style.display = 'none';
+  const rg = $('brefs');
+  rg.innerHTML = '';
+  (c ? c.refs : []).forEach(r => {
+    const d = document.createElement('div');
+    d.className = 'rf' + (r.exists ? '' : ' missing');
+    d.title = r.ref + (r.exists ? '' : '  ⚠ file missing');
+    d.innerHTML = (r.exists ? '<img src="/file/' + esc(r.url) + '">' : '') +
+      '<b title="Remove (goes to refs/_trash)">✕</b>';
+    d.querySelector('b').onclick = async () => {
+      const res = await api('remove_ref', {name: c.name, ref: r.ref}, 'Removing…');
+      if(res){ BIBLE = res; renderBible(); }
+    };
+    rg.appendChild(d);
+  });
+  // cases dessinees candidates comme reference: celles qui citent la fiche d'abord
+  const sel = $('brefpanel');
+  const drawn = [];
+  (IDX.book || []).forEach(p => {});
+  const uses = c ? c.uses.filter(u => u.has_image) : [];
+  sel.innerHTML = '<option value="">from a panel…</option>' +
+    uses.map(u => '<option value="' + u.cid + '|' + u.pid + '|' + u.pnid + '">' +
+      u.cid + '.' + u.pid + ' / ' + u.pnid + '</option>').join('');
+  $('brefaddpanel').disabled = !uses.length;
+  $('buses').innerHTML = c ? (c.uses.length ?
+    'Appears in ' + c.uses.length + ' panel(s): ' + c.uses.map(u =>
+      '<a href="#" data-p="' + u.cid + '|' + u.pid + '">' + u.cid + '.' + u.pid +
+      '/' + u.pnid + '</a>').join(', ') :
+    'Not used in any panel yet — type @' + esc(c.name) + ' in a panel text.') : '';
+  $('buses').querySelectorAll('a').forEach(a => a.onclick = ev => {
+    ev.preventDefault();
+    const [cid, pid] = a.dataset.p.split('|');
+    $('biblemodal').classList.remove('on');
+    showPage(cid, pid);
+  });
+  $('bredraw').disabled = !(c && c.uses.length);
+  $('bdelete').style.display = c ? '' : 'none';
+}
+function renderStyleTab(){
+  const st = BIBLE.style;
+  const pr = $('bpreset');
+  if(!pr.options.length){
+    pr.innerHTML = '<option value="">(keep the text below)</option>' +
+      Object.keys(STYLE_PRESETS).filter(k => k !== 'none').map(k =>
+        '<option value="' + k + '">' + esc(STYLE_PRESETS[k].label) + '</option>').join('');
+    pr.onchange = () => {
+      const p = STYLE_PRESETS[pr.value];
+      if(p){ $('bsuffix').value = p.suffix; $('bsneg').value = p.negative; }
+      pr.value = '';
+      bPreview();
+    };
+  }
+  $('bsuffix').value = st.prompt_suffix; $('bsneg').value = st.negative;
+  $('bsloras').value = loraLines(st.loras); $('bmood').value = st.mood;
+  const cm = $('bchmoods');
+  cm.innerHTML = '';
+  BIBLE.chapters.forEach(ch => {
+    const row = document.createElement('div');
+    row.className = 'moodrow';
+    row.innerHTML = '<span title="' + esc(ch.name) + '">' + esc(ch.name) +
+      ' <small class="hint">(' + ch.pages + ' p.)</small></span>' +
+      '<input data-cid="' + ch.id + '" placeholder="(book mood)" value="' + esc(ch.mood) + '">';
+    row.querySelector('input').oninput = bPreview;
+    cm.appendChild(row);
+  });
+  ['bsuffix', 'bmood'].forEach(id => $(id).oninput = bPreview);
+  bPreview();
+}
+function bPreview(){
+  // exemple = la premiere case avec un texte; les @Nom sont montres resolus
+  let sample = null;
+  for(const c of BIBLE.casting){ if(c.uses.length){ sample = c; break; } }
+  let text = 'wide shot of @Lea in the ruins';
+  if(sample) text = '… @' + sample.name + ' …';
+  const desc = {};
+  BIBLE.casting.forEach(c => desc[c.name] = c.desc);
+  const resolved = text.replace(/@([A-Za-z0-9_\-]+)/g, (m, n) => desc[n] || m);
+  const mood = $('bmood').value.trim();
+  const chm = [...document.querySelectorAll('#bchmoods input')].map(i => i.value.trim()).find(Boolean);
+  const parts = [resolved, $('bsuffix').value.trim(), chm ? chm + '   (chapter mood)' : mood];
+  $('bpreview').textContent = parts.filter(Boolean).join(', ');
+}
+['character', 'setting', 'style'].forEach(t =>
+  $('btab-' + t).onclick = () => { BTAB = t; BSEL = null; renderBible(); });
+$('bnew').onclick = () => { BSEL = ''; renderBible(); renderCastForm(null); $('bname').focus(); };
+$('bclose').onclick = () => $('biblemodal').classList.remove('on');
+$('biblemodal').onclick = ev => { if(ev.target === $('biblemodal'))
+                                    $('biblemodal').classList.remove('on'); };
+$('biblebtn').onclick = () => openBible();
+$('bsave').onclick = async () => {
+  const name = $('bname').value.trim(), orig = $('bname').dataset.orig || '';
+  if(!name){ status('Give the card a name (@Name)', 'warn'); return; }
+  const payload = {name, kind: BTAB, desc: $('bdesc').value,
+                   loras: parseLoras($('bloras').value), negative: $('bneg').value};
+  if(orig && orig !== name) payload.rename_from = orig;
+  const res = await api('save_cast', payload, 'Saving the card…');
+  if(!res) return;
+  BIBLE = res; BSEL = res.saved;
+  renderBible();
+  refreshIndexQuiet();
+  status('@' + res.saved + ' saved' + (res.renamed_mentions ?
+    ' — ' + res.renamed_mentions + ' @' + orig + ' rewritten in the panels' : ''), 'ok');
+};
+$('bdelete').onclick = async () => {
+  if(!BSEL) return;
+  let res = await api('delete_cast', {name: BSEL}, 'Deleting…');
+  if(!res){
+    // refus avec garde-fou: la fiche est utilisee -> confirmer
+    const msg = $('status').textContent.replace(/^⚠️ /, '');
+    if(/delete anyway/.test(msg) && confirm(msg + '\n\nDelete anyway?')){
+      res = await api('delete_cast', {name: BSEL, force: true}, 'Deleting…');
+    }
+    if(!res) return;
+  }
+  BIBLE = res; BSEL = null; renderBible(); refreshIndexQuiet();
+  status('@' + res.deleted + ' deleted' + (res.orphans ? ' — ' + res.orphans +
+         ' panel(s) still mention it (shown as unknown)' : ''), res.orphans ? 'warn' : 'ok');
+};
+$('bimprove').onclick = async () => {
+  const before = $('bdesc').value;
+  const res = await api('improve', {text: 'visual description of a comic ' +
+    (BTAB === 'setting' ? 'setting (place)' : 'character') + ', looks only: ' + before},
+    'Asking Ollama…');
+  if(!res || !res.text) return;
+  $('bdesc').dataset.before = before;
+  $('bdesc').value = res.text.replace(/^visual description[^:]*:\s*/i, '');
+  $('bimproveundo').style.display = '';
+};
+$('bimproveundo').onclick = () => {
+  $('bdesc').value = $('bdesc').dataset.before || '';
+  $('bimproveundo').style.display = 'none';
+};
+$('brefupload').onclick = () => {
+  if(!BSEL){ status('Save the card first, then add references', 'warn'); return; }
+  $('breffile').click();
+};
+$('breffile').onchange = () => {
+  const f = $('breffile').files[0];
+  if(!f || !BSEL) return;
+  const rd = new FileReader();
+  rd.onload = async () => {
+    const res = await api('add_ref', {name: BSEL, image: rd.result}, 'Adding the reference…');
+    $('breffile').value = '';
+    if(res){ BIBLE = res; renderBible(); status('Reference added to @' + res.name, 'ok'); }
+  };
+  rd.readAsDataURL(f);
+};
+$('brefaddpanel').onclick = async () => {
+  const v = $('brefpanel').value;
+  if(!v || !BSEL) return;
+  const [cid, pid, pnid] = v.split('|');
+  const res = await api('add_ref', {name: BSEL, cid, pid, pnid}, 'Adding the reference…');
+  if(res){ BIBLE = res; renderBible(); status('Reference added to @' + res.name + ' (' + res.note + ')', 'ok'); }
+};
+$('bredraw').onclick = async () => {
+  const c = BIBLE.casting.find(x => x.name === BSEL);
+  if(!c || !c.uses.length) return;
+  if(!confirm('Redraw ' + c.uses.length + ' panel(s) where @' + c.name +
+              ' appears? Previous drawings stay in each panel history.')) return;
+  $('biblemodal').classList.remove('on');
+  await startJob({panels: c.uses.map(u => ({cid: u.cid, pid: u.pid, pnid: u.pnid}))},
+                 'Redrawing @' + c.name + '…');
+};
+$('bstylesave').onclick = async () => {
+  const cm = {};
+  document.querySelectorAll('#bchmoods input').forEach(i => cm[i.dataset.cid] = i.value);
+  const res = await api('save_style', {prompt_suffix: $('bsuffix').value,
+    negative: $('bsneg').value, loras: parseLoras($('bsloras').value),
+    mood: $('bmood').value, chapter_moods: cm}, 'Saving the style…');
+  if(!res) return;
+  BIBLE = res; renderBible(); refreshIndexQuiet();
+  status('Style saved — only future drawings use it (🎨 Redraw to update the book)', 'ok');
+};
+$('bstyleredraw').onclick = async () => {
+  if(!confirm('Redraw EVERY panel of the book with the current style and mood? ' +
+              'Previous drawings stay in each panel history.')) return;
+  $('biblemodal').classList.remove('on');
+  await startJob({force: true}, 'Redrawing the whole book…');
+};
+async function refreshIndexQuiet(){
+  const res = await rawPost('index', {});
+  if(res && res.ok){ IDX = res; renderNav(); if(LASTPAGE && SEL) renderPanelBox(LASTPAGE); }
+}
+/* chips @Nom sous le texte de la case + "📌 reference de…" */
+function renderCastChips(){
+  const box = $('castchips');
+  const names = (IDX && IDX.casting) || [];
+  box.innerHTML = '';
+  if(!names.length){
+    box.innerHTML = '<span class="hint">No character/setting yet — 📖 Bible to create them.</span>';
+  }
+  names.forEach(c => {
+    const b = document.createElement('button');
+    b.className = c.kind === 'setting' ? 'setting' : '';
+    b.textContent = '@' + c.name;
+    b.title = (c.kind === 'setting' ? 'setting' : 'character') + ' — insert at the cursor';
+    b.onclick = () => {
+      const ta = $('pntext');
+      const a = ta.selectionStart || 0, z = ta.selectionEnd || 0;
+      const v = ta.value;
+      const ins = (a > 0 && !/\s$/.test(v.slice(0, a)) ? ' ' : '') + '@' + c.name + ' ';
+      ta.value = v.slice(0, a) + ins + v.slice(z);
+      ta.focus(); ta.selectionStart = ta.selectionEnd = a + ins.length;
+    };
+    box.appendChild(b);
+  });
+  const sel = $('pnrefcast');
+  sel.innerHTML = '<option value="">📌 use this drawing as a reference of…</option>' +
+    names.map(c => '<option value="' + esc(c.name) + '">@' + esc(c.name) + '</option>').join('');
+}
+$('pnrefadd').onclick = async () => {
+  const name = $('pnrefcast').value;
+  if(!name || !SEL || !SELPN) return;
+  const res = await api('add_ref', {name, cid: SEL.cid, pid: SEL.pid, pnid: SELPN},
+                        'Adding ' + SELPN + ' as a reference of @' + name + '…');
+  if(res){ $('pnrefcast').value = ''; status(SELPN + ' is now a reference of @' + res.name, 'ok'); }
+};
 $('cfgclose').onclick = () => $('modal').classList.remove('on');
 $('modal').onclick = ev => { if(ev.target === $('modal'))
                              $('modal').classList.remove('on'); };
@@ -1869,12 +2330,19 @@ $('genbook').onclick = async () => {
   if(!confirm('Generate every missing panel of the whole book?\n\nRuns in ' +
               'the background through the engine, page after page - you ' +
               'can keep browsing and press Stop anytime.')) return;
-  const res = await rawPost('generate_all', {});
-  if(!res.ok){ status('⚠️ ' + res.error, 'err'); return; }
+  await startJob({}, 'Generating the book…');
+};
+async function startJob(payload, msg){
+  // lance un job de fond (livre entier, ou liste de cases a redessiner) et
+  // suit sa progression dans la barre du flatplan + la barre de statut
+  const res = await rawPost('generate_all', payload || {});
+  if(!res.ok){ status('⚠️ ' + res.error, 'err'); return null; }
+  if(msg) status(msg + ' (background job — Flatplan shows the progress)', '', true);
   renderJob(res.job);
   if(JOBTIMER) clearInterval(JOBTIMER);
   JOBTIMER = setInterval(pollJob, 3000);
-};
+  return res;
+}
 $('jobstop').onclick = async () => { await rawPost('job_stop');
                                      status('Stopping after the current page…', 'warn'); };
 // un job deja en cours quand la page s'ouvre (F5 pendant une generation)

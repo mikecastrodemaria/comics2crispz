@@ -87,6 +87,9 @@ def book_index(project, project_dir):
           for row in spreads(book, rtl=rtl)]
     return {"ok": True, "name": project.get("name") or "Untitled",
             "engine": project.get("engine") or None,
+            "casting": [{"name": n, "kind": (c or {}).get("kind", "character")}
+                        for n, c in sorted((project.get("casting") or {}).items(),
+                                           key=lambda kv: kv[0].lower())],
             "style_loras": list((project.get("style") or {}).get("loras")
                                 or []),
             "reading": "rtl" if rtl else "ltr",
@@ -290,6 +293,15 @@ def merge_dialogue(old, new):
 _NAME_OK = re.compile(r"[^A-Za-z0-9_\-]+")
 
 
+def name_token(raw):
+    """@Name token from a free name: accents transliterated (Le Reve ->
+    LeReve, not LeRve), then anything outside letters/digits/_/- dropped."""
+    import unicodedata
+    txt = unicodedata.normalize("NFKD", str(raw or ""))
+    txt = "".join(ch for ch in txt if not unicodedata.combining(ch))
+    return _NAME_OK.sub("", txt.strip().lstrip("@"))
+
+
 def _closest_layout(n_panels):
     """Layout whose panel count is closest to n_panels (ties: fewer panels)."""
     names = cz_comic.layout_names()
@@ -308,7 +320,7 @@ def build_from_outline(project, outline, chapter_name="Story"):
     warnings = []
     for c in (outline.get("casting") or [])[:8]:
         raw = str(c.get("name") or "").strip()
-        name = _NAME_OK.sub("", raw)
+        name = name_token(raw)
         if not name:
             warnings.append("casting entry without a usable name - skipped")
             continue
@@ -319,6 +331,9 @@ def build_from_outline(project, outline, chapter_name="Story"):
                             f"'{c.get('kind')}' - treated as character")
         project.setdefault("casting", {})[name] = cz_comic.new_character(
             str(c.get("desc") or "").strip(), kind=kind)
+    mood = str(outline.get("mood") or "").strip()
+    if mood and not (project.get("style") or {}).get("mood"):
+        project.setdefault("style", {})["mood"] = mood[:300]
     ch = cz_comic.add_chapter(project, chapter_name,
                               str(outline.get("synopsis") or "").strip())
     cast_names = sorted(project.get("casting") or {}, key=len, reverse=True)
@@ -650,3 +665,55 @@ def panel_history(src, project_dir):
                     "ts": int(os.path.getmtime(prev)),
                     "url": _rel(prev, project_dir), "thumb": None})
     return out
+
+
+# ---------------------------------------------------------------------------
+# Bible visuelle (editeur): casting (personnages + decors), style global,
+# moods de chapitre - avec, pour chaque fiche, OU elle est utilisee.
+# ---------------------------------------------------------------------------
+def casting_uses(project):
+    """{nom canonique: [{'cid','pid','pnid','has_image'}...]} - les cases
+    dont le texte cite @Nom (via resolve_casting: casse insensible)."""
+    casting = project.get("casting") or {}
+    uses = {n: [] for n in casting}
+    for ch in project.get("chapters") or []:
+        for pg in ch.get("pages") or []:
+            for pn in pg.get("panels") or []:
+                used = cz_comic.resolve_casting(pn.get("text") or "",
+                                                casting)["used"]
+                for u in used:
+                    if u in uses:
+                        img = pn.get("image")
+                        uses[u].append({"cid": ch["id"], "pid": pg["id"],
+                                        "pnid": pn["id"],
+                                        "has_image": bool(img and
+                                                          os.path.isfile(img))})
+    return uses
+
+
+def bible_state(project, project_dir):
+    uses = casting_uses(project)
+    cast = []
+    for name, c in sorted((project.get("casting") or {}).items(),
+                          key=lambda kv: kv[0].lower()):
+        refs = []
+        for r in c.get("refs") or []:
+            ap = r if os.path.isabs(r) else os.path.join(
+                project_dir, *str(r).replace("\\", "/").split("/"))
+            refs.append({"ref": r, "url": _rel(ap, project_dir),
+                         "exists": os.path.isfile(ap)})
+        cast.append({"name": name, "kind": c.get("kind", "character"),
+                     "desc": c.get("desc") or "", "negative": c.get("negative") or "",
+                     "loras": list(c.get("loras") or []), "refs": refs,
+                     "uses": uses.get(name, [])})
+    style = project.get("style") or {}
+    return {"ok": True,
+            "casting": cast,
+            "style": {"prompt_suffix": style.get("prompt_suffix") or "",
+                      "negative": style.get("negative") or "",
+                      "loras": list(style.get("loras") or []),
+                      "mood": style.get("mood") or ""},
+            "chapters": [{"id": ch["id"], "name": ch.get("name") or ch["id"],
+                          "mood": ch.get("mood") or "",
+                          "pages": len(ch.get("pages") or [])}
+                         for ch in project.get("chapters") or []]}
