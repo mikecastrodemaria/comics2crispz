@@ -44,6 +44,7 @@ import cz_comic
 import c2c_state
 import c2c_engines
 import c2c_ollama
+import c2c_script
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSETS = os.path.join(HERE, "assets")
@@ -584,6 +585,63 @@ class Studio:
         res = c2c_state.bible_state(project, self.dir)
         res["warnings"] = [f"unknown chapter '{c}' ignored" for c in unknown]
         return res
+
+    # ------------------------------------------------------------------
+    # 📝 Script (.czs): the whole book as text, import/export without loss
+    # ------------------------------------------------------------------
+    def op_script_get(self, data):
+        """{cid?} -> .czs text of the book (or of one chapter)."""
+        project = self.load()
+        cid = (data.get("cid") or "").strip() or None
+        return {"ok": True, "cid": cid,
+                "text": c2c_script.format_script(project, cid),
+                "layouts": sorted(cz_comic.LAYOUTS),
+                "chapters": [{"id": c["id"], "name": c.get("name") or c["id"]}
+                             for c in project.get("chapters") or []]}
+
+    def _script_apply(self, text, dry):
+        try:
+            outline = c2c_script.parse_script(text)
+        except c2c_script.ScriptError as e:
+            return {"ok": False, "line": e.line_no, "error": str(e)}
+        import copy
+        project = self.load()
+        work = copy.deepcopy(project) if dry else project
+        rep = c2c_script.apply_script(work, outline)
+        rep.update({"ok": True, "dry": dry,
+                    "chapters": len(outline["chapters"]),
+                    "pages": sum(len(c["pages"]) for c in outline["chapters"]),
+                    "panels": sum(len(pg["panels"]) for c in outline["chapters"]
+                                  for pg in c["pages"])})
+        return rep
+
+    def op_script_check(self, data):
+        """Dry run: parse + merge on a COPY, report only (nothing written)."""
+        return self._script_apply(str(data.get("text") or ""), dry=True)
+
+    def op_script_import(self, data):
+        """Parse + merge into the book, save. A parse error refuses the
+        whole import (nothing half-applied). Every removal is quoted in the
+        report. The pages touched are NOT recomposed here (Compose book)."""
+        with _LOCK:
+            text = str(data.get("text") or "")
+            try:
+                outline = c2c_script.parse_script(text)
+            except c2c_script.ScriptError as e:
+                return {"ok": False, "line": e.line_no, "error": str(e)}
+            project = self.load()
+            rep = c2c_script.apply_script(project, outline)
+            cz_comic.save_project(project, self.dir)
+            # keep a copy of what was imported next to the project (diffable)
+            try:
+                with open(os.path.join(self.dir, "script.czs"), "w",
+                          encoding="utf-8") as f:
+                    f.write(c2c_script.format_script(project))
+            except OSError:
+                pass
+        idx = c2c_state.book_index(project, self.dir)
+        idx.update({"report": rep})
+        return idx
 
     def op_set_bubble(self, data):
         """Deplace une bulle: {cid, pid, pnid, index, pos|anchor: [fx, fy]}

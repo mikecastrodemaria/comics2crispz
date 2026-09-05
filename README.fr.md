@@ -77,6 +77,20 @@ Clavier en vue Page : **← →** (ou ↑ ↓, PageUp/PageDown) planche précéd
 suivante dans l'ordre du livre (en manga, ← → suivent le sens de lecture) ;
 **Esc** retourne au chemin de fer.
 
+### Le livre en texte — onglet Script (.czs)
+
+**Script** (onglet d'en-tête) montre tout le livre, ou un chapitre, en texte
+au format `.czs`, éditable sur place ou dans n'importe quel éditeur :
+`=== ch01 : Nom ===` ouvre un chapitre (`> synopsis`, `~ mood: ambiance`),
+`--- page 3-classic` une planche (rôles cover/title/story/back, `seed=N`),
+`[pn1] description` une case, puis les répliques (`Nom: texte`, `CAP:`,
+`SFX:`, `Nom (think):`). **✔ Check** simule l'import et fait un rapport ;
+**⬇ Import** l'applique : chapitres par id, planches par position, cases par
+id, les cases dont le texte n'a pas changé gardent leur dessin, les bulles
+punaisées restent en place, tout ce qui est retiré est cité, une erreur de
+syntaxe refuse tout l'import et pointe la ligne. **💾 .czs** télécharge le
+texte ; une copie `script.czs` est gardée dans le dossier du livre.
+
 ### Bulles — ajouter, masquer, police
 
 Sous la zone de dialogue d'une case, **➕ balloon** ajoute une ligne

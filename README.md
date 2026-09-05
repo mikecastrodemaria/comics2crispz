@@ -90,6 +90,39 @@ This creates `books/making-of/` with 6 pages / 17 panels, a casting
 (`@Mika` the artist, `@Robi` the protocol robot, `@Atelier` the workshop
 setting) and composes every page with placeholders.
 
+### 2b. Or write it as text — the Script tab (.czs)
+
+**Script** (header tab) shows the whole book, or one chapter, as text in the
+`.czs` format and lets you edit it in place or in any editor:
+
+```
+=== ch01 : The departure ===
+> synopsis (optional)
+~ mood: cold night, blue moonlight
+
+--- cover splash
+[pn1] dramatic cover, @Alex under neon rain
+SFX: TITLE
+
+--- page 3-classic seed=1234
+[pn1] interior of @Garage, @Alex enters
+CAP: Three in the morning.
+Alex: Bruno? You there?
+[pn2] close-up of @Bruno
+seed=42
+Bruno (think): Of course...
+```
+
+`=== id? : Name ===` chapter (no id = created), `--- role? layout seed=N?`
+page (roles cover/title/story/back), `[pnN]` panel description (may continue
+on the next lines), then dialogue lines. **✔ Check** simulates the import
+and reports; **⬇ Import** applies it: chapters match by id, pages by position,
+panels by id — panels whose text did not change keep their drawings, balloon
+positions are re-attached, anything removed is quoted in the report, and a
+syntax error refuses the whole import and points at the line. **💾 .czs**
+downloads the text; a `script.czs` copy is kept in the book folder after
+each import.
+
 ### 3. Open the flatplan
 
 ```bat

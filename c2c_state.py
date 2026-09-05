@@ -87,6 +87,7 @@ def book_index(project, project_dir):
           for row in spreads(book, rtl=rtl)]
     return {"ok": True, "name": project.get("name") or "Untitled",
             "engine": project.get("engine") or None,
+            "layouts": sorted(cz_comic.LAYOUTS),
             "casting": [{"name": n, "kind": (c or {}).get("kind", "character")}
                         for n, c in sorted((project.get("casting") or {}).items(),
                                            key=lambda kv: kv[0].lower())],

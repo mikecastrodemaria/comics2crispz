@@ -231,6 +231,15 @@ font-size:11px}
 #jobglobal .jobbar{margin-top:6px}
 #jobglobal .jl{font-size:11px;color:var(--mut);margin-top:4px;white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis}
+#scriptview{display:none;padding:14px;gap:14px;grid-template-columns:1fr 300px}
+#scriptview.on{display:grid}
+#scripttxt{width:100%;min-height:70vh;font-family:Consolas,Menlo,monospace;font-size:13px;
+  line-height:1.45;tab-size:4;resize:vertical}
+#scriptrep{font-size:12px;line-height:1.5;white-space:pre-wrap}
+#scriptrep .err{color:var(--err)}
+#scriptrep .okm{color:var(--ok)}
+.czs-help{font-family:Consolas,Menlo,monospace;font-size:11px;color:var(--mut);
+  white-space:pre;overflow-x:auto;border:1px solid var(--bd);border-radius:6px;padding:6px 8px}
 </style>
 </head>
 <body>
@@ -242,7 +251,7 @@ font-size:11px}
   <div class="tabs">
     <button id="tab-lib" title="All your books">📚 Library</button>
     <button id="tab-flat" class="on">Flatplan</button>
-    <button id="tab-script" disabled title="Coming with step 2">Script</button>
+    <button id="tab-script" disabled title="The whole book as text (.czs): write, check, import">Script</button>
     <button id="tab-page" disabled title="Select a page first">Page</button>
     <button id="tab-prod" disabled title="Coming with step 3">Production</button>
   </div>
@@ -336,6 +345,50 @@ font-size:11px}
         <div class="jobbar"><i id="jobfill"></i></div>
       </div>
       <div id="flat"></div>
+    </div>
+    <div id="scriptview">
+      <div>
+        <div class="row" style="align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <select id="scriptscope" title="The whole book, or one chapter"><option value="">whole book</option></select>
+          <button id="scriptreload" title="Reload the text from the book (drops your unsaved edits here)">📄 From the book</button>
+          <button id="scriptcheck" title="Parse and simulate the import: report, nothing written">✔ Check</button>
+          <button id="scriptimport" class="primary" title="Apply the text to the book (chapters, pages, panels, dialogue). Unchanged panels keep their drawings.">⬇ Import into the book</button>
+          <button id="scriptdl" title="Download this text as a .czs file">💾 .czs</button>
+          <button class="helpb" data-help="The Script view shows the whole book as text in the .czs format: '=== ch01 : Name ===' opens a chapter, '> text' its synopsis, '~ mood: text' its visual mood, '--- page 3-classic' a page (roles cover/title/back, seed=N optional), '[pn1] text' a panel description, then dialogue lines 'Name: text', 'CAP: text', 'SFX: text', 'Name (think): text'. Check simulates the import and reports; Import applies it: panels whose text did not change keep their drawing, anything removed is quoted in the report, a syntax error refuses the whole import and cites the line.">?</button>
+          <span id="scriptstat" class="hint" style="margin-left:auto"></span>
+        </div>
+        <textarea id="scripttxt" spellcheck="false"></textarea>
+      </div>
+      <div>
+        <div class="box">
+          <h3>Report</h3>
+          <div id="scriptrep" class="hint">Check or Import to see what would change.</div>
+        </div>
+        <div class="box" style="margin-top:12px">
+          <h3>.czs cheat sheet</h3>
+          <div class="czs-help">=== ch01 : The departure ===
+> synopsis (optional)
+~ mood: cold night, blue moonlight
+
+--- cover splash
+[pn1] dramatic cover, @Alex under neon rain
+SFX: TITLE
+
+--- page 3-classic seed=1234
+[pn1] interior of @Garage, @Alex enters
+CAP: Three in the morning.
+Alex: Bruno? You there?
+[pn2] close-up of @Bruno
+seed=42
+Bruno (think): Of course...
+[pn3] @Alex hands an envelope
+
+--- back splash
+[pn1] back cover
+# lines starting with # are ignored</div>
+          <div class="hint" style="margin-top:6px">Layouts: <span id="scriptlayouts"></span></div>
+        </div>
+      </div>
     </div>
     <div id="library" style="display:none">
       <div class="row" style="align-items:center;margin-bottom:14px">
@@ -840,6 +893,7 @@ function showWelcome(on){            // compat: l'accueil EST la bibliotheque
 async function showLibrary(){
   $('page').classList.remove('on');
   $('flatview').style.display = 'none';
+  hideScript();
   $('library').style.display = '';
   $('tab-page').disabled = true;
   const res = await loadBooks();
@@ -1150,6 +1204,7 @@ function renderNav(){
   const nav = $('nav');
   nav.innerHTML = '';
   $('biblebtn').disabled = !IDX;
+  $('tab-script').disabled = !IDX;
   IDX.chapters.forEach(ch => {
     const h = document.createElement('div');
     h.className = 'ch';
@@ -1296,6 +1351,7 @@ async function showPage(cid, pid){
   LASTPAGE = p;
   $('flatview').style.display = 'none';
   $('library').style.display = 'none';   // depuis la HOME: la page passe devant
+  hideScript();
   $('page').classList.add('on');
   $('tab-page').disabled = false;
   renderNav();
@@ -1381,6 +1437,7 @@ async function showPage(cid, pid){
 function backToFlat(){
   $('page').classList.remove('on');
   $('library').style.display = 'none';
+  hideScript();
   $('flatview').style.display = '';
   $('tab-page').disabled = true;
   SEL = null; SELPN = null; SELBUB = null; renderNav();
@@ -1715,6 +1772,100 @@ async function regenPanel(){
 
 $('backflat').onclick = backToFlat;
 $('tab-flat').onclick = backToFlat;
+
+/* ---------- 📝 Script (.czs) ---------- */
+let SCRIPT_DIRTY = false;
+function hideScript(){ $('scriptview').classList.remove('on'); $('tab-script').classList.remove('on'); }
+async function showScript(){
+  if(!IDX) return;
+  if(SCRIPT_DIRTY && $('scriptview').classList.contains('on')) return;
+  $('page').classList.remove('on');
+  $('flatview').style.display = 'none';
+  $('library').style.display = 'none';
+  $('scriptview').classList.add('on');
+  $('tab-script').classList.add('on');
+  if(!SCRIPT_DIRTY) await scriptReload();
+}
+async function scriptReload(){
+  // rawPost: pas de verrou BUSY (un chargement en cours ne doit pas laisser
+  // la vue vide sans un mot)
+  const res = await rawPost('script_get', {cid: $('scriptscope').value});
+  if(!res || !res.ok){ status('⚠️ ' + ((res && res.error) || 'cannot read the book'), 'err'); return; }
+  $('scriptlayouts').textContent = (res.layouts || []).join(', ');
+  $('scripttxt').value = res.text;
+  SCRIPT_DIRTY = false;
+  $('scriptscope').innerHTML = '<option value="">whole book</option>' +
+    res.chapters.map(c => '<option value="' + c.id + '"' +
+      (c.id === res.cid ? ' selected' : '') + '>' + esc(c.id + ' · ' + c.name) + '</option>').join('');
+  $('scriptstat').textContent = res.text.split('\n').length + ' lines';
+  $('scriptrep').innerHTML = 'Edit the text, then ✔ Check or ⬇ Import.';
+}
+function scriptReport(rep, applied){
+  const out = [];
+  if(!rep.ok){
+    out.push('<span class="err">✖ ' + esc(rep.error) + '</span>');
+    out.push('Nothing was ' + (applied ? 'applied' : 'changed') + '.');
+    $('scriptrep').innerHTML = out.join('\n');
+    if(rep.line){                             // curseur sur la ligne fautive
+      const ta = $('scripttxt'), lines = ta.value.split('\n');
+      let pos = 0;
+      for(let i = 0; i < rep.line - 1 && i < lines.length; i++) pos += lines[i].length + 1;
+      ta.focus(); ta.setSelectionRange(pos, pos + (lines[rep.line - 1] || '').length);
+    }
+    return;
+  }
+  out.push('<span class="okm">' + (applied ? '✅ Imported' : '✔ Valid') + '</span> — ' +
+    rep.chapters + ' chapter(s), ' + rep.pages + ' page(s), ' + rep.panels + ' panel(s)');
+  if(rep.chapters_added.length) out.push('+ new chapter(s): ' + rep.chapters_added.join(', '));
+  if(rep.pages_added) out.push('+ ' + rep.pages_added + ' new page(s)');
+  out.push(rep.panels_changed + ' panel text(s) ' + (applied ? 'changed' : 'would change') +
+           ' (their drawings stay until you regenerate), ' + rep.panels_unchanged + ' unchanged');
+  if(rep.dialogue_changed) out.push(rep.dialogue_changed + ' dialogue(s) ' + (applied ? 'changed' : 'would change'));
+  (rep.pages_removed || []).forEach(r => out.push('<span class="err">− page ' + r.cid + '.' + r.pid +
+    ' (' + r.layout + ') ' + (applied ? 'removed' : 'would be removed') + '; its texts: ' +
+    esc(r.texts.filter(Boolean).join(' | ') || '(empty)') + '</span>'));
+  (rep.panels_removed || []).forEach(r => out.push('<span class="err">− panel ' + r.cid + '.' + r.pid +
+    '/' + r.pnid + (r.had_image ? ' (had a drawing)' : '') + ': ' + esc(r.text || '(empty)') + '</span>'));
+  (rep.warnings || []).forEach(w => out.push('⚠ ' + esc(w)));
+  $('scriptrep').innerHTML = out.join('\n');
+}
+$('tab-script').onclick = showScript;
+$('scriptscope').onchange = () => {
+  if(SCRIPT_DIRTY && !confirm('Drop your unsaved edits and load that scope?')) return;
+  SCRIPT_DIRTY = false; scriptReload();
+};
+$('scriptreload').onclick = () => {
+  if(SCRIPT_DIRTY && !confirm('Drop your unsaved edits and reload from the book?')) return;
+  SCRIPT_DIRTY = false; scriptReload();
+};
+$('scripttxt').oninput = () => { SCRIPT_DIRTY = true;
+  $('scriptstat').textContent = $('scripttxt').value.split('\n').length + ' lines · edited'; };
+$('scriptcheck').onclick = async () => {
+  const res = await rawPost('script_check', {text: $('scripttxt').value});
+  scriptReport(res, false);
+  status(res.ok ? 'Script is valid' : '⚠️ ' + res.error, res.ok ? 'ok' : 'err');
+};
+$('scriptimport').onclick = async () => {
+  const chk = await rawPost('script_check', {text: $('scripttxt').value});
+  if(!chk.ok){ scriptReport(chk, false); status('⚠️ ' + chk.error, 'err'); return; }
+  const removed = (chk.pages_removed || []).length + (chk.panels_removed || []).length;
+  if(removed && !confirm('This import removes ' + removed + ' page(s)/panel(s) (their ' +
+     'texts are listed in the report). Continue?')) { scriptReport(chk, false); return; }
+  const res = await api('script_import', {text: $('scripttxt').value}, 'Importing the script…');
+  if(!res) return;
+  IDX = res; SCRIPT_DIRTY = false;
+  scriptReport(res.report, true);
+  renderNav();
+  status('Script imported — 🧩 Compose book to letter the pages, 🎨 Generate for new panels', 'ok');
+  await scriptReload();
+};
+$('scriptdl').onclick = () => {
+  const blob = new Blob([$('scripttxt').value], {type: 'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = ((IDX && IDX.name) || 'book').replace(/[^\w\-]+/g, '-') + '.czs';
+  a.click();
+};
 $('reload').onclick = load;
 $('bookdd').onchange = async () => {
   const v = $('bookdd').value;
