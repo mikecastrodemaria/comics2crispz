@@ -726,7 +726,7 @@ font-size:11px}
           this panel (the rest of the page is untouched). Save alone updates
           text and balloons without redrawing.</div>
         </div>
-        <div class="box hint"><kbd>Esc</kbd> back to the flatplan</div>
+        <div class="box hint"><kbd>Esc</kbd> back to the flatplan · <kbd>←</kbd> <kbd>→</kbd> previous / next page (follows the reading direction)</div>
       </div>
     </div>
   </div>
@@ -2459,8 +2459,28 @@ $('genmissing').onclick = async () => {
          (warn ? '  ⚠ ' + warn : ''), warn ? 'warn' : 'ok');
 };
 document.addEventListener('keydown', ev => {
-  if(ev.target.tagName === 'TEXTAREA' || ev.target.tagName === 'INPUT') return;
-  if(ev.key === 'Escape' && $('page').classList.contains('on')) backToFlat();
+  if(ev.target.tagName === 'TEXTAREA' || ev.target.tagName === 'INPUT' ||
+     ev.target.tagName === 'SELECT') return;
+  const onPage = $('page').classList.contains('on');
+  const modalOpen = document.querySelector('#modal.on, #laymodal.on, #wizmodal.on, #helpmodal.on, #biblemodal.on');
+  if(ev.key === 'Escape' && onPage && !modalOpen) backToFlat();
+  // vue Page: fleches = planche precedente / suivante dans l'ordre du livre
+  if(onPage && !modalOpen && SEL && !BUSY &&
+     ['ArrowLeft', 'ArrowUp', 'ArrowRight', 'ArrowDown', 'PageUp', 'PageDown'].includes(ev.key)){
+    const back = ['ArrowLeft', 'ArrowUp', 'PageUp'].includes(ev.key);
+    // manga (droite -> gauche): les fleches gauche/droite suivent le sens de lecture
+    const rtl = IDX && IDX.reading === 'rtl';
+    const dir = (rtl && (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight')) ? !back : back;
+    const i = bookPos(SEL.cid, SEL.pid);
+    const j = i + (dir ? -1 : 1);
+    ev.preventDefault();
+    if(j < 0 || j >= IDX.book.length){
+      status(dir ? 'First page of the book' : 'Last page of the book', 'warn');
+      return;
+    }
+    const p = IDX.book[j];
+    showPage(p.cid, p.pid);
+  }
 });
 
 load();

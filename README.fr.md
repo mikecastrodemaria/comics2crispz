@@ -73,6 +73,10 @@ prend effet après l'image en cours (rien n'est interrompu à mi-rendu),
 **▶ Resume** reprend là où ça s'est arrêté, **⏹ Stop** termine après
 l'élément en cours. Les anciens dessins restent dans l'historique.
 
+Clavier en vue Page : **← →** (ou ↑ ↓, PageUp/PageDown) planche précédente /
+suivante dans l'ordre du livre (en manga, ← → suivent le sens de lecture) ;
+**Esc** retourne au chemin de fer.
+
 ### Corriger une case — Régénérer, Retoucher, Variation, Versions
 
 Cliquer une case sur la planche ouvre son panneau :

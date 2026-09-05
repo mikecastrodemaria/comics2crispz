@@ -112,6 +112,10 @@ Click any page:
 The layout rects are overlaid on the composed page; hover a panel to see its
 id and prompt. Balloons (from the last compose) show as blue outlines.
 
+Keyboard: **← →** (or ↑ ↓, PageUp/PageDown) go to the previous / next page in
+the book's order — in a manga (right-to-left) book, ← → follow the reading
+direction; **Esc** goes back to the flatplan.
+
 ### 5. Generate through the engine
 
 Press **🎨 Generate missing**. Each panel without an image is resolved
