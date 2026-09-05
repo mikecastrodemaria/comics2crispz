@@ -508,11 +508,8 @@ class Studio:
             return {"ok": False, "engine": name,
                     "error": f"{pnid}: engine returned no readable image"}
         with _LOCK:
-            prev = os.path.splitext(src)[0] + ".prev.png"
-            shutil.copy2(src, prev)                     # ↩ toujours possible
-            tmp = src + f".{os.getpid()}.tmp"
-            shutil.copy2(out, tmp)
-            os.replace(tmp, src)
+            c2c_state.replace_panel_image(src, out, "edit", instr)
+            c2c_state.discard_engine_output(out, os.path.dirname(src))
             panel["status"] = "rendered"
             cz_comic.save_project(project, self.dir)
             fd, emb = self._letter_kit(project)
@@ -564,11 +561,9 @@ class Studio:
             return {"ok": False, "engine": name,
                     "error": f"{pnid}: engine returned no readable image"}
         with _LOCK:
-            prev = os.path.splitext(src)[0] + ".prev.png"
-            shutil.copy2(src, prev)
-            tmp = src + f".{os.getpid()}.tmp"
-            shutil.copy2(out, tmp)
-            os.replace(tmp, src)
+            c2c_state.replace_panel_image(src, out, "variation",
+                                          f"strength {strength}")
+            c2c_state.discard_engine_output(out, os.path.dirname(src))
             cz_comic.save_project(project, self.dir)
             fd, emb = self._letter_kit(project)
             c2c_state.compose_one(project, self.dir, cid, pid,
@@ -579,26 +574,32 @@ class Studio:
         return idx
 
     def op_restore_panel(self, data):
-        """↩ Revenir a l'image d'avant la derniere retouche (<pnid>.prev.png
-        <-> image courante: un second ↩ re-applique la retouche)."""
+        """Revenir a une version de l'historique de la case: {cid, pid,
+        pnid, version?}. version = nom de fichier dans <pnid>.history/
+        (absent = la plus recente). La version courante est archivee avant
+        (rien de perdu), la planche recomposee."""
         cid, pid, pnid = data["cid"], data["pid"], data["pnid"]
+        version = (data.get("version") or "").strip() or None
         with _LOCK:
             project = self.load()
             panel = cz_comic.find_panel(project, cid, pid, pnid)
-            src = panel.get("image")
-            prev = os.path.splitext(src)[0] + ".prev.png" if src else None
-            if not (prev and os.path.isfile(prev)):
+            src = panel.get("image") or cz_comic.panel_path(
+                self.dir, cid, pid, pnid)
+            picked = c2c_state.restore_panel_version(src, version)
+            if picked is None:
                 return {"ok": False,
-                        "error": f"{pnid}: no previous version to restore"}
-            swap = src + f".{os.getpid()}.swap"
-            os.replace(src, swap)
-            os.replace(prev, src)
-            os.replace(swap, prev)
+                        "error": f"{pnid}: no previous version to restore"
+                                 + (f" ({version} not in the history)"
+                                    if version else "")}
+            panel["image"] = src
+            panel["status"] = "rendered"
             cz_comic.save_project(project, self.dir)
             fd, emb = self._letter_kit(project)
             c2c_state.compose_one(project, self.dir, cid, pid,
                                   face_detector=fd, char_embeddings=emb)
-        return c2c_state.book_index(project, self.dir)
+        idx = c2c_state.book_index(project, self.dir)
+        idx.update({"restored": pnid, "version": picked})
+        return idx
 
     def op_export_print(self, data):
         """🖨 Sortie PRINT: chaque case remonte a la resolution d'impression
@@ -795,9 +796,14 @@ class Studio:
                         "error": f"{panel['id']}: engine returned no "
                                  f"readable image ({src})"}
             dst = cz_comic.panel_path(self.dir, cid, pid, panel["id"])
-            os.makedirs(os.path.dirname(dst), exist_ok=True)
-            shutil.copy(src, dst)
             with _LOCK:                     # re-read: the user may have edited
+                # une case deja dessinee (force / regenerate): l'ancienne
+                # version part dans l'historique, jamais ecrasee en silence
+                c2c_state.replace_panel_image(
+                    dst, src, "regenerate",
+                    f"seed {res.get('seed_used')}"
+                    if res.get("seed_used") is not None else "")
+                c2c_state.discard_engine_output(src, os.path.dirname(dst))
                 project = self.load()
                 page = cz_comic.find_page(project, cid, pid)
                 pn = cz_comic.find_panel(project, cid, pid, panel["id"])

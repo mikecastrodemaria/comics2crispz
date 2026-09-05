@@ -19,6 +19,8 @@ position in the array, the folio is what readers see).
 import os
 import re
 import json
+import time
+import shutil
 
 from PIL import Image
 
@@ -178,8 +180,8 @@ def chapter_state(project, project_dir, cid):
                 "status": pn.get("status", "draft"),
                 "img": (_rel(img, project_dir)
                         if img and os.path.isfile(img) else None),
-                "has_prev": bool(img and os.path.isfile(
-                    os.path.splitext(img)[0] + ".prev.png")),
+                "history": panel_history(img, project_dir) if img else [],
+                "has_prev": bool(img and panel_history(img, project_dir)),
                 "dialogue": pn.get("dialogue") or [],
                 "dialogue_text": fmt_dialogue(pn.get("dialogue")),
                 "rect": ([rects[i][0] / W, rects[i][1] / H,
@@ -458,3 +460,185 @@ def page_thumb(project_dir, cid, pid, size=360):
             except OSError:
                 pass
     return dst
+
+
+# ---------------------------------------------------------------------------
+# Historique par case: chaque Regenerate / Edit / Variation / Inpaint archive
+# la version qu'il remplace dans <pnid>.history/ (a cote de <pnid>.png), avec
+# une vignette et un index.json (op, note, date). Plafond HISTORY_MAX: la plus
+# vieille version part. Regle maison "rien de perdu": un retour a une version
+# archive AUSSI la version courante -> on peut toujours revenir dans les deux
+# sens.
+# ---------------------------------------------------------------------------
+HISTORY_MAX = 10
+_THUMB_W = 320
+
+
+def history_dir(src):
+    return os.path.splitext(src)[0] + ".history"
+
+
+def _history_index_path(src):
+    return os.path.join(history_dir(src), "index.json")
+
+
+def _read_history(src):
+    p = _history_index_path(src)
+    if not os.path.isfile(p):
+        return []
+    try:
+        with open(p, "r", encoding="utf-8") as f:
+            entries = json.load(f) or []
+    except (OSError, ValueError):
+        return []
+    hd = history_dir(src)
+    return [e for e in entries
+            if isinstance(e, dict) and e.get("file")
+            and os.path.isfile(os.path.join(hd, e["file"]))]
+
+
+def _write_history(src, entries):
+    hd = history_dir(src)
+    os.makedirs(hd, exist_ok=True)
+    p = _history_index_path(src)
+    tmp = p + f".{os.getpid()}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(entries, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, p)
+
+
+def _migrate_prev(src):
+    """Ancien mecanisme (<pnid>.prev.png, un seul cran): absorbe dans
+    l'historique la premiere fois qu'on y touche."""
+    prev = os.path.splitext(src)[0] + ".prev.png"
+    if os.path.isfile(prev):
+        archive_panel(prev, "previous", "before the last edit (old undo slot)",
+                      as_src=src)
+        os.remove(prev)
+
+
+def archive_panel(image_path, op, note="", as_src=None):
+    """Copie image_path dans l'historique de la case as_src (defaut: elle-
+    meme), vignette comprise; renvoie l'entree creee. Purge au-dela de
+    HISTORY_MAX."""
+    src = as_src or image_path
+    if not os.path.isfile(image_path):
+        return None
+    hd = history_dir(src)
+    os.makedirs(hd, exist_ok=True)
+    ts = time.strftime("%Y%m%d-%H%M%S")
+    base = f"{ts}_{re.sub(r'[^a-z0-9]+', '-', str(op).lower()) or 'version'}"
+    fname, n = base + ".png", 1
+    while os.path.exists(os.path.join(hd, fname)):
+        n += 1
+        fname = f"{base}-{n}.png"
+    shutil.copy2(image_path, os.path.join(hd, fname))
+    thumb = os.path.splitext(fname)[0] + ".thumb.jpg"
+    try:
+        with Image.open(image_path) as im:
+            im = im.convert("RGB")
+            im.thumbnail((_THUMB_W, _THUMB_W))
+            im.save(os.path.join(hd, thumb), "JPEG", quality=80)
+    except Exception:
+        thumb = None
+    entry = {"file": fname, "thumb": thumb, "op": str(op),
+             "note": str(note or "")[:200], "ts": int(time.time())}
+    entries = _read_history(src) + [entry]
+    while len(entries) > HISTORY_MAX:
+        old = entries.pop(0)
+        for f in (old.get("file"), old.get("thumb")):
+            if f:
+                try:
+                    os.remove(os.path.join(hd, f))
+                except OSError:
+                    pass
+    _write_history(src, entries)
+    return entry
+
+
+def replace_panel_image(src, new_image, op, note=""):
+    """Remplace l'image de la case par new_image APRES avoir archive la
+    version courante (si elle existe). Ecriture atomique."""
+    if os.path.isfile(src):
+        _migrate_prev(src)
+        archive_panel(src, op, note)
+    os.makedirs(os.path.dirname(src), exist_ok=True)
+    tmp = src + f".{os.getpid()}.tmp"
+    shutil.copy2(new_image, tmp)
+    os.replace(tmp, src)
+
+
+def discard_engine_output(path, panel_dir):
+    """Sortie brute du moteur ecrite DANS le dossier de la case (out_dir =
+    panels/<ch>/<page>/, sous-dossier date): une fois copiee en <pnid>.png
+    elle ne sert plus. Supprime le fichier et son dossier date s'il est
+    vide. Ailleurs (galerie de l'outil, ou n'importe quoi hors de ce
+    dossier): on ne touche a rien."""
+    try:
+        ap, root = os.path.abspath(path), os.path.abspath(panel_dir)
+        if not ap.lower().startswith(root.lower() + os.sep):
+            return
+        os.remove(ap)
+        d = os.path.dirname(ap)
+        if not os.listdir(d):
+            os.rmdir(d)
+    except OSError:
+        pass
+
+
+def restore_panel_version(src, version=None):
+    """Remet la version `version` (nom de fichier de l'historique; None = la
+    plus recente) comme image courante. La version courante est archivee
+    d'abord (op 'replaced'), la version restauree quitte l'historique.
+    Renvoie l'entree restauree, ou None si rien a restaurer."""
+    had_prev = os.path.isfile(os.path.splitext(src)[0] + ".prev.png")
+    _migrate_prev(src)
+    if version == "prev.png" and had_prev:
+        version = None            # l'ancien cran vient d'etre migre = le dernier
+    entries = _read_history(src)
+    if not entries:
+        return None
+    pick = None
+    for e in entries:
+        if version is None or e["file"] == version:
+            pick = e
+    if pick is None:
+        return None
+    hd = history_dir(src)
+    vpath = os.path.join(hd, pick["file"])
+    if os.path.isfile(src):
+        archive_panel(src, "replaced", f"before going back to {pick['op']}")
+    tmp = src + f".{os.getpid()}.tmp"
+    shutil.copy2(vpath, tmp)
+    os.replace(tmp, src)
+    entries = [e for e in _read_history(src) if e["file"] != pick["file"]]
+    for f in (pick.get("file"), pick.get("thumb")):
+        if f:
+            try:
+                os.remove(os.path.join(hd, f))
+            except OSError:
+                pass
+    _write_history(src, entries)
+    return pick
+
+
+def panel_history(src, project_dir):
+    """Historique d'une case pour l'UI, la plus recente d'abord, avec les
+    URLs /file/ (chemins relatifs au livre)."""
+    if not src:
+        return []
+    prev = os.path.splitext(src)[0] + ".prev.png"
+    hd = history_dir(src)
+    out = []
+    for e in reversed(_read_history(src)):
+        out.append({"file": e["file"], "op": e.get("op"),
+                    "note": e.get("note") or "", "ts": e.get("ts"),
+                    "url": _rel(os.path.join(hd, e["file"]), project_dir),
+                    "thumb": (_rel(os.path.join(hd, e["thumb"]), project_dir)
+                              if e.get("thumb") else None)})
+    if os.path.isfile(prev):                     # ancien cran non migre
+        out.append({"file": "prev.png", "op": "previous",
+                    "note": "before the last edit",
+                    "ts": int(os.path.getmtime(prev)),
+                    "url": _rel(prev, project_dir), "thumb": None})
+    return out

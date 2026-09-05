@@ -125,6 +125,24 @@ recomposes with lettering:
 The status bar reports the engine, the seeds (replayable) and any warnings
 (unknown casting names, empty panels, dropped refs — never silent).
 
+### 5b. Fix one panel — Regenerate, Edit, Variation, Versions
+
+Select a panel on the page (click it) to open its box:
+
+- **🎲 Regenerate** redraws JUST this panel from its text (and seed).
+- **✏️ Edit by instruction** keeps the drawing and changes what you ask
+  ("add heavy rain, keep the ink style") through the engine's image-edit
+  model (crispz-qwen-edit; crispz-studio when an omni model is configured).
+  Engines without one say so instead of guessing.
+- **🔁 Variation** redraws the panel FROM its current image with a strength
+  (0.3 = same composition lightly redrawn, 0.6 = a real variation). Works on
+  every engine (protocol `upscale` with factor 1 = pure img2img).
+- **🕘 Versions**: every one of these keeps the version it replaces in
+  `panels/<ch>/<page>/<panel>.history/` (thumbnail + `index.json`, 10 per
+  panel, oldest dropped). The strip under the panel shows them; click one to
+  bring it back — the current drawing is archived in turn, so nothing is ever
+  lost. **↩ Previous** is a shortcut to the most recent version.
+
 ### 6. The whole book
 
 Back to the flatplan (Esc), **🧩 Compose book**:

@@ -184,6 +184,13 @@ padding:10px 12px;margin-bottom:10px}
 .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
 kbd{background:#121722;border:1px solid var(--bd);border-radius:4px;padding:0 5px;
 font-size:11px}
+.hist{display:flex;gap:6px;overflow-x:auto;padding:4px 0}
+.hist .hv{flex:0 0 auto;width:84px;cursor:pointer;border:1px solid var(--line);
+  border-radius:6px;background:var(--bg2);padding:3px;text-align:center}
+.hist .hv:hover{border-color:var(--accent)}
+.hist .hv img{width:76px;height:56px;object-fit:cover;border-radius:4px;display:block}
+.hist .hv small{display:block;font-size:10px;color:var(--fg2);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;margin-top:2px}
 </style>
 </head>
 <body>
@@ -517,13 +524,18 @@ font-size:11px}
             </div>
             <div class="grid2" style="margin-top:8px">
               <button id="editbtn" class="primary">✏️ Edit panel</button>
-              <button id="prevbtn" title="Swap back to the version before the last edit">↩ Previous</button>
+              <button id="prevbtn" title="Bring back the most recent version from the history (the current one is kept there too)">↩ Previous</button>
             </div>
           <div class="row" style="align-items:center;margin-top:8px">
             <button id="varybtn"
                     title="img2img: redraw this panel FROM its current image with the strength below (0.3 = same composition redrawn, 0.6 = a real variation). Works on every engine. Previous version kept.">🔁 Variation</button>
             <span class="lbl" style="margin:0 0 0 8px">strength <b id="varyval" style="color:var(--fg)">0.45</b></span>
             <input id="varystr" type="range" min="0.1" max="0.9" step="0.05" value="0.45" style="flex:1;min-width:90px">
+          </div>
+          <div id="histbox" style="display:none;margin-top:10px">
+            <span class="lbl">🕘 Versions of this panel — click one to bring it back
+              <button class="helpb" data-help="Every Regenerate, Edit, Variation or Inpaint keeps the version it replaces here (up to 10 per panel, oldest dropped). Click a version to make it the current drawing again: the current one is archived in turn, so you can always go back the other way. Previous = the most recent version.">?</button></span>
+            <div id="pnhist" class="hist"></div>
           </div>
           </div>
           <div class="hint" style="margin-top:8px">Regenerate redraws JUST
@@ -565,6 +577,9 @@ async function api(op, payload, busyMsg){
       body:JSON.stringify(payload || {})});
     const res = await r.json();
     if(!res || res.ok === false) throw new Error((res && res.error) || 'unknown error');
+    // le message d'attente ne doit pas survivre a un appel reussi (les
+    // appelants qui ont quelque chose a dire ecrasent ensuite)
+    if(busyMsg && $('status').textContent === busyMsg) status('', '');
     return res;
   }catch(err){
     status('⚠️ ' + err.message, 'err');
@@ -1281,6 +1296,43 @@ function renderPanelBox(p){
   // retouche par instruction: seulement pour une case deja dessinee
   $('editbox').style.display = pn.img ? '' : 'none';
   $('prevbtn').disabled = !pn.has_prev;
+  renderHistory(pn);
+}
+
+const OPICON = {regenerate: '🎲', edit: '✏️', variation: '🔁', inpaint: '🖌',
+                replaced: '↩', previous: '↩'};
+function renderHistory(pn){
+  const box = $('histbox'), strip = $('pnhist');
+  const hist = pn.history || [];
+  box.style.display = hist.length ? '' : 'none';
+  strip.innerHTML = '';
+  hist.forEach(h => {
+    const d = document.createElement('div');
+    d.className = 'hv';
+    const when = h.ts ? new Date(h.ts * 1000).toLocaleString() : '';
+    d.title = (OPICON[h.op] || '') + ' ' + h.op + (h.note ? ' — ' + h.note : '') +
+              (when ? '\n' + when : '') + '\nClick to bring this version back';
+    const img = document.createElement('img');
+    img.src = '/file/' + (h.thumb || h.url) + '?t=' + (h.ts || 0);
+    img.alt = h.op;
+    const cap = document.createElement('small');
+    cap.textContent = (OPICON[h.op] || '') + ' ' + h.op;
+    d.appendChild(img); d.appendChild(cap);
+    d.onclick = () => restoreVersion(h.file);
+    strip.appendChild(d);
+  });
+}
+async function restoreVersion(file){
+  if(!SEL || !SELPN) return;
+  const pnid = SELPN;
+  const res = await api('restore_panel', {cid: SEL.cid, pid: SEL.pid,
+    pnid: pnid, version: file || null}, 'Bringing that version back…');
+  if(!res) return;
+  IDX = res; SELPN = pnid;
+  showPage(SEL.cid, SEL.pid);
+  const v = res.version || {};
+  status(pnid + ': version "' + (v.op || 'previous') + '" is back — the one it ' +
+         'replaced is in the history', 'ok');
 }
 
 async function savePanel(){
@@ -1357,7 +1409,7 @@ $('editbtn').onclick = async () => {
   IDX = res; SELPN = pnid;
   showPage(SEL.cid, SEL.pid);
   const warn = (res.warnings || []).join(' · ');
-  status(pnid + ' edited via ' + res.engine + ' — ↩ Previous swaps back' +
+  status(pnid + ' edited via ' + res.engine + ' — ↩ Previous / Versions bring the old one back' +
          (warn ? '  ⚠ ' + warn : ''), warn ? 'warn' : 'ok');
 };
 $('varystr').oninput = () =>
@@ -1373,19 +1425,10 @@ $('varybtn').onclick = async () => {
   showPage(SEL.cid, SEL.pid);
   const warn = (res.warnings || []).join(' · ');
   status(pnid + ' varied at ' + res.strength + ' via ' + res.engine +
-         ' — ↩ Previous swaps back' + (warn ? '  ⚠ ' + warn : ''),
+         ' — ↩ Previous / Versions bring the old one back' + (warn ? '  ⚠ ' + warn : ''),
          warn ? 'warn' : 'ok');
 };
-$('prevbtn').onclick = async () => {
-  if(!SEL || !SELPN) return;
-  const pnid = SELPN;
-  const res = await api('restore_panel', {cid: SEL.cid, pid: SEL.pid,
-                                          pnid: pnid}, 'Swapping versions…');
-  if(!res) return;
-  IDX = res; SELPN = pnid;
-  showPage(SEL.cid, SEL.pid);
-  status(pnid + ': previous version restored (↩ again to redo)', 'ok');
-};
+$('prevbtn').onclick = () => restoreVersion(null);
 
 /* ---------- structure: gabarits, planches, chapitres ---------- */
 let LAYCTX = null, LAYSEL = null;

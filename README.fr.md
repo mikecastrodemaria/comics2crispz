@@ -63,6 +63,24 @@ Le résultat fini de ce tutoriel :
 📖 **[The Making of comics2crispz — PDF final](docs/the-making-of.pdf)**
 (6 pages, 17 cases, un moteur, zéro retouche manuelle).
 
+### Corriger une case — Régénérer, Retoucher, Variation, Versions
+
+Cliquer une case sur la planche ouvre son panneau :
+
+- **🎲 Regenerate** redessine cette case seule depuis son texte (et sa seed).
+- **✏️ Edit by instruction** garde le dessin et change ce qu'on demande
+  (« add heavy rain, keep the ink style ») via le modèle d'édition du moteur
+  (crispz-qwen-edit, ou crispz-studio avec un modèle omni). Un moteur sans
+  modèle d'édition le dit, il ne devine pas.
+- **🔁 Variation** redessine la case À PARTIR de son image avec une force
+  (0,3 = même composition légèrement redessinée, 0,6 = vraie variation).
+  Marche sur tous les moteurs (op `upscale` du protocole, facteur 1 = img2img).
+- **🕘 Versions** : chacune de ces actions garde la version remplacée dans
+  `panels/<ch>/<page>/<case>.history/` (vignette + `index.json`, 10 par case,
+  la plus vieille part). Le bandeau sous la case les montre ; un clic la
+  remet, la version courante est archivée à son tour : rien n'est jamais
+  perdu. **↩ Previous** = raccourci vers la plus récente.
+
 ## Tests
 
 ```bat
