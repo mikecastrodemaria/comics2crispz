@@ -305,6 +305,7 @@ font-size:11px}
       <div class="field">
         <span class="lbl">THIS book's global LoRAs — uncheck to remove
           <button class="helpb" data-help="The open book's global LoRAs (style.loras): applied to every generated panel. Check to add from the engine's list, UNCHECK to remove; a LoRA currently set on the book but missing from the engine's folder is shown so it can still be removed. Per-character LoRAs live in the casting and win over a style LoRA on the same file.">?</button></span>
+        <input id="cfgborafind" placeholder="find a LoRA of the engine… (checked ones always stay visible)" style="margin-bottom:4px">
         <div id="cfgbookloras" style="max-height:130px;overflow-y:auto;
              border:1px solid var(--bd);border-radius:6px;padding:6px 8px">
         </div>
@@ -2267,7 +2268,27 @@ function renderBookLoras(engineLoras){
   $('cfgbookloras').innerHTML = rows.join('') ||
     '<span class="hint">(no LoRA — pick the book’s engine above while its ' +
     'app is running to see its list)</span>';
+  filterBookLoras();
 }
+function filterBookLoras(){
+  // recherche: les lignes cochees restent toujours visibles (on voit ce
+  // qu'on a sur le livre), les autres suivent le filtre
+  const q = ($('cfgborafind').value || '').trim().toLowerCase();
+  let shown = 0;
+  document.querySelectorAll('#cfgbookloras .lorarow').forEach(row => {
+    const cb = row.querySelector('input');
+    const hit = !q || row.textContent.toLowerCase().includes(q) || (cb && cb.checked);
+    row.style.display = hit ? '' : 'none';
+    if(hit) shown++;
+  });
+  const n = document.querySelectorAll('#cfgbookloras .lorarow').length;
+  $('cfgborafind').placeholder = n ? 'find a LoRA among ' + n + '… (checked ones always stay visible)'
+                                   : 'find a LoRA of the engine…';
+  if(q && !shown) $('cfgbookloras').insertAdjacentHTML('beforeend',
+    '<span class="hint nomatch">no match</span>');
+  else document.querySelectorAll('#cfgbookloras .nomatch').forEach(x => x.remove());
+}
+$('cfgborafind').oninput = filterBookLoras;
 function renderOllamaStatus(st){
   const el = $('cfgstatus');
   if(st && st.ok){
