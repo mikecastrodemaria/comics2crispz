@@ -33,6 +33,7 @@ import sys
 import json
 import time
 import shutil
+import base64
 import argparse
 import threading
 import mimetypes
@@ -571,6 +572,102 @@ class Studio:
         idx = c2c_state.book_index(project, self.dir)
         idx.update({"engine": name, "varied": pnid, "strength": strength,
                     "warnings": res.get("warnings") or []})
+        return idx
+
+    def op_inpaint_panel(self, data):
+        """🖌 INPAINT d'une case: la zone peinte (masque PNG, blanc = a
+        redessiner) est redessinee selon un prompt LOCAL (ce qui doit
+        apparaitre LA - jamais le prompt de scene sur un fragment). Op
+        inpaint du protocole, tous les moteurs. {cid, pid, pnid, mask
+        (data URL PNG ou base64, a la taille de l'image ou non), prompt?,
+        strength?, engine?}. Masque garde en <pnid>.mask.png (refaire avec
+        la meme zone), ancienne image dans l'historique."""
+        cid, pid, pnid = data["cid"], data["pid"], data["pnid"]
+        raw = str(data.get("mask") or "")
+        if "," in raw and raw.startswith("data:"):
+            raw = raw.split(",", 1)[1]
+        try:
+            mask_bytes = base64.b64decode(raw) if raw else b""
+        except Exception:
+            mask_bytes = b""
+        if not mask_bytes:
+            return {"ok": False, "error": "paint the area to redraw first "
+                                          "(the mask is empty)"}
+        prompt = str(data.get("prompt") or "").strip()
+        try:
+            strength = float(data.get("strength", 0.9))
+        except (TypeError, ValueError):
+            strength = 0.9
+        strength = max(0.2, min(1.0, strength))
+        project = self.load()
+        name, eng = self._default_engine(data.get("engine"))
+        book_eng = (project.get("engine") or {}).get("name")
+        if not data.get("engine") and book_eng in self.engines:
+            name, eng = self._default_engine(book_eng)
+        if eng is None or not hasattr(eng, "inpaint"):
+            return {"ok": False,
+                    "error": f"no engine '{name}' able to inpaint"}
+        panel = cz_comic.find_panel(project, cid, pid, pnid)
+        src = panel.get("image")
+        if not (src and os.path.isfile(src)):
+            return {"ok": False,
+                    "error": f"{pnid} has no image yet - generate it first"}
+        mask_path = os.path.splitext(src)[0] + ".mask.png"
+        with open(mask_path + ".tmp", "wb") as f:
+            f.write(mask_bytes)
+        os.replace(mask_path + ".tmp", mask_path)
+        extra = []
+        try:
+            from PIL import Image
+            with Image.open(src) as im:
+                img_size = im.size
+            with Image.open(mask_path) as mk:
+                g = mk.convert("L")
+                if g.size != img_size:
+                    # masque peint a la taille d'AFFICHAGE -> taille de l'image
+                    g = g.resize(img_size, Image.NEAREST)
+                    g.save(mask_path)
+                if g.getbbox() is None:
+                    return {"ok": False,
+                            "error": "the painted area is empty - brush "
+                                     "over what should be redrawn"}
+                h = g.histogram()
+                white = sum(h[128:]) / float(g.size[0] * g.size[1])
+                if white > 0.95:
+                    extra.append(f"the mask covers {white:.0%} of the panel: "
+                                 f"nearly everything is redrawn (Variation "
+                                 f"or Regenerate may be what you want)")
+        except Exception as e:
+            return {"ok": False, "error": f"unreadable mask: {e}"}
+        # style GLOBAL du livre (suffixe) pour rester dans le trait; le prompt
+        # de scene de la case, lui, n'est JAMAIS envoye sur un fragment
+        suffix = ((project.get("style") or {}).get("prompt_suffix") or "").strip()
+        full_prompt = ", ".join(x for x in (prompt, suffix) if x)
+        res = eng.inpaint({"input": os.path.abspath(src),
+                           "mask": os.path.abspath(mask_path),
+                           "prompt": full_prompt, "denoise": strength,
+                           "seed": int(data.get("seed", -1) or -1),
+                           "out_dir": os.path.dirname(os.path.abspath(src))})
+        if not res.get("ok"):
+            return {"ok": False, "engine": name,
+                    "error": f"{pnid}: {res.get('error')}"}
+        out = (res.get("images") or [None])[0]
+        if not out or not os.path.isfile(out):
+            return {"ok": False, "engine": name,
+                    "error": f"{pnid}: engine returned no readable image"}
+        with _LOCK:
+            c2c_state.replace_panel_image(src, out, "inpaint",
+                                          prompt or "(no prompt)")
+            c2c_state.discard_engine_output(out, os.path.dirname(src))
+            panel["status"] = "rendered"
+            cz_comic.save_project(project, self.dir)
+            fd, emb = self._letter_kit(project)
+            c2c_state.compose_one(project, self.dir, cid, pid,
+                                  face_detector=fd, char_embeddings=emb)
+        idx = c2c_state.book_index(project, self.dir)
+        idx.update({"engine": name, "inpainted": pnid, "strength": strength,
+                    "seed_used": res.get("seed_used"),
+                    "warnings": extra + (res.get("warnings") or [])})
         return idx
 
     def op_restore_panel(self, data):

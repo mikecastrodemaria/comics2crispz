@@ -212,6 +212,41 @@ class Engine:
                 "error": f"engine '{self.name}': no route (no instance at "
                          f"{self.url or '?'} and no czp)"}
 
+    def inpaint(self, spec):
+        """Image + masque (blanc = a redessiner) + prompt LOCAL -> image via
+        l'op 'inpaint' du protocole (pipeline inpaint de l'outil: tous les
+        moteurs de la famille en ont un). Memes routes/garde-fous que gen()."""
+        spec = dict(spec)
+        spec.setdefault("protocol", PROTOCOL)
+        spec.setdefault("op", "inpaint")
+        caps = self.alive() if self.url else None
+        if caps and not self._tool_matches(caps):
+            return {"ok": False,
+                    "error": f"the app answering at {self.url} is "
+                             f"'{caps.get('tool')}', not {self.name} - "
+                             f"close it and start {self.name}'s app"}
+        if caps:
+            sup = caps.get("supports") or {}
+            if "inpaint" not in sup:
+                return {"ok": False,
+                        "error": f"the running {self.name} app is older than "
+                                 f"the inpaint feature - restart it with the "
+                                 f"current code"}
+            if not sup.get("inpaint"):
+                return {"ok": False,
+                        "error": f"{self.name} has no inpaint pipeline "
+                                 f"(supports.inpaint is false)"}
+            try:
+                return _gradio_call(self.url, "cli_inpaint",
+                                    [json.dumps(spec)])
+            except Exception as e:
+                return {"ok": False, "error": f"remote call failed: {e}"}
+        if self.czp and os.path.isfile(self.czp):
+            return _run_czp(self.czp, ["inpaint", "--spec", "-"], spec=spec)
+        return {"ok": False,
+                "error": f"engine '{self.name}': no route (no instance at "
+                         f"{self.url or '?'} and no czp)"}
+
     def gen(self, spec):
         """Generate ONE image. spec = a protocol dict (protocol/prompt/...).
         Prefers the instance (warm model); falls back to czp (which retries

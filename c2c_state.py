@@ -580,6 +580,14 @@ def discard_engine_output(path, panel_dir):
             return
         os.remove(ap)
         d = os.path.dirname(ap)
+        # sidecars du moteur (<image>.json, <image>.txt...) : memes stem
+        stem = os.path.basename(ap)
+        for f in os.listdir(d):
+            if f.startswith(stem) and f != stem:
+                try:
+                    os.remove(os.path.join(d, f))
+                except OSError:
+                    pass
         if not os.listdir(d):
             os.rmdir(d)
     except OSError:

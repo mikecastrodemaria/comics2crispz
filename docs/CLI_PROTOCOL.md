@@ -36,6 +36,7 @@
 | `gen`  | txt2img / omni multi-reference from a spec | studio, qwen-edit, krea, krea2 |
 | `edit` | image + instruction → image (`input`, `prompt`) | qwen-edit; studio when an omni model is configured; krea/krea2 answer exit 3 (`supports.edit` false) |
 | `upscale` | upscale/refine an image (`input`, `factor`, `denoise`); **factor 1 = pure img2img** (variation, no ESRGAN stage) | all |
+| `inpaint` | redraw the WHITE area of a mask (`input`, `mask`, `prompt`, `denoise`); the rest stays pixel-exact | all |
 
 ## 3. The spec (input)
 
@@ -81,6 +82,9 @@ Rules:
 | `model` | upscale | ESRGAN model file name (from `caps.models`); absent → the config `default_esrgan_model`, else the first model matching the factor's scale (never a 16x by accident) |
 | `prompt` | upscale | LOCAL description guiding the refine — never the scene prompt on a crop |
 | `prompt` | edit | the instruction ("add heavy rain, keep the ink style") |
+| `mask` | inpaint | local absolute path of a PNG mask, same size as `input` (resized with a warning otherwise); WHITE = redraw. An all-black mask is an error (exit 2) |
+| `denoise` | inpaint | strength 0–1 inside the mask (`default_inpaint_strength`, 0.9) |
+| `prompt` | inpaint | what should appear IN the painted area — a LOCAL description, never the scene prompt; may be empty (coherent fill) |
 
 `edit` keeps the input size (aligned to 32); `width`/`height` are ignored.
 
@@ -138,11 +142,12 @@ UI, so every image is replayable).
 ```json
 {
   "ok": true, "protocol": 1, "tool": "crispz-qwen-edit", "version": "1.16.0",
-  "ops": ["caps", "gen", "upscale", "edit"],
+  "ops": ["caps", "gen", "upscale", "edit", "inpaint"],
   "models": ["4x-UltraSharp.pth", "…"], "loras": ["…"], "model_loaded": true,
   "supports": {"loras": true, "refs": true, "max_refs": 4, "seed": true,
                "negative": true, "arbitrary_size": true, "faces": true,
-               "detail_faces": true, "detail_hands": false, "edit": true},
+               "detail_faces": true, "detail_hands": false, "edit": true,
+               "inpaint": true},
   "instance": {"running": true, "url": "http://127.0.0.1:7860",
                "tool": "crispz-qwen-edit", "version": "1.16.0"}
 }

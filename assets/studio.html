@@ -185,12 +185,14 @@ padding:10px 12px;margin-bottom:10px}
 kbd{background:#121722;border:1px solid var(--bd);border-radius:4px;padding:0 5px;
 font-size:11px}
 .hist{display:flex;gap:6px;overflow-x:auto;padding:4px 0}
-.hist .hv{flex:0 0 auto;width:84px;cursor:pointer;border:1px solid var(--line);
-  border-radius:6px;background:var(--bg2);padding:3px;text-align:center}
-.hist .hv:hover{border-color:var(--accent)}
+.hist .hv{flex:0 0 auto;width:84px;cursor:pointer;border:1px solid var(--bd);
+  border-radius:6px;background:var(--pan2);padding:3px;text-align:center}
+.hist .hv:hover{border-color:var(--acc)}
 .hist .hv img{width:76px;height:56px;object-fit:cover;border-radius:4px;display:block}
-.hist .hv small{display:block;font-size:10px;color:var(--fg2);white-space:nowrap;
+.hist .hv small{display:block;font-size:10px;color:var(--mut);white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis;margin-top:2px}
+#maskcv{position:absolute;z-index:30;cursor:crosshair;touch-action:none}
+#inpbox .row button.on{background:var(--acc);color:#111}
 </style>
 </head>
 <body>
@@ -531,6 +533,24 @@ font-size:11px}
                     title="img2img: redraw this panel FROM its current image with the strength below (0.3 = same composition redrawn, 0.6 = a real variation). Works on every engine. Previous version kept.">🔁 Variation</button>
             <span class="lbl" style="margin:0 0 0 8px">strength <b id="varyval" style="color:var(--fg)">0.45</b></span>
             <input id="varystr" type="range" min="0.1" max="0.9" step="0.05" value="0.45" style="flex:1;min-width:90px">
+          </div>
+          <div id="inpbox" style="margin-top:10px">
+            <span class="lbl">🖌 Inpaint — paint the area to redraw
+              <button class="helpb" data-help="Inpaint redraws ONLY the area you paint on the panel (white in the mask), keeping the rest pixel-exact. Turn on Paint, brush over the zone on the page (Eraser to correct, Clear to start over), describe what should appear THERE (a local description, e.g. 'a black cat sitting', not the whole scene - leave empty to just fill coherently), then Inpaint. Strength 1.0 = fully redrawn, 0.6 = keeps some of the original. Works on every engine; the previous version goes to the history.">?</button></span>
+            <div class="row" style="align-items:center;gap:6px;flex-wrap:wrap">
+              <button id="inpaint_on" title="Toggle painting on the page">🖌 Paint</button>
+              <button id="inpaint_eraser" title="Eraser: un-paint">◌ Eraser</button>
+              <button id="inpaint_clear" title="Clear the painted area">✕ Clear</button>
+              <span class="lbl" style="margin:0">size <b id="inpsizeval" style="color:var(--fg)">40</b></span>
+              <input id="inpsize" type="range" min="6" max="160" step="2" value="40" style="flex:1;min-width:70px">
+            </div>
+            <textarea id="inpprompt" rows="2" style="margin-top:6px"
+              placeholder="what should appear in the painted area (local description) — or leave empty"></textarea>
+            <div class="row" style="align-items:center;margin-top:6px">
+              <button id="inpaintbtn" class="primary">🖌 Inpaint</button>
+              <span class="lbl" style="margin:0 0 0 8px">strength <b id="inpstrval" style="color:var(--fg)">0.90</b></span>
+              <input id="inpstr" type="range" min="0.2" max="1" step="0.05" value="0.9" style="flex:1;min-width:70px">
+            </div>
           </div>
           <div id="histbox" style="display:none;margin-top:10px">
             <span class="lbl">🕘 Versions of this panel — click one to bring it back
@@ -1092,6 +1112,7 @@ async function showPage(cid, pid){
   if(!p) return;
   LASTPAGE = p;
   $('flatview').style.display = 'none';
+  $('library').style.display = 'none';   // depuis la HOME: la page passe devant
   $('page').classList.add('on');
   $('tab-page').disabled = false;
   renderNav();
@@ -1106,6 +1127,7 @@ async function showPage(cid, pid){
   const sh = Math.round(sw * H / W);
   const st = $('stage');
   st.style.width = sw + 'px'; st.style.height = sh + 'px';
+  if(INP.on) inpaintOff();                 // le stage est reconstruit
   st.innerHTML = '';
   if(p.url){
     const img = document.createElement('img');
@@ -1129,6 +1151,7 @@ async function showPage(cid, pid){
       d.appendChild(im);
     }
     d.onclick = () => {
+      if(INP.on) inpaintOff();
       SELPN = (SELPN === pn.id ? null : pn.id);
       document.querySelectorAll('#stage .pn').forEach(x =>
         x.classList.toggle('sel', x.dataset.pn === SELPN));
@@ -1322,6 +1345,110 @@ function renderHistory(pn){
     strip.appendChild(d);
   });
 }
+/* ---------- 🖌 inpaint: masque peint sur la case selectionnee ---------- */
+const INP = {on: false, eraser: false, cv: null, ctx: null, painting: false,
+             pn: null};
+function inpaintOff(){
+  INP.on = false; INP.pn = null;
+  if(INP.cv){ INP.cv.remove(); INP.cv = null; INP.ctx = null; }
+  $('inpaint_on').classList.remove('on');
+}
+function inpaintOn(){
+  if(!SEL || !SELPN || !LASTPAGE) return;
+  const pn = LASTPAGE.panels.find(x => x.id === SELPN);
+  const rectEl = document.querySelector('#stage .pn[data-pn="' + SELPN + '"]');
+  if(!pn || !pn.img || !rectEl){ status('Select a drawn panel first', 'warn'); return; }
+  inpaintOff();
+  const cv = document.createElement('canvas');
+  cv.id = 'maskcv';
+  cv.style.left = rectEl.style.left; cv.style.top = rectEl.style.top;
+  cv.style.width = rectEl.style.width; cv.style.height = rectEl.style.height;
+  cv.width = Math.max(1, Math.round(parseFloat(rectEl.style.width)));
+  cv.height = Math.max(1, Math.round(parseFloat(rectEl.style.height)));
+  cv.title = 'Paint the area to redraw (drag). Eraser / Clear in the panel box.';
+  $('stage').appendChild(cv);
+  INP.cv = cv; INP.ctx = cv.getContext('2d'); INP.on = true; INP.pn = pn;
+  $('inpaint_on').classList.add('on');
+  const pos = ev => {
+    const r = cv.getBoundingClientRect();
+    return [(ev.clientX - r.left) * cv.width / r.width,
+            (ev.clientY - r.top) * cv.height / r.height];
+  };
+  const dot = (x, y) => {
+    const ctx = INP.ctx, size = parseFloat($('inpsize').value);
+    ctx.globalCompositeOperation = INP.eraser ? 'destination-out' : 'source-over';
+    ctx.fillStyle = 'rgba(255,60,60,0.55)';
+    ctx.beginPath(); ctx.arc(x, y, size / 2 * cv.width / r0w(), 0, Math.PI * 2); ctx.fill();
+  };
+  const r0w = () => cv.getBoundingClientRect().width || cv.width;
+  let last = null;
+  cv.onpointerdown = ev => { INP.painting = true; cv.setPointerCapture(ev.pointerId);
+                             last = pos(ev); dot(...last); ev.preventDefault(); };
+  cv.onpointermove = ev => {
+    if(!INP.painting) return;
+    const p = pos(ev);
+    const n = Math.max(1, Math.round(Math.hypot(p[0] - last[0], p[1] - last[1]) / 3));
+    for(let i = 1; i <= n; i++)
+      dot(last[0] + (p[0] - last[0]) * i / n, last[1] + (p[1] - last[1]) * i / n);
+    last = p;
+  };
+  cv.onpointerup = cv.onpointercancel = () => { INP.painting = false; last = null; };
+  status('Paint over the area to redraw, then 🖌 Inpaint', 'ok');
+}
+function maskDataURL(natW, natH){
+  // masque noir + zone peinte en blanc, a la taille demandee
+  const off = document.createElement('canvas');
+  off.width = natW; off.height = natH;
+  const c = off.getContext('2d');
+  c.fillStyle = '#000'; c.fillRect(0, 0, natW, natH);
+  c.drawImage(INP.cv, 0, 0, natW, natH);
+  const d = c.getImageData(0, 0, natW, natH), px = d.data;
+  let any = false;
+  for(let i = 0; i < px.length; i += 4){
+    // fond noir opaque + trait rouge translucide -> seul le canal ROUGE
+    // distingue la zone peinte (l'alpha vaut 255 partout apres le fill)
+    const v = px[i] > 60 ? 255 : 0;
+    if(v) any = true;
+    px[i] = px[i + 1] = px[i + 2] = v; px[i + 3] = 255;
+  }
+  if(!any) return null;
+  c.putImageData(d, 0, 0);
+  return off.toDataURL('image/png');
+}
+$('inpaint_on').onclick = () => INP.on ? inpaintOff() : inpaintOn();
+$('inpaint_eraser').onclick = () => {
+  INP.eraser = !INP.eraser;
+  $('inpaint_eraser').classList.toggle('on', INP.eraser);
+};
+$('inpaint_clear').onclick = () => {
+  if(INP.ctx) INP.ctx.clearRect(0, 0, INP.cv.width, INP.cv.height);
+};
+$('inpsize').oninput = () => $('inpsizeval').textContent = $('inpsize').value;
+$('inpstr').oninput = () =>
+  $('inpstrval').textContent = Number($('inpstr').value).toFixed(2);
+$('inpaintbtn').onclick = async () => {
+  if(!SEL || !SELPN) return;
+  if(!INP.on || !INP.cv){ status('Turn on 🖌 Paint and brush the area first', 'warn'); return; }
+  // masque a la taille du canvas d'affichage: le serveur le remet a la
+  // taille de l'image de la case (pas de decodage d'image cote client, qui
+  // peut bloquer dans un onglet cache)
+  const mask = maskDataURL(INP.cv.width, INP.cv.height);
+  if(!mask){ status('The painted area is empty - brush over what to redraw', 'warn'); return; }
+  const pnid = SELPN;
+  const res = await api('inpaint_panel', {cid: SEL.cid, pid: SEL.pid, pnid: pnid,
+    mask: mask, prompt: $('inpprompt').value.trim(),
+    strength: parseFloat($('inpstr').value)},
+    'Inpainting ' + pnid + '… (only the painted area is redrawn)');
+  if(!res) return;
+  inpaintOff();
+  IDX = res; SELPN = pnid;
+  showPage(SEL.cid, SEL.pid);
+  const warn = (res.warnings || []).join(' · ');
+  status(pnid + ' inpainted via ' + res.engine + ' (seed ' + res.seed_used +
+         ') — the previous version is in the history' +
+         (warn ? '  ⚠ ' + warn : ''), warn ? 'warn' : 'ok');
+};
+
 async function restoreVersion(file){
   if(!SEL || !SELPN) return;
   const pnid = SELPN;

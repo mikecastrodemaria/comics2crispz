@@ -75,6 +75,12 @@ Cliquer une case sur la planche ouvre son panneau :
 - **🔁 Variation** redessine la case À PARTIR de son image avec une force
   (0,3 = même composition légèrement redessinée, 0,6 = vraie variation).
   Marche sur tous les moteurs (op `upscale` du protocole, facteur 1 = img2img).
+- **🖌 Inpaint** redessine SEULEMENT la zone peinte sur la case (pinceau sur
+  la planche, gomme, effacer), d'après une description LOCALE de ce qui doit
+  y apparaître (« a black cat sitting » ; vide = remplissage cohérent),
+  jamais le prompt de scène sur un fragment. Force 1,0 = zone entièrement
+  redessinée. Tous les moteurs (op `inpaint`) ; le masque reste en
+  `<case>.mask.png`.
 - **🕘 Versions** : chacune de ces actions garde la version remplacée dans
   `panels/<ch>/<page>/<case>.history/` (vignette + `index.json`, 10 par case,
   la plus vieille part). Le bandeau sous la case les montre ; un clic la
