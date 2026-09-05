@@ -253,6 +253,19 @@ extracted by the protocol and never reaches the text encoder.
 The story (synopsis, arcs) never goes into image prompts; the fun mode
 fills the casting and a mood from the concept.
 
+### 7c. Production — the dashboard
+
+**Production** (header tab) counts what the book still needs: panels drawn /
+to draw / without text / naming an unknown `@Name` / locked, pages composed
+/ never composed / to recompose (a drawing newer than the page), balloons
+placed over a face, and panels drawn with an **older style** than the
+current one (each drawing stores a style signature: suffix, negative, LoRAs,
+engine, mood). Every counter is a filter: click it to list the pages, jump to
+them, and act on exactly that list (draw these, redraw these, compose these).
+Nothing is regenerated automatically. In the Page view, **🔒 lock** on a panel
+keeps it out of every "generate missing" / "redraw all" — only its own
+Regenerate touches it.
+
 ### 8. Export
 
 The project stays fully compatible with crispz-studio, so its CLI finishes

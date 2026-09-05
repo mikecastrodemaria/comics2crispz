@@ -338,6 +338,12 @@ class Studio:
                     panel["seed"] = int(data["seed"])
                 except (TypeError, ValueError):
                     pass
+            if data.get("locked") is not None:
+                has_img = bool(panel.get("image") and os.path.isfile(panel["image"]))
+                if data["locked"]:
+                    panel["status"] = "locked"
+                else:
+                    panel["status"] = "rendered" if has_img else "draft"
             cz_comic.save_project(project, self.dir)
         idx = c2c_state.book_index(project, self.dir)
         idx["unknown"] = cz_comic.resolve_casting(
@@ -642,6 +648,10 @@ class Studio:
         idx = c2c_state.book_index(project, self.dir)
         idx.update({"report": rep})
         return idx
+
+    def op_production(self, _data):
+        """📊 Tableau de suivi: compteurs + listes (filtres cliquables)."""
+        return c2c_state.production_state(self.load(), self.dir)
 
     def op_set_bubble(self, data):
         """Deplace une bulle: {cid, pid, pnid, index, pos|anchor: [fx, fy]}
@@ -1172,6 +1182,11 @@ class Studio:
             if (panel.get("image") and os.path.isfile(panel["image"])
                     and not force):
                 continue
+            if panel.get("status") == "locked" and not only:
+                # 🔒 une case verrouillee n'est jamais redessinee par un
+                # 'generate missing' / 'redraw all' - seulement a la demande
+                warnings.append(f"{panel['id']}: locked - skipped")
+                continue
             # garde-fou sur le TEXTE de la case, pas le prompt resolu: une
             # case vide + un suffixe de style global donnerait un prompt
             # 'style seulement' qui partirait au moteur pour rien
@@ -1239,6 +1254,7 @@ class Studio:
                 pn = cz_comic.find_panel(project, cid, pid, panel["id"])
                 pn["image"] = dst
                 pn["status"] = "rendered"
+                pn["style_sig"] = c2c_state.style_signature(project, page)
                 cz_comic.save_project(project, self.dir)
             done.append({"panel": panel["id"],
                          "seed_used": res.get("seed_used"),

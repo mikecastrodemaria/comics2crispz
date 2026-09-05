@@ -240,6 +240,19 @@ font-size:11px}
 #scriptrep .okm{color:var(--ok)}
 .czs-help{font-family:Consolas,Menlo,monospace;font-size:11px;color:var(--mut);
   white-space:pre;overflow-x:auto;border:1px solid var(--bd);border-radius:6px;padding:6px 8px}
+#prodview{display:none;padding:14px}
+#prodview.on{display:block}
+.prodgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.pc{border:1px solid var(--bd);border-radius:8px;padding:10px 12px;cursor:pointer;background:var(--pan)}
+.pc:hover{border-color:var(--acc)}
+.pc.sel{border-color:var(--warn);background:#ffd27a0d}
+.pc b{display:block;font-size:22px;color:var(--fg)}
+.pc span{font-size:11px;color:var(--mut)}
+.pc.warn b{color:var(--warn)} .pc.bad b{color:var(--err)} .pc.good b{color:var(--ok)}
+#prodlist{margin-top:14px}
+#prodlist .pl{display:flex;gap:10px;align-items:center;padding:5px 8px;border-bottom:1px solid var(--bd);font-size:12px}
+#prodlist .pl a{color:var(--warn);text-decoration:none;white-space:nowrap}
+#prodlist .pl span{color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -253,7 +266,7 @@ font-size:11px}
     <button id="tab-flat" class="on">Flatplan</button>
     <button id="tab-script" disabled title="The whole book as text (.czs): write, check, import">Script</button>
     <button id="tab-page" disabled title="Select a page first">Page</button>
-    <button id="tab-prod" disabled title="Coming with step 3">Production</button>
+    <button id="tab-prod" disabled title="Production dashboard — what is drawn, missing, stale, drifted">Production</button>
   </div>
   <span id="status"></span>
   <button id="biblebtn" disabled title="Visual Bible — characters, settings (places), style &amp; mood of this book">📖 Bible</button>
@@ -389,6 +402,20 @@ Bruno (think): Of course...
           <div class="hint" style="margin-top:6px">Layouts: <span id="scriptlayouts"></span></div>
         </div>
       </div>
+    </div>
+    <div id="prodview">
+      <div class="row" style="align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <h3 style="margin:0">📊 Production
+          <button class="helpb" data-help="The production dashboard counts what the book needs: panels drawn / missing / locked / with an empty text, panels naming an unknown @Name, pages never composed or stale (a panel newer than the page), balloons placed over a face, and panels drawn with a style different from the current one (drift). Every counter is a filter: click it to list the pages and jump to them. Buttons run the same background jobs as elsewhere; nothing is regenerated automatically.">?</button></h3>
+        <span id="prodstat" class="hint"></span>
+        <span style="margin-left:auto"></span>
+        <button id="prodrefresh">↻ Refresh</button>
+        <button id="prodgen" class="primary" title="Generate every missing panel (background job)">🎨 Generate missing</button>
+        <button id="prodcompose" title="Compose (letter) every page">🧩 Compose book</button>
+        <button id="prodprint" title="Print export (upscale + PDF)">🖨 Export print</button>
+      </div>
+      <div id="prodgrid" class="prodgrid"></div>
+      <div id="prodlist"></div>
     </div>
     <div id="library" style="display:none">
       <div class="row" style="align-items:center;margin-bottom:14px">
@@ -741,6 +768,8 @@ Bruno (think): Of course...
             <input id="pnseed" type="number" step="1" value="-1"
                    style="width:110px"
                    title="-1 = a new random drawing each time; a fixed number replays the same one">
+            <label class="lorarow" style="margin:0 0 0 10px" title="A locked panel is never redrawn by Generate missing / Redraw all — only by its own Regenerate button">
+              <input type="checkbox" id="pnlock"> 🔒 lock</label>
             <button id="savepnbtn" style="margin-left:auto"
                     title="Save text and balloons, recompose the page — no redraw">💾 Save</button>
           </div>
@@ -893,7 +922,7 @@ function showWelcome(on){            // compat: l'accueil EST la bibliotheque
 async function showLibrary(){
   $('page').classList.remove('on');
   $('flatview').style.display = 'none';
-  hideScript();
+  hideScript(); hideProd();
   $('library').style.display = '';
   $('tab-page').disabled = true;
   const res = await loadBooks();
@@ -1205,6 +1234,7 @@ function renderNav(){
   nav.innerHTML = '';
   $('biblebtn').disabled = !IDX;
   $('tab-script').disabled = !IDX;
+  $('tab-prod').disabled = !IDX;
   IDX.chapters.forEach(ch => {
     const h = document.createElement('div');
     h.className = 'ch';
@@ -1351,7 +1381,7 @@ async function showPage(cid, pid){
   LASTPAGE = p;
   $('flatview').style.display = 'none';
   $('library').style.display = 'none';   // depuis la HOME: la page passe devant
-  hideScript();
+  hideScript(); hideProd();
   $('page').classList.add('on');
   $('tab-page').disabled = false;
   renderNav();
@@ -1437,7 +1467,7 @@ async function showPage(cid, pid){
 function backToFlat(){
   $('page').classList.remove('on');
   $('library').style.display = 'none';
-  hideScript();
+  hideScript(); hideProd();
   $('flatview').style.display = '';
   $('tab-page').disabled = true;
   SEL = null; SELPN = null; SELBUB = null; renderNav();
@@ -1576,6 +1606,7 @@ function renderPanelBox(p){
   $('pntext').value = pn.text || '';
   $('pndlg').value = pn.dialogue_text || '';
   $('pnseed').value = pn.seed;
+  $('pnlock').checked = pn.status === 'locked';
   // retouche par instruction: seulement pour une case deja dessinee
   $('editbox').style.display = pn.img ? '' : 'none';
   $('prevbtn').disabled = !pn.has_prev;
@@ -1727,7 +1758,8 @@ async function savePanel(){
   if(!SEL || !SELPN) return null;
   const res = await api('save_panel', {cid: SEL.cid, pid: SEL.pid,
     pnid: SELPN, text: $('pntext').value, dialogue: $('pndlg').value,
-    seed: parseInt($('pnseed').value || '-1', 10)}, 'Saving panel…');
+    seed: parseInt($('pnseed').value || '-1', 10),
+    locked: $('pnlock').checked}, 'Saving panel…');
   if(res && res.unknown && res.unknown.length){
     status('Saved — ⚠ unknown casting: ' + res.unknown.join(', ') +
            ' (check the spelling of the @Names)', 'warn');
@@ -1773,6 +1805,106 @@ async function regenPanel(){
 $('backflat').onclick = backToFlat;
 $('tab-flat').onclick = backToFlat;
 
+/* ---------- 📊 Production ---------- */
+let PROD = null, PRODSEL = null;
+function hideProd(){ $('prodview').classList.remove('on'); $('tab-prod').classList.remove('on'); }
+async function showProd(){
+  if(!IDX) return;
+  $('page').classList.remove('on');
+  $('flatview').style.display = 'none';
+  $('library').style.display = 'none';
+  hideScript();
+  $('prodview').classList.add('on');
+  $('tab-prod').classList.add('on');
+  await prodReload();
+}
+async function prodReload(){
+  const res = await rawPost('production', {});
+  if(!res || !res.ok){ status('⚠️ ' + ((res && res.error) || 'cannot read the book'), 'err'); return; }
+  PROD = res;
+  renderProd();
+}
+const PRODCARDS = [
+  ['drawn', 'panels drawn', null, 'good'],
+  ['missing', 'panels to draw', 'missing', 'warn'],
+  ['empty', 'panels without text', 'empty', 'bad'],
+  ['unknown', 'unknown @Names', 'unknown', 'bad'],
+  ['locked', 'locked panels', 'locked', ''],
+  ['composed', 'pages composed', null, 'good'],
+  ['never', 'pages never composed', 'never', 'warn'],
+  ['stale', 'pages to recompose', 'stale', 'warn'],
+  ['dirty_balloons', 'balloons over a face', 'dirty_balloons', 'warn'],
+  ['drift', 'panels with an old style', 'drift', 'warn'],
+];
+function renderProd(){
+  const t = PROD.totals, g = $('prodgrid');
+  $('prodstat').textContent = t.pages + ' page(s) · ' + t.panels + ' panel(s)';
+  g.innerHTML = '';
+  PRODCARDS.forEach(([key, label, list, cls]) => {
+    const d = document.createElement('div');
+    const n = t[key] || 0;
+    d.className = 'pc ' + (n ? cls : '') + (PRODSEL === list && list ? ' sel' : '');
+    d.innerHTML = '<b>' + n + '</b><span>' + esc(label) + '</span>';
+    if(list) d.onclick = () => { PRODSEL = (PRODSEL === list ? null : list); renderProd(); };
+    else d.style.cursor = 'default';
+    g.appendChild(d);
+  });
+  const L = $('prodlist');
+  L.innerHTML = '';
+  if(!PRODSEL) return;
+  const items = PROD.lists[PRODSEL] || [];
+  const head = document.createElement('div');
+  head.className = 'row';
+  head.style.cssText = 'align-items:center;gap:8px;margin:6px 0';
+  head.innerHTML = '<b>' + items.length + ' item(s)</b>';
+  if(['drift', 'unknown', 'missing'].includes(PRODSEL) && items.length){
+    const b = document.createElement('button');
+    b.textContent = PRODSEL === 'missing' ? '🎨 Draw these' : '🎨 Redraw these panels';
+    b.title = 'Background job on exactly these panels (previous drawings stay in their history)';
+    b.onclick = async () => {
+      if(!confirm(b.textContent + ' — ' + items.length + ' panel(s)?')) return;
+      await startJob({panels: items.map(i => ({cid: i.cid, pid: i.pid, pnid: i.pnid}))},
+                     b.textContent + '…');
+    };
+    head.appendChild(b);
+  }
+  if(['never', 'stale'].includes(PRODSEL) && items.length){
+    const b = document.createElement('button');
+    b.textContent = '🧩 Compose these pages';
+    b.onclick = async () => {
+      for(const it of items){
+        const r = await api('compose', {cid: it.cid, pid: it.pid}, 'Composing ' + it.cid + '.' + it.pid + '…');
+        if(!r) break;
+      }
+      await prodReload(); status('Pages composed', 'ok');
+    };
+    head.appendChild(b);
+  }
+  L.appendChild(head);
+  items.forEach(it => {
+    const row = document.createElement('div');
+    row.className = 'pl';
+    const where = it.cid + '.' + it.pid + (it.pnid ? '/' + it.pnid : '');
+    let extra = it.text || '';
+    if(it.names) extra = '@' + it.names.join(', @') + ' — ' + extra;
+    if(it.count) extra = it.count + ' balloon(s) on panels ' + it.panels.join(', ');
+    row.innerHTML = '<a href="#">' + esc(where) + '</a><span>' + esc(extra) + '</span>';
+    row.querySelector('a').onclick = ev => { ev.preventDefault(); showPage(it.cid, it.pid); };
+    L.appendChild(row);
+  });
+}
+$('tab-prod').onclick = showProd;
+$('prodrefresh').onclick = prodReload;
+$('prodgen').onclick = async () => {
+  if(!confirm('Generate every missing panel of the book (background job)?')) return;
+  await startJob({}, 'Generating the missing panels…');
+};
+$('prodcompose').onclick = async () => {
+  const res = await api('compose_book', {}, 'Composing every page…');
+  if(res){ IDX = res; renderNav(); await prodReload(); status('Book composed', 'ok'); }
+};
+$('prodprint').onclick = () => $('printbtn').onclick();
+
 /* ---------- 📝 Script (.czs) ---------- */
 let SCRIPT_DIRTY = false;
 function hideScript(){ $('scriptview').classList.remove('on'); $('tab-script').classList.remove('on'); }
@@ -1782,6 +1914,7 @@ async function showScript(){
   $('page').classList.remove('on');
   $('flatview').style.display = 'none';
   $('library').style.display = 'none';
+  hideProd();
   $('scriptview').classList.add('on');
   $('tab-script').classList.add('on');
   if(!SCRIPT_DIRTY) await scriptReload();

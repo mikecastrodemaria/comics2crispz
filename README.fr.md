@@ -152,6 +152,18 @@ Cliquer une case sur la planche ouvre son panneau :
 L'histoire (synopsis, arcs) n'entre jamais dans les prompts image ; le mode
 fun remplit le casting et un mood depuis le concept.
 
+### Production — le tableau de suivi
+
+**Production** (onglet d'en-tête) compte ce qui manque au livre : cases
+dessinées / à dessiner / sans texte / avec un `@Nom` inconnu / verrouillées,
+planches composées / jamais composées / à recomposer, bulles posées sur un
+visage, et cases dessinées avec un **style plus ancien** que le style courant
+(chaque dessin garde une signature : suffixe, négatif, LoRA, moteur, mood).
+Chaque compteur est un filtre : un clic liste les planches, on y saute, et on
+agit sur exactement cette liste (dessiner, redessiner, composer). Rien n'est
+régénéré automatiquement. En vue Page, **🔒 lock** sur une case la protège de
+tout « generate missing » / « redraw all » ; seul son propre Regenerate y touche.
+
 ## Tests
 
 ```bat

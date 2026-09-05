@@ -724,3 +724,87 @@ def bible_state(project, project_dir):
                           "mood": ch.get("mood") or "",
                           "pages": len(ch.get("pages") or [])}
                          for ch in project.get("chapters") or []]}
+
+
+# ---------------------------------------------------------------------------
+# Production: le tableau de suivi transverse. Chaque compteur est un FILTRE
+# (la liste des planches/cases concernees) - jamais une action automatique.
+# ---------------------------------------------------------------------------
+def style_signature(project, page=None):
+    """Empreinte du look courant pour une planche: suffixe de style, negatif,
+    LoRA du livre, moteur/modele et mood effectif (chapitre > livre). Stockee
+    dans chaque case au rendu (panel['style_sig']) pour signaler ensuite les
+    cases dessinees avec un AUTRE style que le style courant (derive)."""
+    import hashlib
+    st = project.get("style") or {}
+    eng = project.get("engine") or {}
+    parts = [str(st.get("prompt_suffix") or "").strip(),
+             str(st.get("negative") or "").strip(),
+             ",".join(sorted(str(x) for x in st.get("loras") or [])),
+             str(eng.get("name") or ""), str(eng.get("model") or ""),
+             cz_comic.effective_mood(project, page) if page else
+             str(st.get("mood") or "").strip()]
+    return hashlib.sha1("|".join(parts).encode("utf-8")).hexdigest()[:12]
+
+
+def production_state(project, project_dir):
+    """Compteurs + listes: cases dessinees / manquantes / verrouillees /
+    texte vide, @Nom inconnus, planches jamais composees ou a recomposer
+    (case plus recente que la planche), bulles sur un visage (clean:false),
+    cases rendues avec un autre style que le style courant."""
+    casting = project.get("casting") or {}
+    tot = {"panels": 0, "drawn": 0, "missing": 0, "locked": 0, "empty": 0,
+           "unknown": 0, "pages": 0, "composed": 0, "stale": 0, "never": 0,
+           "dirty_balloons": 0, "drift": 0}
+    lists = {"missing": [], "locked": [], "empty": [], "unknown": [],
+             "never": [], "stale": [], "dirty_balloons": [], "drift": []}
+    for ch, pg in cz_comic.book_order(project):
+        cid, pid = ch["id"], pg["id"]
+        tot["pages"] += 1
+        pp = cz_comic.page_path(project_dir, cid, pid)
+        page_m = os.path.getmtime(pp) if os.path.isfile(pp) else None
+        newest_panel = 0.0
+        sig_now = style_signature(project, pg)
+        for pn in pg.get("panels") or []:
+            tot["panels"] += 1
+            img = pn.get("image")
+            has = bool(img and os.path.isfile(img))
+            ref = {"cid": cid, "pid": pid, "pnid": pn["id"],
+                   "text": (pn.get("text") or "")[:80]}
+            if has:
+                tot["drawn"] += 1
+                newest_panel = max(newest_panel, os.path.getmtime(img))
+                sig = pn.get("style_sig")
+                if sig and sig != sig_now:
+                    tot["drift"] += 1
+                    lists["drift"].append(ref)
+            if pn.get("status") == "locked":
+                tot["locked"] += 1
+                lists["locked"].append(ref)
+            if not (pn.get("text") or "").strip():
+                tot["empty"] += 1
+                lists["empty"].append(ref)
+            elif not has and pn.get("status") != "locked":
+                tot["missing"] += 1
+                lists["missing"].append(ref)
+            unk = cz_comic.resolve_casting(pn.get("text") or "", casting)["unknown"]
+            if unk:
+                tot["unknown"] += 1
+                lists["unknown"].append(dict(ref, names=unk))
+        if page_m is None:
+            tot["never"] += 1
+            lists["never"].append({"cid": cid, "pid": pid})
+        else:
+            tot["composed"] += 1
+            if newest_panel > page_m + 1:
+                tot["stale"] += 1
+                lists["stale"].append({"cid": cid, "pid": pid})
+            dirty = [pl for pl in _placements(project_dir, cid, pid)
+                     if pl.get("clean") is False]
+            if dirty:
+                tot["dirty_balloons"] += len(dirty)
+                lists["dirty_balloons"].append(
+                    {"cid": cid, "pid": pid, "count": len(dirty),
+                     "panels": sorted({pl.get("panel") for pl in dirty})})
+    return {"ok": True, "totals": tot, "lists": lists,
+            "style_sig": style_signature(project)}
