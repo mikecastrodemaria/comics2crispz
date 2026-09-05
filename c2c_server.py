@@ -659,7 +659,13 @@ class Studio:
                      for ch, pg in cz_comic.book_order(project)]
         job.update({"running": True, "stop": False, "total": len(tasks),
                     "done": 0, "current": "", "generated": 0, "errors": [],
-                    "warnings": [], "started": time.time(), "finished": 0.0})
+                    "warnings": [], "started": time.time(), "finished": 0.0,
+                    "label": str(data.get("label") or
+                                 ("Redrawing the whole book" if force and not
+                                  data.get("panels") else
+                                  "Generating the missing panels"))[:120],
+                    "unit": "panel" if data.get("panels") else "page",
+                    "last_s": 0.0, "log": []})
         engine = data.get("engine")
 
         def worker():
@@ -668,14 +674,24 @@ class Studio:
                     if job["stop"]:
                         break
                     job["current"] = f"{cid}.{pid}" + (f"/{pnid}" if pnid else "")
+                    t1 = time.time()
                     res = self.op_generate({"cid": cid, "pid": pid,
                                             "pnid": pnid, "force": force,
                                             "engine": engine})
+                    job["last_s"] = round(time.time() - t1, 1)
                     if not res.get("ok"):
                         job["errors"].append(f"{cid}.{pid}: "
                                              f"{res.get('error')}")
+                        job["log"].append(f"❌ {job['current']}: {res.get('error')}")
                         break
-                    job["generated"] += len(res.get("generated") or [])
+                    n = len(res.get("generated") or [])
+                    job["generated"] += n
+                    seeds = ", ".join(str(g.get("seed_used")) for g in
+                                      (res.get("generated") or [])[:4])
+                    job["log"].append(f"✓ {job['current']}: {n} panel(s) in "
+                                      f"{job['last_s']}s" + (f" (seed {seeds})"
+                                                             if seeds else ""))
+                    del job["log"][:-12]
                     for w in res.get("warnings") or []:
                         if w not in job["warnings"] and len(job["warnings"]) < 40:
                             job["warnings"].append(w)

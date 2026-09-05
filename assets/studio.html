@@ -222,6 +222,15 @@ font-size:11px}
 .uses{font-size:11px;color:var(--mut);margin-top:4px;line-height:1.5}
 .moodrow{display:grid;grid-template-columns:130px 1fr;gap:8px;align-items:center;margin-top:6px}
 .moodrow span{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#jobglobal{display:none;position:sticky;top:46px;z-index:29;background:var(--pan);
+  border-bottom:1px solid var(--bd);padding:8px 14px}
+#jobglobal.on{display:block}
+#jobglobal .jt{display:flex;align-items:center;gap:10px;font-size:12px}
+#jobglobal .jt b{color:var(--fg)}
+#jobglobal .jt .st{flex:1;color:var(--mut)}
+#jobglobal .jobbar{margin-top:6px}
+#jobglobal .jl{font-size:11px;color:var(--mut);margin-top:4px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
 </style>
 </head>
 <body>
@@ -242,6 +251,16 @@ font-size:11px}
   <button id="cfgbtn" title="Settings — engine & Ollama (AI prompt help)">⚙</button>
   <button id="reload" title="Reload project.json">↻</button>
 </header>
+<div id="jobglobal">
+  <div class="jt">
+    <b id="jglabel">Generating…</b>
+    <span class="st" id="jgstatus"></span>
+    <button id="jgstop">⏹ Stop</button>
+    <button id="jgclose" style="display:none">✕</button>
+  </div>
+  <div class="jobbar"><i id="jgfill"></i></div>
+  <div class="jl" id="jglog"></div>
+</div>
 <div id="modal">
   <div class="box" style="width:420px">
     <h3>⚙ Settings
@@ -2294,24 +2313,53 @@ async function rawPost(op, payload){
     body: JSON.stringify(payload || {})});
   return r.json();
 }
+function fmtDur(sec){
+  sec = Math.max(0, Math.round(sec));
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return (m ? m + ' min ' : '') + s + ' s';
+}
+let JOBDISMISSED = 0;
 function renderJob(job){
-  const box = $('jobbox');
+  // barre GLOBALE (sous l'en-tete, visible partout) + boite du flatplan
+  const box = $('jobbox'), g = $('jobglobal');
   const active = job.running || (job.finished && job.total &&
                                  Date.now() / 1000 - job.finished < 15);
   box.style.display = active ? '' : 'none';
-  if(!active) return;
+  const showG = job.running || (job.finished && job.total && job.finished !== JOBDISMISSED);
+  g.classList.toggle('on', !!showG);
+  if(!active && !showG) return;
   const pct = job.total ? Math.round(job.done / job.total * 100) : 0;
-  $('jobfill').style.width = pct + '%';
-  $('jobtext').textContent = job.running
-    ? 'Generating the book… page ' + (job.done + 1) + '/' + job.total +
-      (job.current ? ' (' + job.current + ')' : '') + ' — ' +
-      job.generated + ' panel(s) drawn so far'
-    : (job.errors.length ? '⚠ stopped: ' + job.errors[0]
-       : (job.stop ? '⏹ stopped by you — ' : '✅ done — ') +
-         job.generated + ' panel(s) drawn, ' + job.done + '/' + job.total +
-         ' pages');
+  const unit = job.unit || 'page';
+  const now = Date.now() / 1000;
+  const elapsed = (job.running ? now : job.finished) - job.started;
+  const eta = job.done ? (job.total - job.done) * (elapsed / job.done) : null;
+  let text;
+  if(job.running){
+    text = unit + ' ' + Math.min(job.done + 1, job.total) + '/' + job.total +
+      (job.current ? ' — drawing ' + job.current : '') +
+      ' · ' + job.generated + ' panel(s) drawn · elapsed ' + fmtDur(elapsed) +
+      (eta !== null ? ' · ~' + fmtDur(eta) + ' left' :
+       ' · first ' + unit + ' includes the model warm-up');
+  }else{
+    text = (job.errors.length ? '⚠ stopped on an error: ' + job.errors[0]
+            : (job.stop ? '⏹ stopped by you — ' : '✅ done — ') +
+              job.generated + ' panel(s) drawn, ' + job.done + '/' + job.total +
+              ' ' + unit + 's in ' + fmtDur(elapsed)) +
+      (job.warnings && job.warnings.length ? ' · ⚠ ' + job.warnings.length +
+       ' warning(s): ' + job.warnings.slice(0, 2).join(' · ') : '');
+  }
+  $('jobfill').style.width = pct + '%'; $('jgfill').style.width = pct + '%';
+  $('jobtext').textContent = text;
+  $('jglabel').textContent = (job.label || 'Generating') + ' — ' + pct + '%';
+  $('jgstatus').textContent = text;
+  $('jglog').textContent = (job.log || []).slice(-3).join('   ');
   $('jobstop').style.display = job.running ? '' : 'none';
+  $('jgstop').style.display = job.running ? '' : 'none';
+  $('jgclose').style.display = job.running ? 'none' : '';
 }
+$('jgstop').onclick = () => $('jobstop').onclick();
+$('jgclose').onclick = () => { JOBDISMISSED = 1; rawPost('job_status').then(r => {
+  if(r.ok){ JOBDISMISSED = r.job.finished; renderJob(r.job); } }); };
 async function pollJob(){
   try{
     const res = await rawPost('job_status');
@@ -2335,17 +2383,19 @@ $('genbook').onclick = async () => {
   if(!confirm('Generate every missing panel of the whole book?\n\nRuns in ' +
               'the background through the engine, page after page - you ' +
               'can keep browsing and press Stop anytime.')) return;
-  await startJob({}, 'Generating the book…');
+  await startJob({}, 'Generating the missing panels…');
 };
 async function startJob(payload, msg){
-  // lance un job de fond (livre entier, ou liste de cases a redessiner) et
-  // suit sa progression dans la barre du flatplan + la barre de statut
-  const res = await rawPost('generate_all', payload || {});
+  // lance un job de fond (livre entier, ou liste de cases a redessiner):
+  // la barre globale sous l'en-tete suit l'avancement partout dans l'app
+  payload = Object.assign({label: (msg || '').replace(/…$/, '')}, payload || {});
+  const res = await rawPost('generate_all', payload);
   if(!res.ok){ status('⚠️ ' + res.error, 'err'); return null; }
-  if(msg) status(msg + ' (background job — Flatplan shows the progress)', '', true);
+  status(msg || 'Job started', 'ok');
+  JOBDISMISSED = 0;
   renderJob(res.job);
   if(JOBTIMER) clearInterval(JOBTIMER);
-  JOBTIMER = setInterval(pollJob, 3000);
+  JOBTIMER = setInterval(pollJob, 2000);
   return res;
 }
 $('jobstop').onclick = async () => { await rawPost('job_stop');
