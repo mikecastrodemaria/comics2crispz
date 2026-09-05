@@ -700,6 +700,12 @@ class Studio:
                     dlg[idx]["hidden"] = True
                 else:
                     dlg[idx].pop("hidden", None)
+            if data.get("outline") is not None:
+                ok_ = max(0.3, min(3.0, float(data["outline"])))
+                if abs(ok_ - 1.0) < 0.05:
+                    dlg[idx].pop("outline", None)
+                else:
+                    dlg[idx]["outline"] = round(ok_, 2)
             if "font" in data:
                 f = str(data.get("font") or "").strip()
                 if f:
@@ -707,7 +713,7 @@ class Studio:
                 else:
                     dlg[idx].pop("font", None)      # police du livre
             for key in data.get("clear") or []:
-                if key in ("pos", "anchor", "scale", "style", "hidden", "font"):
+                if key in ("pos", "anchor", "scale", "style", "hidden", "font", "outline"):
                     dlg[idx].pop(key, None)
             if data.get("remove"):
                 # 🗑 la replique quitte le dialogue de la case (le texte est

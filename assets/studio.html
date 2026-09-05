@@ -722,6 +722,15 @@ Bruno (think): Of course...
             <input id="bubscale" type="range" min="0.4" max="3" step="0.1"
                    value="1">
           </div>
+          <div class="field">
+            <span class="lbl" style="display:flex;align-items:center;gap:6px">
+              Outline <b id="buboutval" style="color:var(--fg)">×1.0</b>
+              <button class="helpb" style="margin-left:0"
+                data-help="Thickness of the balloon border, or of the black stroke around SFX / title letters (0.3x to 3x). Line breaks: type \\n inside the text where the line must break (e.g. 'La fille des\\nruines fleuries'); speech balloons still wrap automatically around it.">?</button>
+              <span style="margin-left:auto">border / letter stroke · type \n to break a line</span>
+            </span>
+            <input id="bubout" type="range" min="0.3" max="3" step="0.1" value="1">
+          </div>
           <div class="grid2">
             <div class="field" style="margin-top:6px">
               <span class="lbl">Font
@@ -1568,6 +1577,9 @@ function renderBubBox(){
   $('bubscaleval').textContent = '×' + Number(sc).toFixed(1);
   $('bubstyle').disabled = ['caption', 'sfx'].includes(dlg.kind || 'speech');
   $('bubhidden').checked = !!dlg.hidden;
+  const ok_ = dlg.outline || 1.0;
+  $('bubout').value = ok_;
+  $('buboutval').textContent = '×' + Number(ok_).toFixed(1);
   fillFontSelect($('bubfont'), dlg.font || '', '(book default)');
 }
 let FONTS = null;
@@ -1587,6 +1599,8 @@ async function fillFontSelect(sel, value, defaultLabel){
 }
 $('bubscale').oninput = () =>
   $('bubscaleval').textContent = '×' + Number($('bubscale').value).toFixed(1);
+$('bubout').oninput = () =>
+  $('buboutval').textContent = '×' + Number($('bubout').value).toFixed(1);
 $('bubkind').onchange = () =>
   $('bubstyle').disabled = ['caption', 'sfx'].includes($('bubkind').value);
 $('bubapply').onclick = async () => {
@@ -1595,6 +1609,7 @@ $('bubapply').onclick = async () => {
     pnid: SELBUB.panel, index: SELBUB.index,
     kind: $('bubkind').value, style: $('bubstyle').value,
     scale: parseFloat($('bubscale').value), hidden: $('bubhidden').checked,
+    outline: parseFloat($('bubout').value),
     font: $('bubfont').value}, 'Recomposing the page…');
   if(res){ IDX = res; status($('bubhidden').checked ?
     'Balloon hidden — it stays in the dialogue box as "(hidden)"; remove that to show it again' :

@@ -172,6 +172,11 @@ Click a balloon on the page to change its type, shape, size, **font** and
 model already drew inside the image, or a silent panel. The book's default
 balloon font lives in 📖 Bible › Style; drop `.ttf`/`.otf` comic fonts in a
 `fonts/` folder next to the app or inside the book to pick them.
+**Outline** sets the border thickness (or the black stroke around SFX / title
+letters); type `
+` inside a balloon text to force a line break
+(`La fille des
+ruines fleuries`).
 
 ### 5b. Fix one panel — Regenerate, Edit, Variation, Versions
 

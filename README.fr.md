@@ -102,6 +102,11 @@ lettrée, pour un titre que le modèle a déjà dessiné dans l'image ou une cas
 muette. La police par défaut du livre est dans 📖 Bible › Style ; déposez des
 polices BD `.ttf`/`.otf` dans un dossier `fonts/` à côté de l'app ou dans le
 livre pour les choisir.
+**Outline** règle l'épaisseur du contour (ou du trait noir des lettres SFX /
+titre) ; tapez `
+` dans le texte d'une bulle pour forcer un retour à la ligne
+(`La fille des
+ruines fleuries`).
 
 ### Corriger une case — Régénérer, Retoucher, Variation, Versions
 
