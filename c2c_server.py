@@ -709,11 +709,19 @@ class Studio:
             for key in data.get("clear") or []:
                 if key in ("pos", "anchor", "scale", "style", "hidden", "font"):
                     dlg[idx].pop(key, None)
+            if data.get("remove"):
+                # 🗑 la replique quitte le dialogue de la case (le texte est
+                # renvoye dans la reponse: rien de perdu sans trace)
+                gone = dlg.pop(idx)
+                panel["dialogue"] = dlg
             cz_comic.save_project(project, self.dir)
             fd, emb = self._letter_kit(project)
             c2c_state.compose_one(project, self.dir, data["cid"], data["pid"],
                                   face_detector=fd, char_embeddings=emb)
-        return c2c_state.book_index(project, self.dir)
+        out = c2c_state.book_index(project, self.dir)
+        if data.get("remove"):
+            out["removed"] = gone
+        return out
 
     # ---- generation du livre ENTIER en tache de fond (progression, stop) ----
     JOB = {"running": False, "stop": False, "total": 0, "done": 0,
