@@ -154,6 +154,17 @@ Back to the flatplan (Esc), **🧩 Compose book**:
 
 ![Flatplan after generation](docs/img/04-flatplan-after.png)
 
+### 6b. Background jobs — progress, pause, stop
+
+Whole-book generation, "Redraw its panels" and "Redraw the whole book" run
+in the background. A progress strip under the header follows them anywhere
+in the app: what runs, page/panel x/y, panels drawn, elapsed and estimated
+time left, the last items with duration and seed, warnings at the end.
+**⏸ Pause** takes effect after the current image (nothing is interrupted
+mid-render) and **▶ Resume** continues where it stopped; **⏹ Stop** ends
+the job after the current item. Previous drawings always stay in each
+panel's history.
+
 ### 7. Character consistency (refs v2)
 
 Give a casting entry reference images (`refs`, project-relative paths —

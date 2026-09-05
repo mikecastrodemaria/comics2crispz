@@ -255,6 +255,7 @@ font-size:11px}
   <div class="jt">
     <b id="jglabel">Generating…</b>
     <span class="st" id="jgstatus"></span>
+    <button id="jgpause" title="Pause after the current image (nothing is interrupted mid-render)">⏸ Pause</button>
     <button id="jgstop">⏹ Stop</button>
     <button id="jgclose" style="display:none">✕</button>
   </div>
@@ -2334,7 +2335,11 @@ function renderJob(job){
   const elapsed = (job.running ? now : job.finished) - job.started;
   const eta = job.done ? (job.total - job.done) * (elapsed / job.done) : null;
   let text;
-  if(job.running){
+  if(job.running && job.paused){
+    text = (job.current ? '⏸ pausing after ' + job.current + '…'
+            : '⏸ paused after ' + unit + ' ' + job.done + '/' + job.total) +
+      ' · ' + job.generated + ' panel(s) drawn · ▶ Resume continues where it stopped';
+  }else if(job.running){
     text = unit + ' ' + Math.min(job.done + 1, job.total) + '/' + job.total +
       (job.current ? ' — drawing ' + job.current : '') +
       ' · ' + job.generated + ' panel(s) drawn · elapsed ' + fmtDur(elapsed) +
@@ -2355,8 +2360,20 @@ function renderJob(job){
   $('jglog').textContent = (job.log || []).slice(-3).join('   ');
   $('jobstop').style.display = job.running ? '' : 'none';
   $('jgstop').style.display = job.running ? '' : 'none';
+  $('jgpause').style.display = job.running ? '' : 'none';
+  $('jgpause').textContent = job.paused ? '▶ Resume' : '⏸ Pause';
   $('jgclose').style.display = job.running ? 'none' : '';
+  $('jglabel').textContent = (job.label || 'Generating') + ' — ' + pct + '%' +
+    (job.running && job.paused ? ' (paused)' : '');
 }
+$('jgpause').onclick = async () => {
+  const st = await rawPost('job_status');
+  if(!st.ok || !st.job.running) return;
+  const res = await rawPost('job_pause', {paused: !st.job.paused});
+  if(!res.ok){ status('⚠️ ' + res.error, 'err'); return; }
+  renderJob(res.job);
+  status(res.job.paused ? 'Pausing after the current image…' : 'Resumed', 'ok');
+};
 $('jgstop').onclick = () => $('jobstop').onclick();
 $('jgclose').onclick = () => { JOBDISMISSED = 1; rawPost('job_status').then(r => {
   if(r.ok){ JOBDISMISSED = r.job.finished; renderJob(r.job); } }); };

@@ -665,12 +665,17 @@ class Studio:
                                   data.get("panels") else
                                   "Generating the missing panels"))[:120],
                     "unit": "panel" if data.get("panels") else "page",
-                    "last_s": 0.0, "log": []})
+                    "last_s": 0.0, "log": [], "paused": False})
         engine = data.get("engine")
 
         def worker():
             try:
                 for cid, pid, pnid in tasks:
+                    # ⏸ pause: on attend ICI, entre deux elements - jamais au
+                    # milieu d'un rendu (l'image en cours se termine d'abord)
+                    while job["paused"] and not job["stop"]:
+                        job["current"] = ""
+                        time.sleep(0.3)
                     if job["stop"]:
                         break
                     job["current"] = f"{cid}.{pid}" + (f"/{pnid}" if pnid else "")
@@ -712,6 +717,16 @@ class Studio:
     def op_job_stop(self, _data):
         Studio.JOB["stop"] = True
         return {"ok": True, "job": dict(Studio.JOB)}
+
+    def op_job_pause(self, data):
+        """⏸ / ▶ : {paused: bool}. La pause prend effet apres l'element en
+        cours (une image ne s'interrompt pas a mi-chemin) ; reprendre
+        continue la liste la ou elle en etait."""
+        job = Studio.JOB
+        if not job.get("running"):
+            return {"ok": False, "error": "no generation running"}
+        job["paused"] = bool(data.get("paused", True))
+        return {"ok": True, "job": dict(job)}
 
     def op_edit_panel(self, data):
         """✏️ Retoucher UNE case par INSTRUCTION (op edit du protocole:

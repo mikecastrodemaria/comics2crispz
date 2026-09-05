@@ -63,6 +63,16 @@ Le résultat fini de ce tutoriel :
 📖 **[The Making of comics2crispz — PDF final](docs/the-making-of.pdf)**
 (6 pages, 17 cases, un moteur, zéro retouche manuelle).
 
+### Travaux de fond — progression, pause, stop
+
+La génération du livre entier, « Redraw its panels » et « Redraw the whole
+book » tournent en fond. Une barre sous l'en-tête les suit partout : quoi,
+page/case x/y, cases dessinées, temps écoulé et estimation du reste, les
+derniers éléments avec durée et seed, avertissements à la fin. **⏸ Pause**
+prend effet après l'image en cours (rien n'est interrompu à mi-rendu),
+**▶ Resume** reprend là où ça s'est arrêté, **⏹ Stop** termine après
+l'élément en cours. Les anciens dessins restent dans l'historique.
+
 ### Corriger une case — Régénérer, Retoucher, Variation, Versions
 
 Cliquer une case sur la planche ouvre son panneau :
