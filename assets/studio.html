@@ -30,6 +30,11 @@ box-shadow:0 0 0 2px #4d82c433}
 margin:0 0 4px;letter-spacing:.3px}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .grid2 button{width:100%}
+.grid2 .helpb,.field .helpb{width:20px;min-width:20px;max-width:20px}
+.grid2 .chips button{width:auto;min-width:0;max-width:none}
+a{color:var(--warn)}
+.uses a{color:var(--warn);text-decoration:none;border-bottom:1px dotted var(--warn)}
+.uses a:hover{color:#fff}
 select.w100,.w100{max-width:none;width:100%}
 input[type=range]{width:100%;padding:0;border:none;background:transparent;
 box-shadow:none;accent-color:var(--acc);height:22px;cursor:pointer}
@@ -41,7 +46,7 @@ display:none;z-index:50;align-items:center;justify-content:center}
 #helpmodal{z-index:60}
 #modal h3,#laymodal h3,#wizmodal h3,#helpmodal h3,#biblemodal h3{margin:0 0 4px;
 font-size:13px;text-transform:uppercase;color:var(--mut)}
-.helpb{width:20px;height:20px;padding:0;border-radius:50%;font-size:11px;
+.helpb{display:inline-block;width:20px;height:20px;padding:0;border-radius:50%;font-size:11px;
 line-height:1;color:var(--mut);vertical-align:2px;margin-left:6px}
 .helpb:hover{color:#fff;border-color:var(--acc)}
 .engcard{border:1px solid var(--bd);border-radius:6px;padding:8px 10px;
