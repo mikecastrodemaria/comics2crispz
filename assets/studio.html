@@ -196,7 +196,7 @@ font-size:11px}
 .hist .hv img{width:76px;height:56px;object-fit:cover;border-radius:4px;display:block}
 .hist .hv small{display:block;font-size:10px;color:var(--mut);white-space:nowrap;
   overflow:hidden;text-overflow:ellipsis;margin-top:2px}
-#maskcv{position:absolute;z-index:30;cursor:crosshair;touch-action:none}
+#maskcv{position:absolute;z-index:30;cursor:crosshair;touch-action:none;outline:2px dashed #ff3c3ccc;background:#ff3c3c0d}
 #inpbox .row button.on{background:var(--acc);color:#111}
 .btabs{display:flex;gap:4px;margin:6px 0 10px}
 .btabs button{border-radius:6px;padding:5px 12px}
@@ -814,7 +814,7 @@ Bruno (think): Of course...
             <span class="lbl">🖌 Inpaint — paint the area to redraw
               <button class="helpb" data-help="Inpaint redraws ONLY the area you paint on the panel (white in the mask), keeping the rest pixel-exact. Turn on Paint, brush over the zone on the page (Eraser to correct, Clear to start over), describe what should appear THERE (a local description, e.g. 'a black cat sitting', not the whole scene - leave empty to just fill coherently), then Inpaint. Strength 1.0 = fully redrawn, 0.6 = keeps some of the original. Works on every engine; the previous version goes to the history.">?</button></span>
             <div class="row" style="align-items:center;gap:6px;flex-wrap:wrap">
-              <button id="inpaint_on" title="Toggle painting on the page">🖌 Paint</button>
+              <button id="inpaint_on" class="primary" title="Turn on the brush: then drag over the panel on the page to mark the area to redraw">🖌 Paint</button>
               <button id="inpaint_eraser" title="Eraser: un-paint">◌ Eraser</button>
               <button id="inpaint_clear" title="Clear the painted area">✕ Clear</button>
               <span class="lbl" style="margin:0">size <b id="inpsizeval" style="color:var(--fg)">40</b></span>
@@ -823,7 +823,7 @@ Bruno (think): Of course...
             <textarea id="inpprompt" rows="2" style="margin-top:6px"
               placeholder="what should appear in the painted area (local description) — or leave empty"></textarea>
             <div class="row" style="align-items:center;margin-top:6px">
-              <button id="inpaintbtn" class="primary">🖌 Inpaint</button>
+              <button id="inpaintbtn" class="primary" disabled title="First turn on Paint and brush the area on the page">🖌 Inpaint</button>
               <span class="lbl" style="margin:0 0 0 8px">strength <b id="inpstrval" style="color:var(--fg)">0.90</b></span>
               <input id="inpstr" type="range" min="0.2" max="1" step="0.05" value="0.9" style="flex:1;min-width:70px">
             </div>
@@ -1683,9 +1683,12 @@ function renderHistory(pn){
 const INP = {on: false, eraser: false, cv: null, ctx: null, painting: false,
              pn: null};
 function inpaintOff(){
-  INP.on = false; INP.pn = null;
+  INP.on = false; INP.pn = null; INP.painted = false;
   if(INP.cv){ INP.cv.remove(); INP.cv = null; INP.ctx = null; }
   $('inpaint_on').classList.remove('on');
+  $('inpaint_on').textContent = '🖌 Paint';
+  $('inpaintbtn').disabled = true;
+  $('inpaintbtn').title = 'First turn on Paint and brush the area on the page';
 }
 function inpaintOn(){
   if(!SEL || !SELPN || !LASTPAGE) return;
@@ -1703,6 +1706,8 @@ function inpaintOn(){
   $('stage').appendChild(cv);
   INP.cv = cv; INP.ctx = cv.getContext('2d'); INP.on = true; INP.pn = pn;
   $('inpaint_on').classList.add('on');
+  $('inpaint_on').textContent = '✓ Painting — click to stop';
+  $('inpaintbtn').disabled = true;
   const pos = ev => {
     const r = cv.getBoundingClientRect();
     return [(ev.clientX - r.left) * cv.width / r.width,
@@ -1717,7 +1722,11 @@ function inpaintOn(){
   const r0w = () => cv.getBoundingClientRect().width || cv.width;
   let last = null;
   cv.onpointerdown = ev => { INP.painting = true; cv.setPointerCapture(ev.pointerId);
-                             last = pos(ev); dot(...last); ev.preventDefault(); };
+                             last = pos(ev); dot(...last); ev.preventDefault();
+                             if(!INP.eraser && !INP.painted){ INP.painted = true;
+                               $('inpaintbtn').disabled = false;
+                               $('inpaintbtn').title = 'Redraw the painted area';
+                               status('Painted area ready — describe what goes there (or not), then 🖌 Inpaint', 'ok'); } };
   cv.onpointermove = ev => {
     if(!INP.painting) return;
     const p = pos(ev);
@@ -1727,7 +1736,7 @@ function inpaintOn(){
     last = p;
   };
   cv.onpointerup = cv.onpointercancel = () => { INP.painting = false; last = null; };
-  status('Paint over the area to redraw, then 🖌 Inpaint', 'ok');
+  status('Paint mode ON: drag the mouse over the panel (red dashed frame) to mark the area to redraw, then 🖌 Inpaint', 'ok');
 }
 function maskDataURL(natW, natH){
   // masque noir + zone peinte en blanc, a la taille demandee
@@ -1756,13 +1765,14 @@ $('inpaint_eraser').onclick = () => {
 };
 $('inpaint_clear').onclick = () => {
   if(INP.ctx) INP.ctx.clearRect(0, 0, INP.cv.width, INP.cv.height);
+  INP.painted = false; $('inpaintbtn').disabled = true;
 };
 $('inpsize').oninput = () => $('inpsizeval').textContent = $('inpsize').value;
 $('inpstr').oninput = () =>
   $('inpstrval').textContent = Number($('inpstr').value).toFixed(2);
 $('inpaintbtn').onclick = async () => {
   if(!SEL || !SELPN) return;
-  if(!INP.on || !INP.cv){ status('Turn on 🖌 Paint and brush the area first', 'warn'); return; }
+  if(!INP.on || !INP.cv){ inpaintOn(); return; }     // premier clic = mode pinceau
   // masque a la taille du canvas d'affichage: le serveur le remet a la
   // taille de l'image de la case (pas de decodage d'image cote client, qui
   // peut bloquer dans un onglet cache)
