@@ -147,11 +147,16 @@ UI, so every image is replayable).
   "supports": {"loras": true, "refs": true, "max_refs": 4, "seed": true,
                "negative": true, "arbitrary_size": true, "faces": true,
                "detail_faces": true, "detail_hands": false, "edit": true,
-               "inpaint": true},
+               "inpaint": true, "img2img": true},
   "instance": {"running": true, "url": "http://127.0.0.1:7860",
                "tool": "crispz-qwen-edit", "version": "1.16.0"}
 }
 ```
+
+`supports.inpaint` / `supports.img2img` are per MODEL FAMILY (static, no
+pipeline import): Krea 2 has neither (diffusers ships no Krea2Inpaint /
+Krea2Img2Img pipeline), so `inpaint` and a variation (`upscale` with factor
+1) answer exit 3 there instead of pretending.
 
 `caps` needs neither GPU nor a loaded model: config read + instance probe,
 ~1.5 s. `supports.refs` is honest per model family: hard `false` on

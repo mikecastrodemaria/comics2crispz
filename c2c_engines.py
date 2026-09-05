@@ -166,6 +166,13 @@ class Engine:
                              f"'{caps.get('tool')}', not {self.name} - "
                              f"close it and start {self.name}'s app"}
         if caps:
+            sup = caps.get("supports") or {}
+            if float(spec.get("factor") or 2.0) <= 1.0 and sup.get("img2img") is False:
+                return {"ok": False,
+                        "error": f"{self.name} cannot do a variation: this "
+                                 f"model family has no img2img pipeline "
+                                 f"(Regenerate, or switch the book to studio "
+                                 f"/ krea / qwen-edit for variations)"}
             try:
                 return _gradio_call(self.url, "cli_upscale",
                                     [json.dumps(spec)])
@@ -234,8 +241,10 @@ class Engine:
                                  f"current code"}
             if not sup.get("inpaint"):
                 return {"ok": False,
-                        "error": f"{self.name} has no inpaint pipeline "
-                                 f"(supports.inpaint is false)"}
+                        "error": f"{self.name} cannot inpaint: this model "
+                                 f"family has no inpaint pipeline (switch the "
+                                 f"book to studio / krea / qwen-edit to inpaint, "
+                                 f"or Regenerate the panel)"}
             try:
                 return _gradio_call(self.url, "cli_inpaint",
                                     [json.dumps(spec)])

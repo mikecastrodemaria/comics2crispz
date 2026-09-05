@@ -1654,6 +1654,32 @@ function renderPanelBox(p){
   $('prevbtn').disabled = !pn.has_prev;
   renderHistory(pn);
   renderCastChips();
+  applyEngineCaps();
+}
+/* ce que le moteur DU LIVRE sait faire (variation = img2img, inpaint): les
+   boutons se grisent avec la raison au lieu d'echouer apres coup */
+let ENGCAPS = {name: null, caps: null};
+async function applyEngineCaps(){
+  const name = (IDX && IDX.engine && IDX.engine.name) || null;
+  if(ENGCAPS.name !== name || !ENGCAPS.caps){
+    ENGCAPS = {name, caps: {}};
+    try{
+      const r = await rawPost('engines', {});
+      const eng = name || (r && r.default);
+      ENGCAPS.caps = ((r && r.engines) || {})[eng] || {};
+    }catch(_){ ENGCAPS.caps = {}; }
+  }
+  const sup = (ENGCAPS.caps && ENGCAPS.caps.supports) || {};
+  const who = ENGCAPS.name || 'the default engine';
+  const noVary = sup.img2img === false, noInp = sup.inpaint === false;
+  $('varybtn').disabled = noVary;
+  $('varybtn').title = noVary ? who + ' has no img2img pipeline: no variation on this ' +
+    'engine (Regenerate instead, or switch the book engine in ⚙)' :
+    'img2img: redraw this panel FROM its current image with the strength below. Previous version kept.';
+  $('inpaint_on').disabled = noInp; $('inpaintbtn').disabled = noInp || !INP.painted;
+  $('inpaint_on').title = noInp ? who + ' has no inpaint pipeline: switch the book engine in ⚙ ' +
+    '(studio / krea / qwen-edit) to inpaint' : 'Turn on the brush: then drag over the panel on the page to mark the area to redraw';
+  $('inpbox').style.opacity = noInp ? '.55' : '';
 }
 
 const OPICON = {regenerate: '🎲', edit: '✏️', variation: '🔁', inpaint: '🖌',

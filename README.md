@@ -189,12 +189,14 @@ Select a panel on the page (click it) to open its box:
   Engines without one say so instead of guessing.
 - **🔁 Variation** redraws the panel FROM its current image with a strength
   (0.3 = same composition lightly redrawn, 0.6 = a real variation). Works on
-  every engine (protocol `upscale` with factor 1 = pure img2img).
+  every engine with an img2img pipeline — not Krea 2 (protocol `upscale`
+  with factor 1 = pure img2img).
 - **🖌 Inpaint** redraws ONLY the area you paint on the panel (brush on the
   page, eraser, clear), from a LOCAL description of what should appear there
   ("a black cat sitting"; empty = coherent fill) — never the scene prompt on
-  a fragment. Strength 1.0 = fully redrawn. Every engine (protocol
-  `inpaint`); the mask is kept as `<panel>.mask.png`.
+  a fragment. Strength 1.0 = fully redrawn. Every engine with an inpaint
+  pipeline — not Krea 2 (protocol `inpaint`); the mask is kept as
+  `<panel>.mask.png`.
 - **🕘 Versions**: every one of these keeps the version it replaces in
   `panels/<ch>/<page>/<panel>.history/` (thumbnail + `index.json`, 10 per
   panel, oldest dropped). The strip under the panel shows them; click one to
