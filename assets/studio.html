@@ -851,14 +851,25 @@ function status(msg, cls, spin){
   s.innerHTML = (spin ? '<span class="spin"></span>' : '') + esc(msg || '');
 }
 
+let BUSYOP = '', BUSYSINCE = 0;
 async function api(op, payload, busyMsg){
-  if(BUSY) return null;
-  BUSY = true;
+  if(BUSY){
+    // jamais un clic ignore en silence: on dit CE qu'on attend, et depuis quand
+    const secs = Math.round((Date.now() - BUSYSINCE) / 1000);
+    status('⏳ still waiting for "' + BUSYOP + '" (' + secs + ' s) — ' +
+           (secs > 120 ? 'reload the page (F5) if the server was restarted' : 'one moment'),
+           'warn');
+    return null;
+  }
+  BUSY = true; BUSYOP = op; BUSYSINCE = Date.now();
   if(busyMsg) status(busyMsg, '', true);
+  // un serveur relance en plein appel laisse sinon la page bloquee a vie
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 30 * 60 * 1000);
   try{
     const r = await fetch('/api/' + op, {method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify(payload || {})});
+      body:JSON.stringify(payload || {}), signal: ctl.signal});
     const res = await r.json();
     if(!res || res.ok === false) throw new Error((res && res.error) || 'unknown error');
     // le message d'attente ne doit pas survivre a un appel reussi (les
@@ -866,10 +877,13 @@ async function api(op, payload, busyMsg){
     if(busyMsg && $('status').textContent === busyMsg) status('', '');
     return res;
   }catch(err){
-    status('⚠️ ' + err.message, 'err');
+    status('⚠️ ' + (err.name === 'AbortError' ? 'no answer from the server for 30 min ("' + op + '")'
+           : err.message === 'Failed to fetch' ? 'the comics2crispz server did not answer ("' + op +
+             '") — is it running? (start.bat)' : err.message), 'err');
     return null;
   }finally{
-    BUSY = false;
+    clearTimeout(timer);
+    BUSY = false; BUSYOP = '';
   }
 }
 
