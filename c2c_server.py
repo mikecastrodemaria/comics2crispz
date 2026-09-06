@@ -1287,10 +1287,45 @@ class Studio:
         return out
 
     def op_engines(self, _data):
-        return {"ok": True,
-                "engines": {name: e.caps()
-                            for name, e in self.engines.items()},
-                "default": self.config.get("engine")}
+        """Capacites de chaque moteur + ce que le LIVRE demande et que le moteur
+        courant ne sait pas faire.
+
+        Sans ce recoupement, un champ rempli dans le livre peut n'avoir AUCUN
+        effet sans que rien ne le dise: le negative prompt d'un style, par exemple,
+        est inerte sur un modele distille (crispz-klein). On le decouvrait apres
+        avoir attendu un rendu, ou jamais."""
+        caps = {name: e.caps() for name, e in self.engines.items()}
+        cur = self.config.get("engine")
+        warnings = []
+        sup = ((caps.get(cur) or {}).get("supports") or {})
+        try:
+            project = self.load()
+        except Exception:
+            project = None
+        if project and sup:
+            style = project.get("style") or {}
+            if sup.get("negative") is False:
+                users = []
+                if (style.get("negative") or "").strip():
+                    users.append("the book style")
+                if any((c.get("negative") or "").strip()
+                       for c in (project.get("casting") or {}).values()):
+                    users.append("a casting entry")
+                if users:
+                    warnings.append(
+                        f"engine '{cur}' ignores negative prompts (distilled model, "
+                        f"no CFG) but {' and '.join(users)} set one - it has no "
+                        f"effect on the image")
+            if sup.get("refs") is False and any(
+                    (c.get("refs") or []) for c in (project.get("casting") or {}).values()):
+                warnings.append(
+                    f"engine '{cur}' cannot use reference images, but the casting "
+                    f"has some - @Name consistency will fall back to the text only")
+            if sup.get("inpaint") is False:
+                warnings.append(f"engine '{cur}' has no inpaint pipeline - "
+                                f"the Inpaint tool is unavailable")
+        return {"ok": True, "engines": caps, "default": cur,
+                "warnings": warnings}
 
     def dispatch(self, op, data):
         fn = getattr(self, f"op_{op}", None)
