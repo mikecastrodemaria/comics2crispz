@@ -190,7 +190,7 @@ def format_script(project, chapter_id=None):
             out.append(head)
             for pn in pg.get("panels") or []:
                 out.append(f"[{pn['id']}] " + " ".join((pn.get('text') or '').split()))
-                if int(pn.get("seed", -1)) >= 0:
+                if int(pn.get("seed") or -1) >= 0:
                     out.append(f"seed={int(pn['seed'])}")
                 dlg = c2c_state.fmt_dialogue(pn.get("dialogue") or [])
                 if dlg:
@@ -206,6 +206,23 @@ def apply_script(project, outline):
     rep = {"chapters_added": [], "pages_added": 0, "pages_removed": [],
            "panels_changed": 0, "panels_unchanged": 0, "panels_removed": [],
            "dialogue_changed": 0, "warnings": list(outline.get("warnings") or [])}
+    # Gabarits dont les cases sortent de la plage de ratios exploitable par le
+    # modele SUR CE FORMAT DE PAGE ('2-cols' passe en paysage, pas en portrait).
+    # Dit a l'import, pas apres 60 rendus etires. Un gabarit = un seul message,
+    # meme s'il sert dix fois.
+    _seen_layouts = set()
+    for sc in outline["chapters"]:
+        for spg in sc.get("pages") or []:
+            lay = spg.get("layout")
+            if not lay or lay in _seen_layouts:
+                continue
+            _seen_layouts.add(lay)
+            try:
+                w = cz_comic.layout_warning(lay, project.get("page"))
+            except Exception:
+                w = None
+            if w:
+                rep["warnings"].append(w)
     seen_ch = set()
     for sc in outline["chapters"]:
         ch = next((c for c in project.get("chapters") or []

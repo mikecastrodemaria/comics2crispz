@@ -225,6 +225,44 @@ def gen_size(rect_w, rect_h, target_pixels=1024 * 1024, align=GEN_ALIGN, max_sid
     return _align(w, align), _align(h, align)
 
 
+# Au-dela de ce ratio, une case sort de la distribution d'entrainement des modeles
+# de diffusion (FLUX.2 Klein annonce 512-1536 px par cote): le rendu s'etire, les
+# personnages s'allongent, la composition part. Ce n'est PAS une propriete du
+# gabarit seul - elle depend du format de page: '2-cols' est raisonnable sur une
+# page paysage et catastrophique sur un portrait 1280x1980 (1:3.5).
+MAX_GEN_ASPECT = 2.5
+
+
+def extreme_cells(layout, page, max_aspect=MAX_GEN_ASPECT, target_pixels=1024 * 1024):
+    """Cases d'un gabarit dont le ratio de GENERATION depasse `max_aspect`, pour ce
+    format de page. Renvoie [(index, w, h, ratio)], vide si tout va bien.
+
+    Sert a prevenir a la COMPOSITION du livre plutot qu'a la decouverte du rendu."""
+    pg = page_size(page)
+    cells = layout_cells(layout)
+    rects = panel_rects(cells, pg["width"], pg["height"], pg["margin"], pg["gutter"])
+    out = []
+    for i, r in enumerate(rects):
+        w, h = gen_size(r[2], r[3], target_pixels=target_pixels)
+        ar = max(w / h, h / w)
+        if ar > max_aspect:
+            out.append((i, w, h, ar))
+    return out
+
+
+def layout_warning(layout, page, max_aspect=MAX_GEN_ASPECT):
+    """Message (str) si ce gabarit produit des cases hors plage sur ce format de
+    page, sinon None."""
+    bad = extreme_cells(layout, page, max_aspect=max_aspect)
+    if not bad:
+        return None
+    worst = max(bad, key=lambda b: b[3])
+    return (f"layout '{layout}' on this page format generates {len(bad)} cell(s) "
+            f"outside the model's usable aspect range - worst {worst[1]}x{worst[2]} "
+            f"(1:{worst[3]:.2f}, limit 1:{max_aspect:g}). Expect stretched figures; "
+            f"prefer a rows/grid layout, or a wider page format.")
+
+
 def page_size(preset_or_dict):
     """Resout un format de page: nom de PAGE_PRESETS ou dict deja complet."""
     if isinstance(preset_or_dict, str):
@@ -527,7 +565,11 @@ def resolve_panel(project, page, panel, index=None, target_pixels=1024 * 1024):
             "negative": ", ".join(n for n in negs if n),
             "refs": refs, "loras": merged,
             "width": gw, "height": gh,
-            "rect": rects[index], "seed": int(panel.get("seed", -1)),
+            "rect": rects[index],
+            # .get(k, default) rend None quand la clef EXISTE a None -- ce que
+            # produit le parseur de script pour une case sans seed=. int(None)
+            # plantait la resolution entiere.
+            "seed": int(panel.get("seed") if panel.get("seed") is not None else -1),
             "unknown": res["unknown"]}
 
 
