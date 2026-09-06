@@ -352,9 +352,7 @@ def build_from_outline(project, outline, chapter_name="Story"):
             continue
         panels_data = [p for p in (pd.get("panels") or [])
                        if isinstance(p, dict)]
-        # canonical_layout absorbe les alias ('3-up' -> '3-strip'): on ne stocke
-        # QUE des noms canoniques dans le project.json.
-        layout = cz_comic.canonical_layout(pd.get("layout")) or pd.get("layout")
+        layout = pd.get("layout")
         try:
             n_cells = len(cz_comic.layout_cells(layout))
         except (ValueError, TypeError):
