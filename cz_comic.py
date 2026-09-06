@@ -41,20 +41,43 @@ GEN_ALIGN = 32
 # Une case = (x, y, w, h) en FRACTIONS de la zone utile (page moins les marges).
 # L'ordre de la liste = l'ordre de lecture des cases.
 LAYOUTS = {
-    "splash":       [(0, 0, 1, 1)],
-    "2-up":         [(0, 0, 1, .5), (0, .5, 1, .5)],
-    "2-side":       [(0, 0, .5, 1), (.5, 0, .5, 1)],
-    "3-classic":    [(0, 0, 1, .4), (0, .4, .5, .6), (.5, .4, .5, .6)],
-    "3-strip":      [(0, 0, 1, 1 / 3), (0, 1 / 3, 1, 1 / 3), (0, 2 / 3, 1, 1 / 3)],
-    "4-grid":       [(0, 0, .5, .5), (.5, 0, .5, .5), (0, .5, .5, .5), (.5, .5, .5, .5)],
-    "4-wide-top":   [(0, 0, 1, .4), (0, .4, 1 / 3, .6), (1 / 3, .4, 1 / 3, .6),
-                     (2 / 3, .4, 1 / 3, .6)],
-    "5-hero":       [(0, 0, 1, .45), (0, .45, .5, .275), (.5, .45, .5, .275),
-                     (0, .725, .5, .275), (.5, .725, .5, .275)],
-    "6-grid":       [(0, 0, .5, 1 / 3), (.5, 0, .5, 1 / 3),
-                     (0, 1 / 3, .5, 1 / 3), (.5, 1 / 3, .5, 1 / 3),
-                     (0, 2 / 3, .5, 1 / 3), (.5, 2 / 3, .5, 1 / 3)],
-    "9-grid":       [(c / 3, r / 3, 1 / 3, 1 / 3) for r in range(3) for c in range(3)],
+    # 1 case
+    "splash":   [(0, 0, 1, 1)],
+    # N bandes pleine largeur, empilees
+    "2-rows":   [(0, 0, 1, 1 / 2), (0, 1 / 2, 1, 1 / 2)],
+    "3-rows":   [(0, 0, 1, 1 / 3), (0, 1 / 3, 1, 1 / 3), (0, 2 / 3, 1, 1 / 3)],
+    "4-rows":   [(0, r / 4, 1, 1 / 4) for r in range(4)],
+    # N colonnes pleine hauteur
+    "2-cols":   [(0, 0, 1 / 2, 1), (1 / 2, 0, 1 / 2, 1)],
+    "3-cols":   [(c / 3, 0, 1 / 3, 1) for c in range(3)],
+    # grilles regulieres
+    "4-grid":   [(c / 2, r / 2, 1 / 2, 1 / 2) for r in range(2) for c in range(2)],
+    "6-grid":   [(c / 2, r / 3, 1 / 2, 1 / 3) for r in range(3) for c in range(2)],
+    "9-grid":   [(c / 3, r / 3, 1 / 3, 1 / 3) for r in range(3) for c in range(3)],
+    # un bandeau d'ouverture, puis le reste
+    "3-hero":   [(0, 0, 1, .4), (0, .4, 1 / 2, .6), (1 / 2, .4, 1 / 2, .6)],
+    "4-hero":   [(0, 0, 1, .4), (0, .4, 1 / 3, .6), (1 / 3, .4, 1 / 3, .6),
+                 (2 / 3, .4, 1 / 3, .6)],
+    "5-hero":   [(0, 0, 1, .45), (0, .45, 1 / 2, .275), (1 / 2, .45, 1 / 2, .275),
+                 (0, .725, 1 / 2, .275), (1 / 2, .725, 1 / 2, .275)],
+}
+
+# Anciens noms, encore presents dans les project.json et les scripts existants.
+# Le vocabulaire d'origine melangeait trois logiques ('2-up' empile mais '2-side'
+# juxtapose, '3-strip' empile mais '3-classic' non, '4-wide-top' descriptif): on ne
+# pouvait pas deviner '3-rows' a partir de '2-up'. Le schema est desormais regulier
+# -- <n>-rows / <n>-cols / <n>-grid / <n>-hero, plus 'splash' (terme BD consacre) --
+# et cette table ne sert qu'a lire l'existant. Les noms sont NORMALISES a l'ecriture:
+# un project.json ecrit par cette version ne contient que des noms canoniques.
+LEGACY_LAYOUTS = {
+    "2-up": "2-rows", "3-strip": "3-rows",
+    "2-side": "2-cols",
+    "3-classic": "3-hero", "4-wide-top": "4-hero",
+    # variantes que l'on ecrit naturellement (et que des LLM produisent)
+    "3-up": "3-rows", "4-up": "4-rows", "1-up": "splash", "full": "splash",
+    "2-row": "2-rows", "3-row": "3-rows", "4-row": "4-rows",
+    "2-col": "2-cols", "3-col": "3-cols",
+    "2-strip": "2-rows", "4-strip": "4-rows",
 }
 
 # Formats de planche courants. dpi sert a l'export (PDF) et a rien d'autre.
@@ -85,13 +108,35 @@ PAGE_ROLES = ("cover", "title", "story", "back")
 _ROLE_RANK = {"cover": 0, "title": 1, "story": 1, "back": 2}
 
 
+# Ordre d'affichage: par nombre de cases, puis par famille. Trier alphabetiquement
+# melangerait '2-cols' et '2-rows' avec '4-grid' sans logique lisible.
+_FAMILY_RANK = {"splash": 0, "rows": 1, "cols": 2, "grid": 3, "hero": 4}
+
+
+def _layout_rank(name):
+    n, _, fam = name.partition("-")
+    return (int(n) if n.isdigit() else 1, _FAMILY_RANK.get(fam or name, 9), name)
+
+
 def layout_names():
-    return sorted(LAYOUTS)
+    """Noms canoniques, du plus simple au plus dense. Les anciens noms n'y figurent
+    PAS: un seul nom par gabarit dans l'UI, la doc et les scripts."""
+    return sorted(LAYOUTS, key=_layout_rank)
+
+
+def canonical_layout(name):
+    """Nom canonique d'un gabarit: lui-meme, ou sa traduction depuis un ancien nom.
+    None si inconnu. Point d'entree unique du parseur, de l'etat et de l'API."""
+    n = str(name or "").strip().lower()
+    if n in LAYOUTS:
+        return n
+    return LEGACY_LAYOUTS.get(n)
 
 
 def layout_cells(name):
-    """Cases d'un gabarit. Leve ValueError si le nom est inconnu."""
-    cells = LAYOUTS.get(name)
+    """Cases d'un gabarit. Accepte les anciens noms. ValueError si inconnu."""
+    canon = canonical_layout(name)
+    cells = LAYOUTS.get(canon) if canon else None
     if cells is None:
         raise ValueError(f"unknown layout '{name}' (known: {', '.join(layout_names())})")
     return list(cells)
@@ -362,6 +407,7 @@ def add_page(project, chapter_id, layout="4-grid", texts=None, role="story"):
         raise ValueError(f"role must be one of {PAGE_ROLES}, got {role!r}")
     chapter = find_chapter(project, chapter_id)
     cells = layout_cells(layout)
+    layout = canonical_layout(layout)        # jamais d'ancien nom dans le fichier
     if texts and len(texts) > len(cells):
         raise ValueError(
             f"{len(texts)} texts for layout '{layout}' ({len(cells)} cells): "
@@ -385,6 +431,7 @@ def set_layout(project, chapter_id, page_id, layout):
     en connaissance de cause. Rien n'est detruit silencieusement."""
     page = find_page(project, chapter_id, page_id)
     n = len(layout_cells(layout))
+    layout = canonical_layout(layout)        # jamais d'ancien nom dans le fichier
     panels = page["panels"]
     while len(panels) < n:
         panels.append(new_panel(f"pn{len(panels) + 1}"))

@@ -234,7 +234,7 @@ class Studio:
 
     # Cycle de gabarits varies pour "ajouter N planches" (structure de
     # depart): alternance large/dense, jamais deux fois le meme d'affilee.
-    LAYOUT_CYCLE = ("3-classic", "4-grid", "2-up", "5-hero", "3-strip",
+    LAYOUT_CYCLE = ("3-hero", "4-grid", "2-rows", "5-hero", "3-rows",
                     "6-grid")
 
     def op_add_chapter(self, data):

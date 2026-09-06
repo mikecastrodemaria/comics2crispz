@@ -82,7 +82,7 @@ suivante dans l'ordre du livre (en manga, ← → suivent le sens de lecture) ;
 **Script** (onglet d'en-tête) montre tout le livre, ou un chapitre, en texte
 au format `.czs`, éditable sur place ou dans n'importe quel éditeur :
 `=== ch01 : Nom ===` ouvre un chapitre (`> synopsis`, `~ mood: ambiance`),
-`--- page 3-classic` une planche (rôles cover/title/story/back, `seed=N`),
+`--- page 3-hero` une planche (rôles cover/title/story/back, `seed=N`),
 `[pn1] description` une case, puis les répliques (`Nom: texte`, `CAP:`,
 `SFX:`, `Nom (think):`). **✔ Check** simule l'import et fait un rapport ;
 **⬇ Import** l'applique : chapitres par id, planches par position, cases par

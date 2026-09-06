@@ -48,7 +48,7 @@ def build(dest):
     cc.add_dialogue(cover["panels"][0], "Une histoire de la famille crispz",
                     kind="caption")
 
-    s1 = cc.add_page(p, ch["id"], "3-classic", texts=[
+    s1 = cc.add_page(p, ch["id"], "3-hero", texts=[
         "wide shot of @Phare in the rain at dusk, a small figure climbing "
         "the cliff path",
         "@Tom knocking at a heavy wooden door, soaked, wind-blown",
@@ -87,7 +87,7 @@ def build(dest):
                     speaker="Tom")
     cc.add_dialogue(s3["panels"][4], "VRAOUM", kind="sfx")
 
-    s4 = cc.add_page(p, ch["id"], "3-strip", texts=[
+    s4 = cc.add_page(p, ch["id"], "3-rows", texts=[
         "the cargo ship turning away from the rocks, guided by the light "
         "beam, storm calming",
         "@Nora and @Tom side by side at the gallery railing, dawn light, "

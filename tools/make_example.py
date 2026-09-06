@@ -16,7 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import cz_comic as cc
 import c2c_state
 
-LAYOUT_CYCLE = ["3-classic", "4-grid", "5-hero", "3-strip", "2-up", "6-grid"]
+LAYOUT_CYCLE = ["3-hero", "4-grid", "5-hero", "3-rows", "2-rows", "6-grid"]
 
 
 def build(dest, extra_pages=0):

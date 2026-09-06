@@ -50,7 +50,7 @@ def build(dest):
     cc.add_dialogue(cover["panels"][0], "How comics2crispz was born",
                     kind="caption")
 
-    s1 = cc.add_page(p, ch["id"], "3-classic", texts=[
+    s1 = cc.add_page(p, ch["id"], "3-hero", texts=[
         "@Mika surrounded by five glowing computer screens, each showing a "
         "different user interface, overwhelmed, papers flying",
         "close-up of @Mika's tired face lit by screens",
@@ -91,7 +91,7 @@ def build(dest):
     cc.add_dialogue(s3["panels"][3], "Fresh panel !", speaker="Robi",
                     style="rounded")
 
-    s4 = cc.add_page(p, ch["id"], "3-strip", texts=[
+    s4 = cc.add_page(p, ch["id"], "3-rows", texts=[
         "night scene, @Atelier window glowing, the server tower humming, "
         "envelopes flying between them like birds",
         "@Mika asleep on the desk, @Robi gently covering them with a "

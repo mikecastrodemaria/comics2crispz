@@ -104,7 +104,7 @@ setting) and composes every page with placeholders.
 [pn1] dramatic cover, @Alex under neon rain
 SFX: TITLE
 
---- page 3-classic seed=1234
+--- page 3-hero seed=1234
 [pn1] interior of @Garage, @Alex enters
 CAP: Three in the morning.
 Alex: Bruno? You there?
