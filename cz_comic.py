@@ -85,13 +85,41 @@ PAGE_ROLES = ("cover", "title", "story", "back")
 _ROLE_RANK = {"cover": 0, "title": 1, "story": 1, "back": 2}
 
 
+# Le vocabulaire des gabarits n'est pas regulier: '2-up' = deux bandes empilees,
+# mais les trois bandes s'appellent '3-strip' et non '3-up'. Ecrire '3-up' est donc
+# l'erreur naturelle -- surtout quand un LLM redige le script. On accepte l'alias
+# plutot que de renvoyer l'auteur au dictionnaire.
+# Les alias ne sont PAS listes dans layout_names(): un seul nom canonique par
+# gabarit dans l'UI et la doc, sinon le vocabulaire double de taille.
+LAYOUT_ALIASES = {
+    "3-up": "3-strip",       # symetrie avec 2-up
+    "2-strip": "2-up",       # symetrie inverse
+    "3-row": "3-strip",
+    "2-row": "2-up",
+    "2-col": "2-side",
+    "full": "splash",
+    "1-up": "splash",
+}
+
+
 def layout_names():
     return sorted(LAYOUTS)
 
 
+def canonical_layout(name):
+    """Nom canonique d'un gabarit: le nom lui-meme, ou sa cible d'alias. None si
+    inconnu. Sert au parseur de script ET a l'etat, pour que les deux acceptent
+    exactement le meme vocabulaire."""
+    n = str(name or "").strip().lower()
+    if n in LAYOUTS:
+        return n
+    return LAYOUT_ALIASES.get(n)
+
+
 def layout_cells(name):
-    """Cases d'un gabarit. Leve ValueError si le nom est inconnu."""
-    cells = LAYOUTS.get(name)
+    """Cases d'un gabarit. Accepte les alias. Leve ValueError si le nom est inconnu."""
+    canon = canonical_layout(name)
+    cells = LAYOUTS.get(canon) if canon else None
     if cells is None:
         raise ValueError(f"unknown layout '{name}' (known: {', '.join(layout_names())})")
     return list(cells)

@@ -108,9 +108,12 @@ def parse_script(text):
                                           f"(--- role? layout seed=N?)")
             if not layout:
                 raise ScriptError(no, "a page needs a layout (--- page 3-classic)")
-            if layout not in cz_comic.LAYOUTS:
+            canon = cz_comic.canonical_layout(layout)
+            if canon is None:
                 raise ScriptError(no, f"unknown layout '{layout}' (known: "
-                                      f"{', '.join(sorted(cz_comic.LAYOUTS))})")
+                                      f"{', '.join(cz_comic.layout_names())})")
+            layout = canon          # un alias est normalise ici: le project.json
+                                    # ne contient QUE des noms canoniques
             page = {"role": role, "layout": layout, "seed": seed, "panels": [],
                     "line": no}
             ch["pages"].append(page)
