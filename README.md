@@ -13,6 +13,32 @@ and comics2crispz all work on the same file, each of them stateless.
 
 *Version française : [README.fr.md](README.fr.md).*
 
+---
+
+## What it produces
+
+📖 **[Four Billion Reasons — read the PDF](docs/four-billion-reasons.pdf)** — 6 pages,
+drawn end to end by the crispz family through the CLI protocol. No panel was retouched
+by hand.
+
+| | |
+|---|---|
+| <img src="docs/img/four-billion-reasons-cover.jpg" width="330" alt="Cover: a developer at his keyboard, a small round robot on the desk, a huge rusted machine looming behind him"> | <img src="docs/img/four-billion-reasons-bugs.jpg" width="420" alt="A nine-panel page: the developer turns a guidance dial, compares two identical portraits, reads a stack-trace"> |
+| The cover. | Page 3 — nine panels, recurring character, balloons placed by the app. |
+
+The story is what actually happened while building the engines this app drives: a
+guidance dial that turns out to be decoration on a distilled model, `expected 3072, got
+4096` when a 9B LoRA meets a 4B base, eleven checkpoints skipped by a filter still set
+to the previous model. The book is the bug report.
+
+Source project: `books/klein-genesis/`, built by
+[`tools/make_klein_genesis.py`](tools/make_klein_genesis.py) — the script writes the
+script, so the book is reproducible from one command. The older
+📖 **[Making of comics2crispz](docs/the-making-of.pdf)** follows the tutorial below
+step by step.
+
+---
+
 ## Install / run
 
 ```bat
@@ -292,6 +318,10 @@ balloons, then export PDF/CBZ.)
 crispz family through the CLI protocol:
 📖 **[The Making of comics2crispz — final PDF](docs/the-making-of.pdf)**
 (6 pages, 17 panels, one engine, zero manual retouching).
+
+A second book built the same way, with a recurring character across all six pages:
+📖 **[Four Billion Reasons](docs/four-billion-reasons.pdf)** (project
+`books/klein-genesis/`).
 
 ## Architecture
 

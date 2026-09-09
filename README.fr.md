@@ -13,6 +13,30 @@ Un projet = un dossier avec un `project.json` **compatible famille crispz**
 🎬 Comic Studio, le CLI `--comic` et comics2crispz travaillent sur le même
 fichier, chacun stateless.
 
+## Ce que ça produit
+
+📖 **[Four Billion Reasons — lire le PDF](docs/four-billion-reasons.pdf)** — 6 pages,
+dessinées de bout en bout par la famille crispz à travers le protocole CLI. Aucune case
+retouchée à la main.
+
+| | |
+|---|---|
+| <img src="docs/img/four-billion-reasons-cover.jpg" width="330" alt="Couverture : un développeur à son clavier, un petit robot rond posé sur le bureau, une énorme machine rouillée dressée derrière lui"> | <img src="docs/img/four-billion-reasons-bugs.jpg" width="420" alt="Une page de neuf cases : le développeur tourne une molette de guidance, compare deux portraits identiques, lit une trace d'erreur"> |
+| La couverture. | Page 3 — neuf cases, personnage récurrent, bulles placées par l'app. |
+
+L'histoire est ce qui s'est réellement passé en construisant les moteurs que cette app
+pilote : une molette de guidance qui n'est que décorative sur un modèle distillé,
+`expected 3072, got 4096` quand une LoRA 9B rencontre une base 4B, onze checkpoints
+écartés par un filtre resté réglé sur le modèle précédent. Le livre est le rapport de
+bug.
+
+Projet source : `books/klein-genesis/`, construit par
+[`tools/make_klein_genesis.py`](tools/make_klein_genesis.py) — le script écrit le
+scénario, donc le livre se refait d'une seule commande. Le plus ancien
+📖 **[Making of comics2crispz](docs/the-making-of.pdf)** suit pas à pas le tutoriel.
+
+---
+
 ## Installer / lancer
 
 ```bat
@@ -62,6 +86,10 @@ app racontée en BD — se construit avec :
 Le résultat fini de ce tutoriel :
 📖 **[The Making of comics2crispz — PDF final](docs/the-making-of.pdf)**
 (6 pages, 17 cases, un moteur, zéro retouche manuelle).
+
+Un second livre construit pareil, avec un personnage récurrent sur les six pages :
+📖 **[Four Billion Reasons](docs/four-billion-reasons.pdf)** (projet
+`books/klein-genesis/`).
 
 ### Travaux de fond — progression, pause, stop
 
