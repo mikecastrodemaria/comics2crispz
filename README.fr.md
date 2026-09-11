@@ -119,6 +119,23 @@ punaisées restent en place, tout ce qui est retiré est cité, une erreur de
 syntaxe refuse tout l'import et pointe la ligne. **💾 .czs** télécharge le
 texte ; une copie `script.czs` est gardée dans le dossier du livre.
 
+### Le livre en un fichier — le bundle .md
+
+Dans l'onglet Script, la portée **📦 full bundle (.md)** montre tout ce qui
+définit le livre dans un seul Markdown : `## Settings` (nom, page, moteur et
+modèle), `## Style` (suffixe, négatif, LoRA, mood, police des bulles),
+`## Story bible` (concept, langue), `## Visual bible` (une carte
+`### @Nom (character|setting)` par fiche : description, chemins des
+références, LoRA, négatif) et `## Script` (le .czs). Lisible comme un
+document, exact comme donnée (blocs JSON) : export → import → export est
+identique. **💾 Download** l'enregistre, **📂 Open file…** charge un `.md` (ou
+`.czs`) dans l'éditeur, **✔ Check** simule l'import section par section,
+**⬇ Import** l'applique : une section absente du fichier n'est pas touchée,
+les fiches/planches/cases retirées sont citées, une image de référence
+absente est signalée par son chemin (les images sont listées, pas incluses :
+le bundle est la recette, `panels/` et `pages/` sont le résultat). Une copie
+`book.md` est gardée dans le dossier du livre après chaque import.
+
 ### Bulles — ajouter, masquer, police
 
 Sous la zone de dialogue d'une case, **➕ balloon** ajoute une ligne

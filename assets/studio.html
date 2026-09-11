@@ -363,12 +363,14 @@ font-size:11px}
     <div id="scriptview">
       <div>
         <div class="row" style="align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-          <select id="scriptscope" title="The whole book, or one chapter"><option value="">whole book</option></select>
+          <select id="scriptscope" title="The whole book, one chapter, or the full bundle (.md: settings, style, bibles and script)"><option value="">whole book</option></select>
+          <button id="scriptopen" title="Open a .czs script or a .md bundle from your disk into the editor (then Check / Import)">📂 Open file…</button>
+          <input id="scriptfile" type="file" accept=".czs,.md,.txt" style="display:none">
           <button id="scriptreload" title="Reload the text from the book (drops your unsaved edits here)">📄 From the book</button>
           <button id="scriptcheck" title="Parse and simulate the import: report, nothing written">✔ Check</button>
           <button id="scriptimport" class="primary" title="Apply the text to the book (chapters, pages, panels, dialogue). Unchanged panels keep their drawings.">⬇ Import into the book</button>
-          <button id="scriptdl" title="Download this text as a .czs file">💾 .czs</button>
-          <button class="helpb" data-help="The Script view shows the whole book as text in the .czs format: '=== ch01 : Name ===' opens a chapter, '> text' its synopsis, '~ mood: text' its visual mood, '--- page 3-hero' a page (roles cover/title/back, seed=N optional), '[pn1] text' a panel description, then dialogue lines 'Name: text', 'CAP: text', 'SFX: text', 'Name (think): text'. Check simulates the import and reports; Import applies it: panels whose text did not change keep their drawing, anything removed is quoted in the report, a syntax error refuses the whole import and cites the line.">?</button>
+          <button id="scriptdl" title="Download this text (.czs script, or .md bundle in bundle mode)">💾 Download</button>
+          <button class="helpb" data-help="Scope '📦 full bundle (.md)' shows EVERYTHING that defines the book in one Markdown file - settings (page, engine/model), style and mood, story bible, visual bible cards with their reference paths, and the script - readable, and importable back (Check simulates, Import applies section by section; a section absent from the file is left untouched; reference images are listed by path, not embedded). Other scopes show the .czs script only. The Script view shows the whole book as text in the .czs format: '=== ch01 : Name ===' opens a chapter, '> text' its synopsis, '~ mood: text' its visual mood, '--- page 3-hero' a page (roles cover/title/back, seed=N optional), '[pn1] text' a panel description, then dialogue lines 'Name: text', 'CAP: text', 'SFX: text', 'Name (think): text'. Check simulates the import and reports; Import applies it: panels whose text did not change keep their drawing, anything removed is quoted in the report, a syntax error refuses the whole import and cites the line.">?</button>
           <span id="scriptstat" class="hint" style="margin-left:auto"></span>
         </div>
         <textarea id="scripttxt" spellcheck="false"></textarea>
@@ -2001,9 +2003,20 @@ async function showScript(){
   $('tab-script').classList.add('on');
   if(!SCRIPT_DIRTY) await scriptReload();
 }
+const BUNDLE_SCOPE = '__bundle__';
+function bundleMode(){ return $('scriptscope').value === BUNDLE_SCOPE; }
 async function scriptReload(){
   // rawPost: pas de verrou BUSY (un chargement en cours ne doit pas laisser
   // la vue vide sans un mot)
+  if(bundleMode()){
+    const rb = await rawPost('bundle_get', {});
+    if(!rb || !rb.ok){ status('⚠️ ' + ((rb && rb.error) || 'cannot read the book'), 'err'); return; }
+    $('scripttxt').value = rb.text;
+    SCRIPT_DIRTY = false;
+    $('scriptstat').textContent = rb.text.split('\n').length + ' lines · full bundle';
+    $('scriptrep').innerHTML = 'Bundle = settings + style + bibles + script. Edit, then ✔ Check or ⬇ Import.';
+    return;
+  }
   const res = await rawPost('script_get', {cid: $('scriptscope').value});
   if(!res || !res.ok){ status('⚠️ ' + ((res && res.error) || 'cannot read the book'), 'err'); return; }
   $('scriptlayouts').textContent = (res.layouts || []).join(', ');
@@ -2011,9 +2024,41 @@ async function scriptReload(){
   SCRIPT_DIRTY = false;
   $('scriptscope').innerHTML = '<option value="">whole book</option>' +
     res.chapters.map(c => '<option value="' + c.id + '"' +
-      (c.id === res.cid ? ' selected' : '') + '>' + esc(c.id + ' · ' + c.name) + '</option>').join('');
+      (c.id === res.cid ? ' selected' : '') + '>' + esc(c.id + ' · ' + c.name) + '</option>').join('') +
+    '<option value="' + BUNDLE_SCOPE + '">📦 full bundle (.md)</option>';
   $('scriptstat').textContent = res.text.split('\n').length + ' lines';
   $('scriptrep').innerHTML = 'Edit the text, then ✔ Check or ⬇ Import.';
+}
+function bundleReport(rep, applied){
+  const out = [];
+  if(!rep.ok){
+    out.push('<span class="err">✖ ' + esc(rep.error) + '</span>', 'Nothing was applied.');
+    $('scriptrep').innerHTML = out.join('\n');
+    return;
+  }
+  const v = applied ? '' : ' (would)';
+  out.push('<span class="okm">' + (applied ? '✅ Bundle imported' : '✔ Bundle valid') + '</span> — sections: ' +
+           (rep.sections || []).join(', '));
+  if(rep.settings.length) out.push('settings' + v + ' changed: ' + rep.settings.join(', '));
+  if(rep.style) out.push('style / mood / font' + v + ' changed');
+  if(rep.bible) out.push('story bible' + v + ' changed');
+  if(rep.casting_added.length) out.push('+ cards: @' + rep.casting_added.join(', @'));
+  if(rep.casting_updated.length) out.push('~ cards: @' + rep.casting_updated.join(', @'));
+  (rep.casting_removed || []).forEach(n => out.push('<span class="err">− card @' + esc(n) +
+    (applied ? ' removed' : ' would be removed') + ' (its reference files stay on disk)</span>'));
+  (rep.refs_missing || []).forEach(r => out.push('⚠ reference image missing on disk: ' + esc(r)));
+  if(rep.script){
+    const sr = rep.script;
+    out.push('script: ' + sr.panels_changed + ' panel text(s)' + v + ' changed, ' + sr.panels_unchanged +
+             ' unchanged' + (sr.pages_added ? ', +' + sr.pages_added + ' page(s)' : ''));
+    (sr.pages_removed || []).forEach(r => out.push('<span class="err">− page ' + r.cid + '.' + r.pid +
+      ': ' + esc(r.texts.filter(Boolean).join(' | ') || '(empty)') + '</span>'));
+    (sr.panels_removed || []).forEach(r => out.push('<span class="err">− panel ' + r.cid + '.' + r.pid +
+      '/' + r.pnid + ': ' + esc(r.text || '(empty)') + '</span>'));
+    (sr.warnings || []).forEach(w => out.push('⚠ ' + esc(w)));
+  }
+  (rep.warnings || []).forEach(w => out.push('⚠ ' + esc(w)));
+  $('scriptrep').innerHTML = out.join('\n');
 }
 function scriptReport(rep, applied){
   const out = [];
@@ -2056,11 +2101,28 @@ $('scriptreload').onclick = () => {
 $('scripttxt').oninput = () => { SCRIPT_DIRTY = true;
   $('scriptstat').textContent = $('scripttxt').value.split('\n').length + ' lines · edited'; };
 $('scriptcheck').onclick = async () => {
-  const res = await rawPost('script_check', {text: $('scripttxt').value});
-  scriptReport(res, false);
-  status(res.ok ? 'Script is valid' : '⚠️ ' + res.error, res.ok ? 'ok' : 'err');
+  const bm = bundleMode();
+  const res = await rawPost(bm ? 'bundle_check' : 'script_check', {text: $('scripttxt').value});
+  (bm ? bundleReport : scriptReport)(res, false);
+  status(res.ok ? (bm ? 'Bundle is valid' : 'Script is valid') : '⚠️ ' + res.error, res.ok ? 'ok' : 'err');
 };
 $('scriptimport').onclick = async () => {
+  if(bundleMode()){
+    const chk = await rawPost('bundle_check', {text: $('scripttxt').value});
+    if(!chk.ok){ bundleReport(chk, false); status('⚠️ ' + chk.error, 'err'); return; }
+    const removed = (chk.casting_removed || []).length +
+      (chk.script ? (chk.script.pages_removed || []).length + (chk.script.panels_removed || []).length : 0);
+    if(!confirm('Import the bundle into this book?' + (removed ? '\n\n' + removed +
+       ' card(s)/page(s)/panel(s) would be removed (listed in the report).' : ''))) { bundleReport(chk, false); return; }
+    const res = await api('bundle_import', {text: $('scripttxt').value}, 'Importing the bundle…');
+    if(!res) return;
+    IDX = res; SCRIPT_DIRTY = false;
+    bundleReport(res.report, true);
+    renderNav();
+    status('Bundle imported — 🧩 Compose book to letter, 🎨 Generate for new panels', 'ok');
+    await scriptReload();
+    return;
+  }
   const chk = await rawPost('script_check', {text: $('scripttxt').value});
   if(!chk.ok){ scriptReport(chk, false); status('⚠️ ' + chk.error, 'err'); return; }
   const removed = (chk.pages_removed || []).length + (chk.panels_removed || []).length;
@@ -2078,8 +2140,29 @@ $('scriptdl').onclick = () => {
   const blob = new Blob([$('scripttxt').value], {type: 'text/plain'});
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = ((IDX && IDX.name) || 'book').replace(/[^\w\-]+/g, '-') + '.czs';
+  a.download = ((IDX && IDX.name) || 'book').replace(/[^\w\-]+/g, '-') + (bundleMode() ? '.md' : '.czs');
   a.click();
+};
+$('scriptopen').onclick = () => {
+  if(SCRIPT_DIRTY && !confirm('Drop your unsaved edits and open a file?')) return;
+  $('scriptfile').click();
+};
+$('scriptfile').onchange = () => {
+  const f = $('scriptfile').files[0];
+  if(!f) return;
+  const rd = new FileReader();
+  rd.onload = () => {
+    const txt = String(rd.result || '');
+    // un .md avec des sections '## ' = bundle, sinon script .czs
+    const isBundle = /^## /m.test(txt) && !/^=== /m.test(txt.split('\n', 3).join('\n'));
+    if(isBundle) $('scriptscope').value = BUNDLE_SCOPE;
+    else if(bundleMode()) $('scriptscope').value = '';
+    $('scripttxt').value = txt; SCRIPT_DIRTY = true;
+    $('scriptstat').textContent = txt.split('\n').length + ' lines · from ' + f.name + ' (not imported yet)';
+    $('scriptrep').innerHTML = 'File loaded into the editor: ✔ Check to see what it would change, ⬇ Import to apply.';
+    $('scriptfile').value = '';
+  };
+  rd.readAsText(f);
 };
 $('reload').onclick = load;
 $('bookdd').onchange = async () => {

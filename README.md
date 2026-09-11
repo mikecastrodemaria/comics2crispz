@@ -149,6 +149,22 @@ syntax error refuses the whole import and points at the line. **💾 .czs**
 downloads the text; a `script.czs` copy is kept in the book folder after
 each import.
 
+### 2c. The book in one file — the .md bundle
+
+In the Script tab, scope **📦 full bundle (.md)** shows everything that
+defines the book in one Markdown file: `## Settings` (name, page, engine and
+model), `## Style` (suffix, negative, LoRAs, mood, balloon font), `## Story
+bible` (concept, language), `## Visual bible` (one `### @Name (character|setting)`
+card per entry with its description, reference paths, LoRAs, negative) and
+`## Script` (the .czs). Readable as a document, exact as data (fenced JSON
+blocks): export → import → export is identical. **💾 Download** saves it,
+**📂 Open file…** loads a `.md` (or `.czs`) into the editor, **✔ Check**
+simulates the import section by section, **⬇ Import** applies it: a section
+absent from the file is left untouched, removed cards/pages/panels are quoted,
+a missing reference image is reported by path (images are listed, not
+embedded — the bundle is the recipe, `panels/` and `pages/` are the output).
+A `book.md` copy is kept in the book folder after each import.
+
 ### 3. Open the flatplan
 
 ```bat

@@ -45,6 +45,7 @@ import c2c_state
 import c2c_engines
 import c2c_ollama
 import c2c_script
+import c2c_bundle
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSETS = os.path.join(HERE, "assets")
@@ -652,6 +653,62 @@ class Studio:
     def op_production(self, _data):
         """📊 Tableau de suivi: compteurs + listes (filtres cliquables)."""
         return c2c_state.production_state(self.load(), self.dir)
+
+    # ------------------------------------------------------------------
+    # 📦 Bundle (.md): settings + style + bibles + script in ONE text file
+    # ------------------------------------------------------------------
+    def op_bundle_get(self, _data):
+        project = self.load()
+        return {"ok": True, "text": c2c_bundle.export_bundle(project),
+                "name": project.get("name") or "book"}
+
+    def _ref_exists(self, r):
+        ap = r if os.path.isabs(str(r)) else os.path.join(
+            self.dir, *str(r).replace("\\", "/").split("/"))
+        return os.path.isfile(ap)
+
+    def _bundle_apply(self, text, dry):
+        try:
+            bundle = c2c_bundle.parse_bundle(text)
+        except c2c_bundle.BundleError as e:
+            return {"ok": False, "error": str(e)}
+        import copy
+        project = self.load()
+        work = copy.deepcopy(project) if dry else project
+        try:
+            rep = c2c_bundle.apply_bundle(work, bundle, ref_exists=self._ref_exists)
+        except c2c_script.ScriptError as e:
+            return {"ok": False, "line": e.line_no,
+                    "error": f"script section, {e}"}
+        rep.update({"ok": True, "dry": dry,
+                    "sections": [k for k in ("settings", "style", "bible", "casting",
+                                             "script") if bundle.get(k) is not None]})
+        return rep, work
+
+    def op_bundle_check(self, data):
+        res = self._bundle_apply(str(data.get("text") or ""), dry=True)
+        return res[0] if isinstance(res, tuple) else res
+
+    def op_bundle_import(self, data):
+        """Apply the bundle to the book and save; a parse error in any
+        section refuses the whole import (the check runs on a copy first,
+        so nothing is half-applied). A book.md copy is kept in the book."""
+        with _LOCK:
+            text = str(data.get("text") or "")
+            chk = self._bundle_apply(text, dry=True)
+            if not isinstance(chk, tuple):
+                return chk
+            res = self._bundle_apply(text, dry=False)
+            rep, project = res
+            cz_comic.save_project(project, self.dir)
+            try:
+                with open(os.path.join(self.dir, "book.md"), "w", encoding="utf-8") as f:
+                    f.write(c2c_bundle.export_bundle(project))
+            except OSError:
+                pass
+        idx = c2c_state.book_index(project, self.dir)
+        idx.update({"report": rep})
+        return idx
 
     def op_set_bubble(self, data):
         """Deplace une bulle: {cid, pid, pnid, index, pos|anchor: [fx, fy]}
