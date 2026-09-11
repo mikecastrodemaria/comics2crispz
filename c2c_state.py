@@ -171,9 +171,8 @@ def chapter_state(project, project_dir, cid):
     folios = _folios(project)
     pages = []
     for page in ch["pages"]:
-        cells = cz_comic.layout_cells(page["layout"])
-        rects = cz_comic.panel_rects(cells, pg_conf["width"], pg_conf["height"],
-                                     pg_conf["margin"], pg_conf["gutter"])
+        geom = cz_comic.page_geometry(project, page, pg_conf)
+        rects = [g["rect"] for g in geom]
         pp = cz_comic.page_path(project_dir, cid, page["id"])
         panels = []
         for i, pn in enumerate(page["panels"]):
@@ -190,7 +189,10 @@ def chapter_state(project, project_dir, cid):
                 "dialogue_text": fmt_dialogue(pn.get("dialogue")),
                 "rect": ([rects[i][0] / W, rects[i][1] / H,
                           rects[i][2] / W, rects[i][3] / H]
-                         if i < len(rects) else None)})
+                         if i < len(rects) else None),
+                "shape": pn.get("shape") or None,
+                "poly": ([[q[0] / W, q[1] / H] for q in geom[i]["poly"]]
+                         if i < len(geom) and geom[i]["poly"] else None)})
         pages.append({"cid": cid, "pid": page["id"],
                       "role": page.get("role", "story"),
                       "layout": page["layout"],

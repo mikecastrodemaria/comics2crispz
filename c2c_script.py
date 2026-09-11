@@ -48,6 +48,8 @@ _RE_CHAPTER = re.compile(r"^===\s*(?:(ch\d+)\s*)?:?\s*(.*?)\s*===\s*$")
 _RE_PAGE = re.compile(r"^---\s*(.*?)\s*$")
 _RE_PANEL = re.compile(r"^\[(pn\d+)\]\s*(.*)$")
 _RE_SEED = re.compile(r"^seed\s*=\s*(-?\d+)\s*$", re.IGNORECASE)
+_RE_SHAPE = re.compile(r"^shape\s*=\s*(.+?)\s*$", re.IGNORECASE)
+_RE_Z = re.compile(r"^z\s*=\s*(-?\d+)\s*$", re.IGNORECASE)
 # a dialogue line: 'CAP:', 'SFX:', or 'Name: text' / 'Name (mods): text'
 _RE_DIALOGUE = re.compile(r"^(CAP|SFX|[^:\[\]#]{1,40}?(?:\s*\([^)]*\))?)\s*:\s*\S")
 
@@ -150,6 +152,36 @@ def parse_script(text):
         if m:
             panel["seed"] = int(m.group(1))
             continue
+        m = _RE_SHAPE.match(stripped)
+        if m:
+            # shape=rect  |  shape=0,0 1,0 0.55,1,0.2 0,1   (fx,fy[,r] per corner)
+            body = m.group(1).strip()
+            if body.lower() in ("rect", "none", "cell"):
+                panel["shape"] = None
+                continue
+            pts = []
+            for tok in re.split(r"[\s;]+", body):
+                if not tok:
+                    continue
+                parts = tok.split(",")
+                try:
+                    pt = [float(parts[0]), float(parts[1]),
+                          float(parts[2]) if len(parts) > 2 else 0.0]
+                except (ValueError, IndexError):
+                    raise ScriptError(no, f"bad shape corner '{tok}' (fx,fy[,r])")
+                pts.append(pt)
+            if len(pts) < 3:
+                raise ScriptError(no, "a shape needs at least 3 corners")
+            panel["shape"] = {"points": pts, "z": (panel.get("shape") or {}).get("z", 0)
+                              if isinstance(panel.get("shape"), dict) else 0}
+            continue
+        m = _RE_Z.match(stripped)
+        if m:
+            if "shape" in panel and panel["shape"] is None:
+                continue                      # shape=rect: z is meaningless
+            sh = panel.get("shape") if isinstance(panel.get("shape"), dict) else None
+            panel["shape"] = dict(sh or {"points": []}, z=int(m.group(1)))
+            continue
         if in_text and not _is_dialogue(stripped):
             panel["text"] = (panel["text"] + " " + stripped).strip()
             continue
@@ -192,6 +224,14 @@ def format_script(project, chapter_id=None):
                 out.append(f"[{pn['id']}] " + " ".join((pn.get('text') or '').split()))
                 if int(pn.get("seed") or -1) >= 0:
                     out.append(f"seed={int(pn['seed'])}")
+                sh = pn.get("shape") or {}
+                if sh.get("points"):
+                    out.append("shape=" + " ".join(
+                        f"{float(q[0]):g},{float(q[1]):g}" +
+                        (f",{float(q[2]):g}" if len(q) > 2 and float(q[2] or 0) > 0 else "")
+                        for q in sh["points"]))
+                    if int(sh.get("z") or 0):
+                        out.append(f"z={int(sh['z'])}")
                 dlg = c2c_state.fmt_dialogue(pn.get("dialogue") or [])
                 if dlg:
                     out.append(dlg)
@@ -268,6 +308,15 @@ def apply_script(project, outline):
                         rep["panels_unchanged"] += 1
                 if spn.get("seed") is not None:
                     pn["seed"] = int(spn["seed"])
+                if "shape" in spn:
+                    if spn["shape"] is None:
+                        pn.pop("shape", None)
+                    else:
+                        sh = dict(spn["shape"])
+                        if not sh.get("points"):            # z= alone: keep corners
+                            sh["points"] = (pn.get("shape") or {}).get("points") or []
+                        if sh["points"]:
+                            pn["shape"] = sh
                 old_dlg = pn.get("dialogue") or []
                 new_dlg = c2c_state.merge_dialogue(old_dlg, spn["dialogue"])
                 if c2c_state.fmt_dialogue(old_dlg) != c2c_state.fmt_dialogue(new_dlg):

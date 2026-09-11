@@ -255,6 +255,98 @@ def gen_size(rect_w, rect_h, target_pixels=1024 * 1024, align=GEN_ALIGN, max_sid
 MAX_GEN_ASPECT = 2.5
 
 
+# ----------------------------------------------------------------------------
+# Forme d'une case: par defaut le rectangle de sa cellule; optionnellement
+# panel['shape'] = {"points": [[fx, fy, r?], ...], "z": 0} en FRACTIONS DE
+# PAGE (0..1), r = arrondi du coin (0..1, fraction du demi-cote le plus court).
+# La case est generee au ratio de sa boite englobante, puis DECOUPEE par le
+# polygone a la composition; z ordonne la superposition (grand = dessus).
+# ----------------------------------------------------------------------------
+def _round_corners(pts, steps=10):
+    """[(x, y, r)] -> polygone dense (px): chaque coin de rayon r > 0 est
+    remplace par une courbe de Bezier quadratique tangente aux deux cotes."""
+    n = len(pts)
+    if n < 3:
+        return [(x, y) for x, y, *_ in pts]
+    out = []
+    for i in range(n):
+        x, y = pts[i][0], pts[i][1]
+        r = float(pts[i][2]) if len(pts[i]) > 2 else 0.0
+        if r <= 0.001:
+            out.append((x, y))
+            continue
+        ax, ay = pts[i - 1][0], pts[i - 1][1]
+        bx, by = pts[(i + 1) % n][0], pts[(i + 1) % n][1]
+        la = math.hypot(ax - x, ay - y) or 1.0
+        lb = math.hypot(bx - x, by - y) or 1.0
+        d = min(1.0, max(0.0, r)) * 0.5 * min(la, lb)
+        p0 = (x + (ax - x) / la * d, y + (ay - y) / la * d)
+        p2 = (x + (bx - x) / lb * d, y + (by - y) / lb * d)
+        for k in range(steps + 1):
+            t = k / steps
+            out.append(((1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * x + t * t * p2[0],
+                        (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * y + t * t * p2[1]))
+    return out
+
+
+def shape_points(shape, pg):
+    """panel['shape'] -> [(x, y, r)] en px de page, ou None si pas de forme."""
+    pts = (shape or {}).get("points") or []
+    if len(pts) < 3:
+        return None
+    out = []
+    for p_ in pts:
+        fx, fy = float(p_[0]), float(p_[1])
+        r = float(p_[2]) if len(p_) > 2 and p_[2] is not None else 0.0
+        out.append((max(0.0, min(1.0, fx)) * pg["width"],
+                    max(0.0, min(1.0, fy)) * pg["height"], max(0.0, min(1.0, r))))
+    return out
+
+
+def page_geometry(project, page, pg=None):
+    """Geometrie de chaque case: [{'rect': (x, y, w, h), 'poly': [(x, y)...]|None,
+    'z': int, 'index': i}]. rect = cellule du gabarit, ou boite englobante du
+    polygone quand la case a une forme."""
+    pg = pg or page_size(project.get("page"))
+    cells = layout_cells(page["layout"])
+    base = panel_rects(cells, pg["width"], pg["height"], pg["margin"], pg["gutter"])
+    out = []
+    for i, rect in enumerate(base):
+        panel = page["panels"][i] if i < len(page.get("panels") or []) else None
+        shape = (panel or {}).get("shape") or None
+        poly, z = None, 0
+        pts = shape_points(shape, pg) if shape else None
+        if pts:
+            poly = _round_corners(pts)
+            xs = [q[0] for q in poly]
+            ys = [q[1] for q in poly]
+            x0, y0 = int(math.floor(min(xs))), int(math.floor(min(ys)))
+            rect = (x0, y0, max(1, int(math.ceil(max(xs)) - x0)),
+                    max(1, int(math.ceil(max(ys)) - y0)))
+            try:
+                z = int(shape.get("z") or 0)
+            except (TypeError, ValueError):
+                z = 0
+        out.append({"rect": rect, "poly": poly, "z": z, "index": i})
+    return out
+
+
+def page_rects(project, page, pg=None):
+    """Rectangles (boites) des cases, formes comprises - remplace panel_rects
+    partout ou l'on a le projet sous la main."""
+    return [g["rect"] for g in page_geometry(project, page, pg)]
+
+
+def cell_shape(project, page, index):
+    """La forme 'rectangle' d'une cellule en fractions de page: point de depart
+    de l'editeur de coins (4 coins, pas d'arrondi)."""
+    pg = page_size(project.get("page"))
+    x, y, w, h = page_rects(project, page, pg)[index]
+    W, H = float(pg["width"]), float(pg["height"])
+    return {"points": [[x / W, y / H, 0], [(x + w) / W, y / H, 0],
+                       [(x + w) / W, (y + h) / H, 0], [x / W, (y + h) / H, 0]], "z": 0}
+
+
 def extreme_cells(layout, page, max_aspect=MAX_GEN_ASPECT, target_pixels=1024 * 1024):
     """Cases d'un gabarit dont le ratio de GENERATION depasse `max_aspect`, pour ce
     format de page. Renvoie [(index, w, h, ratio)], vide si tout va bien.
@@ -556,7 +648,7 @@ def resolve_panel(project, page, panel, index=None, target_pixels=1024 * 1024):
     if index >= len(cells):
         raise ValueError(f"panel {panel['id']} has no cell in layout '{page['layout']}'")
     pg = page_size(project.get("page"))
-    rects = panel_rects(cells, pg["width"], pg["height"], pg["margin"], pg["gutter"])
+    rects = page_rects(project, page, pg)
     rw, rh = rects[index][2], rects[index][3]
 
     res = resolve_casting(panel.get("text", ""), project.get("casting"))
@@ -652,13 +744,15 @@ def compose_page(project, page, images=None, fit="cover", placeholders=True):
              'contain' = image entiere, fond visible autour.
     placeholders : dessine une case barree numerotee pour les panneaux non rendus."""
     pg = page_size(project.get("page"))
-    cells = layout_cells(page["layout"])
-    rects = panel_rects(cells, pg["width"], pg["height"], pg["margin"], pg["gutter"])
+    geom = page_geometry(project, page, pg)
     sheet = Image.new("RGB", (pg["width"], pg["height"]), pg["background"])
     draw = ImageDraw.Draw(sheet)
     border = int(pg.get("border") or 0)
+    gutter = int(pg.get("gutter") or 0)
 
-    for i, rect in enumerate(rects):
+    # ordre de superposition: z croissant, puis ordre de lecture
+    for g in sorted(geom, key=lambda g: (g["z"], g["index"])):
+        i, rect, poly = g["index"], g["rect"], g["poly"]
         if i >= len(page["panels"]):
             break
         panel = page["panels"][i]
@@ -679,10 +773,25 @@ def compose_page(project, page, images=None, fit="cover", placeholders=True):
                 img = canvas
             else:
                 img = ImageOps.fit(img, (w, h), Image.LANCZOS)
-        sheet.paste(img, (x, y))
+        if poly is None:
+            sheet.paste(img, (x, y))
+            if border > 0:
+                draw.rectangle([x, y, x + w - 1, y + h - 1],
+                               outline=pg.get("border_color", "#000000"), width=border)
+            continue
+        # case a forme: masque polygonal, halo de gouttiere (fond de page) pour
+        # se detacher d'une case du dessous, puis contour le long du polygone
+        mask = Image.new("L", (pg["width"], pg["height"]), 0)
+        ImageDraw.Draw(mask).polygon(poly, fill=255)
+        layer = Image.new("RGB", (pg["width"], pg["height"]), pg["background"])
+        layer.paste(img, (x, y))
+        closed = poly + [poly[0]]
+        if gutter > 0 and g["z"] > 0:
+            draw.line(closed, fill=pg["background"], width=gutter, joint="curve")
+        sheet.paste(layer, (0, 0), mask)
         if border > 0:
-            draw.rectangle([x, y, x + w - 1, y + h - 1],
-                           outline=pg.get("border_color", "#000000"), width=border)
+            draw.line(closed, fill=pg.get("border_color", "#000000"),
+                      width=border, joint="curve")
     return sheet
 
 
@@ -1140,7 +1249,7 @@ def render_lettering(project, page, sheet, face_detector=None,
     Sans detecteur: comportement v1 (empilage haut, alternance gauche/droite)."""
     pg = page_size(project.get("page"))
     cells = layout_cells(page["layout"])
-    rects = panel_rects(cells, pg["width"], pg["height"], pg["margin"], pg["gutter"])
+    rects = page_rects(project, page, pg)
     draw = ImageDraw.Draw(sheet)
     placements = []
 

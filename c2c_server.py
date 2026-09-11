@@ -733,6 +733,50 @@ class Studio:
         idx.update({"report": rep})
         return idx
 
+    def op_set_shape(self, data):
+        """Forme d'une case: {cid, pid, pnid, points: [[fx, fy, r?]...] | null,
+        z?}. points null = retour au rectangle de la cellule. Un polygone
+        a au moins 3 points; coordonnees en fractions de page, clampees.
+        Recompose la planche."""
+        cid, pid, pnid = data["cid"], data["pid"], data["pnid"]
+        with _LOCK:
+            project = self.load()
+            panel = cz_comic.find_panel(project, cid, pid, pnid)
+            pts = data.get("points")
+            if pts is None and "z" not in data:
+                panel.pop("shape", None)
+            else:
+                shape = dict(panel.get("shape") or {})
+                if pts is not None:
+                    clean = []
+                    for q in pts:
+                        try:
+                            fx, fy = float(q[0]), float(q[1])
+                            r = float(q[2]) if len(q) > 2 and q[2] is not None else 0.0
+                        except (TypeError, ValueError, IndexError):
+                            return {"ok": False, "error": "bad shape point (need [fx, fy, r?])"}
+                        clean.append([round(max(0.0, min(1.0, fx)), 4),
+                                      round(max(0.0, min(1.0, fy)), 4),
+                                      round(max(0.0, min(1.0, r)), 3)])
+                    if len(clean) < 3:
+                        return {"ok": False, "error": "a panel shape needs at least 3 corners"}
+                    shape["points"] = clean
+                if "z" in data:
+                    try:
+                        shape["z"] = int(data.get("z") or 0)
+                    except (TypeError, ValueError):
+                        shape["z"] = 0
+                if not shape.get("points"):
+                    page = cz_comic.find_page(project, cid, pid)
+                    shape["points"] = cz_comic.cell_shape(
+                        project, page, page["panels"].index(panel))["points"]
+                panel["shape"] = shape
+            cz_comic.save_project(project, self.dir)
+            fd, emb = self._letter_kit(project)
+            c2c_state.compose_one(project, self.dir, cid, pid,
+                                  face_detector=fd, char_embeddings=emb)
+        return c2c_state.book_index(project, self.dir)
+
     def op_set_bubble(self, data):
         """Deplace une bulle: {cid, pid, pnid, index, pos|anchor: [fx, fy]}
         ou {clear: ["pos", "anchor"]}. pos = coin haut-gauche de la bulle,
@@ -1160,9 +1204,7 @@ class Studio:
         folios = c2c_state._folios(prj)
         numbers = bool(pg.get("page_numbers", False))
         for ch, page in cz_comic.book_order(prj):
-            cells = cz_comic.layout_cells(page["layout"])
-            rects = cz_comic.panel_rects(cells, pg["width"], pg["height"],
-                                         pg["margin"], pg["gutter"])
+            rects = cz_comic.page_rects(prj, page, pg)
             images = {}
             for i, panel in enumerate(page["panels"]):
                 srcp = panel.get("image")
