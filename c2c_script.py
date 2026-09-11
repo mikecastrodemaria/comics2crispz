@@ -243,8 +243,10 @@ def apply_script(project, outline):
         for j, sp in enumerate(sc["pages"]):
             pg = old_pages[j] if j < len(old_pages) else None
             if pg is None:
+                # add_page picks the next free id from ch['pages']: the new
+                # page must STAY there until the end (removing it gave every
+                # new page of a chapter the same id, and one shared folder)
                 pg = cz_comic.add_page(project, ch["id"], sp["layout"], role=sp["role"])
-                ch["pages"].remove(pg)          # re-inserted in order below
                 rep["pages_added"] += 1
             else:
                 pg["layout"] = sp["layout"]

@@ -87,6 +87,23 @@ class Studio:
         self._emb_cache = {}          # (name, ref path, mtime) -> embedding
         if not os.path.isfile(cz_comic.project_json_path(self.dir)):
             raise FileNotFoundError(f"no project.json in {self.dir}")
+        self.repairs = self._repair_ids()
+
+    def _repair_ids(self):
+        """Duplicate page ids (an old import bug) are repaired on open: the
+        fixes are logged and kept in self.repairs so the UI can say it."""
+        try:
+            project = cz_comic.load_project(self.dir)
+        except Exception:
+            return []
+        fixes = c2c_state.repair_page_ids(project)
+        if fixes:
+            cz_comic.save_project(project, self.dir)
+            for f in fixes:
+                print(f"[c2c] repaired duplicate page id {f['cid']}.{f['old']} -> "
+                      f"{f['new']} ({f['panels_to_redraw']} panel(s) to redraw)",
+                      flush=True)
+        return fixes
 
     def load(self):
         return cz_comic.load_project(self.dir)

@@ -812,3 +812,31 @@ def production_state(project, project_dir):
                      "panels": sorted({pl.get("panel") for pl in dirty})})
     return {"ok": True, "totals": tot, "lists": lists,
             "style_sig": style_signature(project)}
+
+
+def repair_page_ids(project):
+    """Two pages of a chapter with the same id share one panels/ folder and
+    overwrite each other's drawings. Give every duplicate (after the first)
+    a fresh id; its panels lose their image link (the files belong to the
+    first page - they are NOT deleted) and go back to draft so they can be
+    generated again. Returns the list of fixes (empty = nothing to do)."""
+    fixes = []
+    for ch in project.get("chapters") or []:
+        seen = set()
+        for pg in ch.get("pages") or []:
+            if pg.get("id") not in seen:
+                seen.add(pg.get("id"))
+                continue
+            old = pg.get("id")
+            new = cz_comic._next_id([{"id": i} for i in seen], "p")
+            seen.add(new)
+            pg["id"] = new
+            lost = 0
+            for pn in pg.get("panels") or []:
+                if pn.get("image"):
+                    pn["image"] = None
+                    pn["status"] = "draft"
+                    lost += 1
+            fixes.append({"cid": ch["id"], "old": old, "new": new,
+                          "panels_to_redraw": lost})
+    return fixes
