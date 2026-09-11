@@ -191,6 +191,12 @@ def chapter_state(project, project_dir, cid):
                           rects[i][2] / W, rects[i][3] / H]
                          if i < len(rects) else None),
                 "storyboard": bool(pn.get("storyboard")),
+                "breakout": ({"enabled": bool(pn["breakout"].get("enabled")),
+                              "zoom": pn["breakout"].get("zoom", 1.0),
+                              "outline": pn["breakout"].get("outline", 0),
+                              "ready": bool(pn["breakout"].get("cutout") and
+                                            os.path.isfile(pn["breakout"]["cutout"]))}
+                             if isinstance(pn.get("breakout"), dict) else None),
                 "shape": pn.get("shape") or None,
                 "poly": ([[q[0] / W, q[1] / H] for q in geom[i]["poly"]]
                          if i < len(geom) and geom[i]["poly"] else None)})
@@ -417,6 +423,7 @@ def compose_one(project, project_dir, cid, pid, face_detector=None,
     Returns the placements."""
     page = cz_comic.find_page(project, cid, pid)
     pg = cz_comic.page_size(project.get("page"))
+    refresh_breakouts(page)
     sheet = cz_comic.compose_page(project, page)
     raw = cz_comic.render_lettering(project, page, sheet,
                                     face_detector=face_detector,
@@ -847,3 +854,23 @@ def repair_page_ids(project):
             fixes.append({"cid": ch["id"], "old": old, "new": new,
                           "panels_to_redraw": lost})
     return fixes
+
+
+def refresh_breakouts(page):
+    """Cases 'hors cadre': recalcule le detourage quand le dessin a change
+    (ou n'a jamais ete detoure). Sans rembg: la case reste dans son cadre
+    et le rapport de la planche le dit (breakout['error'])."""
+    import c2c_cutout
+    for pn in page.get("panels") or []:
+        bo = pn.get("breakout")
+        if not (isinstance(bo, dict) and bo.get("enabled")):
+            continue
+        img = pn.get("image")
+        if not (img and os.path.isfile(img)):
+            continue
+        try:
+            if not bo.get("cutout") or c2c_cutout.is_stale(img):
+                bo["cutout"] = c2c_cutout.refresh(img)
+            bo.pop("error", None)
+        except Exception as e:
+            bo["error"] = str(e)[:200]

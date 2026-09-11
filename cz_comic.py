@@ -815,12 +815,20 @@ def compose_page(project, page, images=None, fit="cover", placeholders=True):
     gutter = int(pg.get("gutter") or 0)
 
     # ordre de superposition: z croissant, puis ordre de lecture
+    breakouts = []              # (panel, geometry, image) a poser HORS cadre a la fin
     for g in sorted(geom, key=lambda g: (g["z"], g["index"])):
         i, rect, poly = g["index"], g["rect"], g["poly"]
         if i >= len(page["panels"]):
             break
         panel = page["panels"][i]
         x, y, w, h = rect
+        bo = panel.get("breakout") or {}
+        zoom = 1.0
+        if bo.get("enabled"):
+            try:
+                zoom = max(1.0, min(1.6, float(bo.get("zoom") or 1.0)))
+            except (TypeError, ValueError):
+                zoom = 1.0
         img = (images or {}).get(panel["id"])
         if img is None and panel.get("image") and os.path.isfile(panel["image"]):
             img = Image.open(panel["image"])
@@ -836,7 +844,18 @@ def compose_page(project, page, images=None, fit="cover", placeholders=True):
                 canvas.paste(scaled, ((w - scaled.width) // 2, (h - scaled.height) // 2))
                 img = canvas
             else:
-                img = ImageOps.fit(img, (w, h), Image.LANCZOS)
+                if zoom > 1.0:
+                    # case 'hors cadre': le dessin est cadre avec un zoom, le
+                    # cadre en montre le centre et le sujet detoure depasse
+                    zw, zh = int(round(w * zoom)), int(round(h * zoom))
+                    big = ImageOps.fit(img, (zw, zh), Image.LANCZOS)
+                    ox, oy = (zw - w) // 2, (zh - h) // 2
+                    img = big.crop((ox, oy, ox + w, oy + h))
+                    breakouts.append((panel, g, big, (x - ox, y - oy)))
+                else:
+                    img = ImageOps.fit(img, (w, h), Image.LANCZOS)
+                    if bo.get("enabled"):
+                        breakouts.append((panel, g, img, (x, y)))
         if poly is None:
             sheet.paste(img, (x, y))
             if border > 0:
@@ -858,6 +877,29 @@ def compose_page(project, page, images=None, fit="cover", placeholders=True):
         if border > 0:
             draw.line(closed, fill=pg.get("border_color", "#000000"),
                       width=border, joint="curve")
+    # ---- sujets hors cadre: le detourage (RGBA, taille du dessin) est pose
+    # par-dessus TOUTES les cases, sans decoupe, cadre au meme zoom que le
+    # dessin; un lisere optionnel (px) le detache des voisines
+    for panel, g, fitted, pos in breakouts:
+        cp = (panel.get("breakout") or {}).get("cutout")
+        if not (cp and os.path.isfile(cp)):
+            continue
+        try:
+            with Image.open(cp) as m:
+                m = m.convert("RGBA")
+                m = ImageOps.fit(m, fitted.size, Image.LANCZOS)
+        except Exception:
+            continue
+        alpha = m.split()[3]
+        try:
+            outline = int((panel.get("breakout") or {}).get("outline") or 0)
+        except (TypeError, ValueError):
+            outline = 0
+        if outline > 0:
+            from PIL import ImageFilter
+            halo = alpha.filter(ImageFilter.MaxFilter(outline * 2 + 1))
+            sheet.paste(Image.new("RGB", m.size, pg["background"]), pos, halo)
+        sheet.paste(m.convert("RGB"), pos, alpha)
     return sheet
 
 

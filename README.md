@@ -228,6 +228,15 @@ shape's bounding box and clipped by the shape at composition; the border
 follows the polygon. **▭ Reset** returns to the rectangle. In the script a
 panel carries `shape=fx,fy[,r] fx,fy …` (page fractions, `r` = corner
 rounding 0–1) and `z=N`; `shape=rect` resets.
+**🧍 Break the frame** (panel box): the panel's subject is cut out of its
+background (rembg, optional dependency, a few seconds on CPU; the model is
+downloaded once) and drawn OVER the neighbouring panels while the background
+stays inside the frame. *Zoom* frames the drawing tighter so the subject
+overflows more, *Outline* adds a page-coloured rim. The matte refreshes
+itself when the drawing changes; if it takes too much or too little, brush
+the area with the Paint tool and use ➕ add painted / ➖ remove painted.
+Balloons stay on top.
+
 **Slanted presets** (Layout dialog › ✂): diagonal split, slanted trio, stairs,
 manga burst, a wide panel under two inserts, a rounded inset, a tilted
 grid — applied on a page with the same panel count, then adjustable corner

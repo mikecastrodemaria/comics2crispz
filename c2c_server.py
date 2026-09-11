@@ -46,6 +46,7 @@ import c2c_engines
 import c2c_ollama
 import c2c_script
 import c2c_bundle
+import c2c_cutout
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ASSETS = os.path.join(HERE, "assets")
@@ -811,6 +812,92 @@ class Studio:
                                   face_detector=fd, char_embeddings=emb)
         idx = c2c_state.book_index(project, self.dir)
         idx["applied"] = name
+        return idx
+
+    def op_breakout_panel(self, data):
+        """🧍 Sujet hors cadre: {cid, pid, pnid, enabled, zoom?, outline?,
+        recompute?}. Active = detourage du dessin (rembg) pose par-dessus
+        les cases voisines a la composition; zoom (1-1.6) cadre le dessin
+        plus serre pour que le sujet deborde davantage; outline (px) =
+        lisere de fond autour du sujet. Sans rembg: refus clair."""
+        cid, pid, pnid = data["cid"], data["pid"], data["pnid"]
+        with _LOCK:
+            project = self.load()
+            panel = cz_comic.find_panel(project, cid, pid, pnid)
+            bo = dict(panel.get("breakout") or {})
+            if "enabled" in data:
+                bo["enabled"] = bool(data["enabled"])
+            if "zoom" in data:
+                try:
+                    bo["zoom"] = round(max(1.0, min(1.6, float(data["zoom"]))), 2)
+                except (TypeError, ValueError):
+                    pass
+            if "outline" in data:
+                try:
+                    bo["outline"] = max(0, min(40, int(data["outline"])))
+                except (TypeError, ValueError):
+                    pass
+            if bo.get("enabled"):
+                ok, why = c2c_cutout.available()
+                if not ok:
+                    return {"ok": False, "error": f"cannot cut the subject out: {why}"}
+                src = panel.get("image")
+                if not (src and os.path.isfile(src)):
+                    return {"ok": False, "error": f"{pnid} has no drawing yet"}
+                try:
+                    bo["cutout"] = c2c_cutout.refresh(src, force=bool(data.get("recompute")))
+                    bo.pop("error", None)
+                except Exception as e:
+                    return {"ok": False, "error": f"{pnid}: cutout failed: {e}"}
+            panel["breakout"] = bo
+            cz_comic.save_project(project, self.dir)
+            fd, emb = self._letter_kit(project)
+            c2c_state.compose_one(project, self.dir, cid, pid,
+                                  face_detector=fd, char_embeddings=emb)
+        idx = c2c_state.book_index(project, self.dir)
+        idx["breakout"] = bo
+        return idx
+
+    def op_breakout_mask(self, data):
+        """Corrige le detourage avec la zone peinte: {cid, pid, pnid, mask
+        (data URL, taille d'affichage), mode: 'add' | 'remove'}."""
+        cid, pid, pnid = data["cid"], data["pid"], data["pnid"]
+        raw = str(data.get("mask") or "")
+        if "," in raw and raw.startswith("data:"):
+            raw = raw.split(",", 1)[1]
+        try:
+            mask_bytes = base64.b64decode(raw) if raw else b""
+        except Exception:
+            mask_bytes = b""
+        if not mask_bytes:
+            return {"ok": False, "error": "paint the area first (the mask is empty)"}
+        mode = "add" if data.get("mode") == "add" else "remove"
+        with _LOCK:
+            project = self.load()
+            panel = cz_comic.find_panel(project, cid, pid, pnid)
+            bo = panel.get("breakout") or {}
+            src = panel.get("image")
+            if not (bo.get("enabled") and src and os.path.isfile(src)):
+                return {"ok": False, "error": f"{pnid}: turn 'Break the frame' on first"}
+            from PIL import Image
+            import io
+            try:
+                mask = Image.open(io.BytesIO(mask_bytes)).convert("L")
+            except Exception as e:
+                return {"ok": False, "error": f"unreadable mask: {e}"}
+            if mask.getbbox() is None:
+                return {"ok": False, "error": "the painted area is empty"}
+            try:
+                bo["cutout"] = c2c_cutout.edit_alpha(src, mask, mode)
+            except Exception as e:
+                return {"ok": False, "error": f"{pnid}: matte edit failed: {e}"}
+            panel["breakout"] = bo
+            cz_comic.save_project(project, self.dir)
+            fd, emb = self._letter_kit(project)
+            c2c_state.compose_one(project, self.dir, cid, pid,
+                                  face_detector=fd, char_embeddings=emb)
+        idx = c2c_state.book_index(project, self.dir)
+        idx["mode"] = mode
         return idx
 
     def op_set_bubble(self, data):

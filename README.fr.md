@@ -161,6 +161,15 @@ forme puis découpé à la composition ; le contour suit le polygone.
 **▭ Reset** revient au rectangle. Dans le script : `shape=fx,fy[,r] …`
 (fractions de page, `r` = arrondi 0–1) et `z=N` ; `shape=rect` remet le
 rectangle.
+**🧍 Break the frame** (panneau de la case) : le sujet de la case est détouré
+de son fond (rembg, dépendance optionnelle, quelques secondes sur CPU, modèle
+téléchargé une fois) et dessiné PAR-DESSUS les cases voisines pendant que le
+fond reste dans le cadre. *Zoom* cadre le dessin plus serré pour que le sujet
+déborde davantage, *Outline* ajoute un liseré couleur de page. Le détourage
+se recalcule quand le dessin change ; s'il prend trop ou pas assez, peins la
+zone avec l'outil Paint puis ➕ add painted / ➖ remove painted. Les bulles
+restent au-dessus.
+
 **Gabarits obliques** (fenêtre Layout › ✂) : diagonale, trio oblique,
 escalier, éclat manga, case large sous deux inserts, insert arrondi, grille
 penchée ; appliqués sur une planche du même nombre de cases, puis ajustables

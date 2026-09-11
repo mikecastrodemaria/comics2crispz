@@ -846,6 +846,24 @@ Bruno (think): Of course...
             <select id="pnrefcast" style="flex:1"><option value="">📌 use this drawing as a reference of…</option></select>
             <button id="pnrefadd" title="Add this panel's image to that card's references (Visual Bible)">📌 Add</button>
           </div>
+          <div id="bobox" class="field">
+            <span class="lbl">🧍 Break the frame — the subject overflows the neighbouring panels
+              <button class="helpb" data-help="The Spider-Man effect: the panel's subject (character, hand, web) is cut out of its background and drawn OVER the neighbouring panels, while the background stays inside the frame. The cutout is computed automatically (rembg, a few seconds, CPU) and refreshed when the drawing changes. Zoom frames the drawing tighter so the subject overflows more; Outline adds a page-coloured rim around the subject. If the matte takes too much or too little, turn on Paint (Inpaint block), brush the area, then '+ add painted' or '- remove painted'. Balloons stay on top.">?</button></span>
+            <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center">
+              <label class="lorarow" style="margin:0"><input type="checkbox" id="boon"> enabled</label>
+              <span class="lbl" style="margin:0 0 0 6px">zoom <b id="bozoomval" style="color:var(--fg)">1.00</b></span>
+              <input id="bozoom" type="range" min="1" max="1.6" step="0.05" value="1" style="flex:1;min-width:70px">
+              <span class="lbl" style="margin:0 0 0 6px">outline <b id="booutval" style="color:var(--fg)">0</b>px</span>
+              <input id="boout" type="range" min="0" max="30" step="1" value="0" style="flex:1;min-width:60px">
+            </div>
+            <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
+              <button id="boapply" class="primary">✔ Apply</button>
+              <button id="borecompute" title="Recompute the cutout from the current drawing">↻ Recompute</button>
+              <button id="boadd" title="Bring the painted area (Paint tool) back into the cutout">➕ add painted</button>
+              <button id="borem" title="Clear the painted area (Paint tool) from the cutout">➖ remove painted</button>
+              <span id="bostat" class="hint"></span>
+            </div>
+          </div>
           <div id="inpbox" style="margin-top:10px">
             <span class="lbl">🖌 Inpaint — paint the area to redraw
               <button class="helpb" data-help="Inpaint redraws ONLY the area you paint on the panel (white in the mask), keeping the rest pixel-exact. Turn on Paint, brush over the zone on the page (Eraser to correct, Clear to start over), describe what should appear THERE (a local description, e.g. 'a black cat sitting', not the whole scene - leave empty to just fill coherently), then Inpaint. Strength 1.0 = fully redrawn, 0.6 = keeps some of the original. Works on every engine; the previous version goes to the history.">?</button></span>
@@ -1706,7 +1724,48 @@ function renderPanelBox(p){
   renderCastChips();
   applyEngineCaps();
   renderShapeEditor();
+  renderBreakout(pn);
 }
+function renderBreakout(pn){
+  const bo = pn.breakout || {};
+  $('boon').checked = !!bo.enabled;
+  $('bozoom').value = bo.zoom || 1; $('bozoomval').textContent = Number(bo.zoom || 1).toFixed(2);
+  $('boout').value = bo.outline || 0; $('booutval').textContent = bo.outline || 0;
+  $('bostat').textContent = !bo.enabled ? '' : (bo.ready ? 'cutout ready' : 'cutout missing');
+  ['borecompute', 'boadd', 'borem'].forEach(id => $(id).disabled = !bo.enabled);
+}
+$('bozoom').oninput = () => $('bozoomval').textContent = Number($('bozoom').value).toFixed(2);
+$('boout').oninput = () => $('booutval').textContent = $('boout').value;
+async function applyBreakout(extra){
+  if(!SEL || !SELPN) return;
+  const pnid = SELPN;
+  const payload = Object.assign({cid: SEL.cid, pid: SEL.pid, pnid: pnid,
+    enabled: $('boon').checked, zoom: parseFloat($('bozoom').value),
+    outline: parseInt($('boout').value, 10)}, extra || {});
+  const res = await api('breakout_panel', payload,
+    payload.enabled ? 'Cutting the subject out and recomposing… (a few seconds)' : 'Recomposing…');
+  if(!res) return;
+  IDX = res; SELPN = pnid; await showPage(SEL.cid, SEL.pid);
+  status(payload.enabled ? pnid + ' breaks the frame — Paint + add/remove painted to fix the cutout'
+                         : pnid + ' back inside its frame', 'ok');
+}
+$('boapply').onclick = () => applyBreakout();
+$('borecompute').onclick = () => applyBreakout({recompute: true});
+async function breakoutMask(mode){
+  if(!SEL || !SELPN) return;
+  if(!INP.on || !INP.cv || !INP.painted){ status('Turn on 🖌 Paint (Inpaint block) and brush the area first', 'warn'); return; }
+  const mask = maskDataURL(INP.cv.width, INP.cv.height);
+  if(!mask){ status('The painted area is empty', 'warn'); return; }
+  const pnid = SELPN;
+  const res = await api('breakout_mask', {cid: SEL.cid, pid: SEL.pid, pnid: pnid, mask, mode},
+                        (mode === 'add' ? 'Adding' : 'Removing') + ' the painted area…');
+  if(!res) return;
+  inpaintOff();
+  IDX = res; SELPN = pnid; await showPage(SEL.cid, SEL.pid);
+  status('Cutout updated (' + mode + ')', 'ok');
+}
+$('boadd').onclick = () => breakoutMask('add');
+$('borem').onclick = () => breakoutMask('remove');
 /* ce que le moteur DU LIVRE sait faire (variation = img2img, inpaint): les
    boutons se grisent avec la raison au lieu d'echouer apres coup */
 let ENGCAPS = {name: null, caps: null};
