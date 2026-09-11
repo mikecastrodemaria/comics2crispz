@@ -1869,7 +1869,7 @@ function renderShapeEditor(){
     c.setAttribute('cx', q[0] * sw); c.setAttribute('cy', q[1] * sh_); c.setAttribute('r', 7);
     c.onpointerdown = ev => {
       ev.preventDefault(); ev.stopPropagation();
-      SHP.sel = i; SHP.drag = {i, moved: false};
+      SHP.sel = i; SHP.drag = {i, moved: false, x0: q[0], y0: q[1]};
       try{ c.setPointerCapture(ev.pointerId); }catch(_){}
       document.querySelectorAll('#shapesvg .shc').forEach((e, k) => e.classList.toggle('sel', k === i));
       shapeSelectUI();
@@ -1877,8 +1877,20 @@ function renderShapeEditor(){
     c.onpointermove = ev => {
       if(!SHP.drag || SHP.drag.i !== i) return;
       const r = $('stage').getBoundingClientRect();
-      const fx = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
-      const fy = Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height));
+      let fx = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+      let fy = Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height));
+      if(ev.shiftKey){
+        // Shift = contrainte Illustrator: horizontal, vertical ou 45 degres
+        // depuis le point de depart (en pixels d'ecran, pas en fractions)
+        const dx = (fx - SHP.drag.x0) * r.width, dy = (fy - SHP.drag.y0) * r.height;
+        const ang = Math.atan2(dy, dx), step = Math.PI / 4;
+        const snap = Math.round(ang / step) * step;
+        const len = Math.hypot(dx, dy);
+        fx = Math.max(0, Math.min(1, SHP.drag.x0 + Math.cos(snap) * len / r.width));
+        fy = Math.max(0, Math.min(1, SHP.drag.y0 + Math.sin(snap) * len / r.height));
+        if(Math.abs(Math.cos(snap)) < 1e-6) fx = SHP.drag.x0;
+        if(Math.abs(Math.sin(snap)) < 1e-6) fy = SHP.drag.y0;
+      }
       P[i][0] = fx; P[i][1] = fy; SHP.drag.moved = true;
       c.setAttribute('cx', fx * sw); c.setAttribute('cy', fy * sh_);
       poly.setAttribute('points', P.map(z => (z[0] * sw) + ',' + (z[1] * sh_)).join(' '));
@@ -1900,7 +1912,7 @@ function shapeSelectUI(){
   const ok = SHP.sel >= 0 && SHP.pts && SHP.pts[SHP.sel];
   $('shpradius').disabled = !ok;
   $('shphint').textContent = ok ? 'corner ' + (SHP.sel + 1) + ' of ' + SHP.pts.length +
-    ' — drag it, double-click to remove' : 'select a corner';
+    ' — drag it (Shift = horizontal / vertical / 45°), double-click to remove' : 'select a corner';
   const v = ok ? (SHP.pts[SHP.sel][2] || 0) : 0;
   $('shpradius').value = v; $('shproundval').textContent = Number(v).toFixed(2);
 }
@@ -1918,7 +1930,7 @@ $('shpedit').onclick = () => {
   SHP.on = !SHP.on;
   if(!SHP.on){ SHP.pts = null; SHP.sel = -1; }
   renderShapeEditor();
-  if(SHP.on) status('Drag the corners on the page; click a blue midpoint to add one; double-click a corner to remove it', 'ok');
+  if(SHP.on) status('Drag the corners on the page (hold Shift to constrain to horizontal / vertical / 45°); click a blue midpoint to add one; double-click a corner to remove it', 'ok');
 };
 $('shpreset').onclick = async () => {
   if(!SEL || !SELPN) return;
