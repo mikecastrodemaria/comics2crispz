@@ -289,6 +289,15 @@ panel. A balloon you drag can be dropped **outside its panel** (over the
 gutter, a neighbour, or the page margin, for a cover title): only the page
 holds it back, while the tail tip keeps aiming inside the panel.
 
+**Adding fonts (Google Fonts or any .ttf/.otf).** On fonts.google.com pick a
+font (comic-friendly: Bangers, Luckiest Guy, Permanent Marker, Comic Neue,
+Patrick Hand), "Get font" → "Download all", unzip, and drop the `.ttf` files
+either in `comics2crispz/fonts/` (every book) or in `books/<book>/fonts/`
+(that book only). They show up at once in the balloon box and in Bible ›
+Style under their file name (`(font=Bangers-Regular.ttf)` in the text). Prefer
+the static `-Regular` / `-Bold` files over the variable `[wght]` one, which
+only renders in its default weight.
+
 The book's **default balloon shape** (round = classic oval, rounded = soft
 rectangle, angular = jagged) is set in the wizard and in 📖 Bible › Style; a
 balloon's Shape "(book default: …)" follows it, or overrides it.

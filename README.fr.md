@@ -225,6 +225,16 @@ déposée **hors de sa case** (sur la gouttière, la voisine ou la marge, pour
 un titre de couverture) : seule la page la retient, la pointe de la queue
 continue de viser dans la case.
 
+**Ajouter des polices (Google Fonts ou tout .ttf/.otf).** Sur fonts.google.com,
+choisir une police (pour la BD : Bangers, Luckiest Guy, Permanent Marker,
+Comic Neue, Patrick Hand), « Get font » → « Download all », dézipper, et
+déposer les `.ttf` soit dans `comics2crispz/fonts/` (tous les livres), soit
+dans `books/<livre>/fonts/` (ce livre seulement). Elles apparaissent aussitôt
+dans la boîte de la bulle et dans Bible › Style sous leur nom de fichier
+(`(font=Bangers-Regular.ttf)` dans le texte). Préférer les fichiers statiques
+`-Regular` / `-Bold` au fichier variable `[wght]`, rendu dans sa seule graisse
+par défaut.
+
 La **forme de bulle par défaut** du livre (round = ovale classique, rounded =
 rectangle doux, angular = pans coupés) se règle au wizard et dans 📖 Bible ›
 Style ; la forme d'une bulle « (book default: …) » la suit, ou la remplace.
