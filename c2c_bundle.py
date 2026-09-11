@@ -203,7 +203,9 @@ def apply_bundle(project, bundle, ref_exists=None):
         new["loras"] = [str(x) for x in (new.get("loras") or [])]
         for k in ("prompt_suffix", "negative", "mood", "font"):
             new[k] = str(new.get(k) or "")
-        if any(style.get(k) != new[k] for k in _STYLE_KEYS):
+        def _norm(v):
+            return [str(x) for x in v] if isinstance(v, list) else str(v or "")
+        if any(_norm(style.get(k)) != _norm(new[k]) for k in _STYLE_KEYS):
             style.update(new)
             rep["style"] = True
     if bundle.get("bible") is not None and bundle["bible"] != (project.get("bible") or {}):
