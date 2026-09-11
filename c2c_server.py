@@ -917,8 +917,11 @@ class Studio:
             for key in ("pos", "anchor"):
                 if data.get(key) is not None:
                     fx, fy = data[key]
-                    dlg[idx][key] = [max(0.0, min(1.0, float(fx))),
-                                     max(0.0, min(1.0, float(fy)))]
+                    # une bulle peut sortir de sa case (fractions < 0 ou > 1);
+                    # le lettrage la garde dans la page
+                    lo, hi = (-1.0, 2.0) if key == "pos" else (0.0, 1.0)   # la queue vise DANS la case
+                    dlg[idx][key] = [max(lo, min(hi, float(fx))),
+                                     max(lo, min(hi, float(fy)))]
             # type de bulle (parole/pensee/cartouche/sfx), forme, homothetie
             if data.get("kind") is not None:
                 if data["kind"] not in cz_comic.DIALOGUE_KINDS:
@@ -947,6 +950,12 @@ class Studio:
                     dlg[idx]["hidden"] = True
                 else:
                     dlg[idx].pop("hidden", None)
+            if data.get("width") is not None:
+                wk = max(0.3, min(2.0, float(data["width"])))
+                if abs(wk - 1.0) < 0.03:
+                    dlg[idx].pop("width", None)
+                else:
+                    dlg[idx]["width"] = round(wk, 2)
             if data.get("outline") is not None:
                 ok_ = max(0.3, min(3.0, float(data["outline"])))
                 if abs(ok_ - 1.0) < 0.05:
@@ -960,7 +969,7 @@ class Studio:
                 else:
                     dlg[idx].pop("font", None)      # police du livre
             for key in data.get("clear") or []:
-                if key in ("pos", "anchor", "scale", "style", "hidden", "font", "outline"):
+                if key in ("pos", "anchor", "scale", "style", "hidden", "font", "outline", "width"):
                     dlg[idx].pop(key, None)
             if data.get("remove"):
                 # 🗑 la replique quitte le dialogue de la case (le texte est

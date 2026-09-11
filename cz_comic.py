@@ -1105,13 +1105,18 @@ def parse_dialogue(block):
                             d["outline"] = float(tok[8:])
                         except ValueError:
                             pass
+                    elif tok.lower().startswith("width="):
+                        try:
+                            d["width"] = float(tok[6:])
+                        except ValueError:
+                            pass
             out.append(d)
         else:
-            kind, style, hidden, font, outline = "speech", None, False, None, None
+            kind, style, hidden, font, outline, width = "speech", None, False, None, None, None
             m = re.match(r"^(.*?)\s*\(([^)]+)\)$", head)
             if m:
                 known = True
-                k2, s2, h2, f2, o2 = kind, style, hidden, font, None
+                k2, s2, h2, f2, o2, w2 = kind, style, hidden, font, None, None
                 for tok in m.group(2).split(","):
                     tok = tok.strip()
                     tl = tok.lower()
@@ -1129,12 +1134,18 @@ def parse_dialogue(block):
                         except ValueError:
                             known = False
                             break
+                    elif tl.startswith("width="):
+                        try:
+                            w2 = float(tok[6:])
+                        except ValueError:
+                            known = False
+                            break
                     else:
                         known = False
                         break
                 if known:
                     head, kind, style, hidden, font = m.group(1).strip(), k2, s2, h2, f2
-                    outline = o2
+                    outline, width = o2, w2
             d = {"speaker": head, "text": text, "kind": kind}
             if style:
                 d["style"] = style
@@ -1144,6 +1155,8 @@ def parse_dialogue(block):
                 d["font"] = font
             if outline is not None:
                 d["outline"] = outline
+            if width is not None:
+                d["width"] = width
             out.append(d)
     return out
 
@@ -1327,19 +1340,27 @@ def _place_rect(panel_rect, bw, bh, forbidden, taken, prefer, inside=None):
     return (best_out or (cols[0], y + pad, bw, bh)), False
 
 
-def _pos_rect(d, panel_rect, bw, bh, forbidden):
+def _pos_rect(d, panel_rect, bw, bh, forbidden, page=None):
     """Position MANUELLE d'une bulle: d['pos'] = coin haut-gauche en FRACTIONS
     de case, ecrit par Comic Studio quand l'utilisateur deplace la bulle.
-    Prioritaire sur le placement automatique (_place_rect), clampee dans la
-    case. clean=False si elle recouvre un visage: on ne la re-deplace PAS
-    (l'utilisateur l'a posee la volontairement), on le signale seulement.
+    Prioritaire sur le placement automatique (_place_rect). Une bulle
+    punaisee peut SORTIR de sa case (deborder sur la gouttiere ou la
+    voisine, un titre sur la marge): elle n'est clampee que dans la PAGE
+    (`page` = (W, H)); sans page, dans la case comme avant. clean=False si
+    elle recouvre un visage: on ne la re-deplace PAS (l'utilisateur l'a
+    posee la volontairement), on le signale seulement.
     Renvoie ((x, y, w, h), clean) ou None si pas de position manuelle."""
     pos = d.get("pos")
     if not pos:
         return None
     x, y, w, h = panel_rect
-    bx = max(x + 2, min(x + int(float(pos[0]) * w), x + w - bw - 2))
-    by = max(y + 2, min(y + int(float(pos[1]) * h), y + h - bh - 2))
+    if page:
+        W, H = page
+        bx = max(2, min(x + int(float(pos[0]) * w), W - bw - 2))
+        by = max(2, min(y + int(float(pos[1]) * h), H - bh - 2))
+    else:
+        bx = max(x + 2, min(x + int(float(pos[0]) * w), x + w - bw - 2))
+        by = max(y + 2, min(y + int(float(pos[1]) * h), y + h - bh - 2))
     r = (bx, by, bw, bh)
     clean = all(_overlap_area(r, f) == 0 for f in forbidden)
     return r, clean
@@ -1528,6 +1549,13 @@ def render_lettering(project, page, sheet, face_detector=None,
                 outline_k = 1.0
             outline_k = max(0.3, min(3.0, outline_k))
             bw = max(1, int(round(3 * outline_k)))
+            # largeur de la bulle / du SFX: x0.3..x2 de la largeur habituelle
+            # (>1 = plus large que la case, pour un titre ou un cri)
+            try:
+                width_k = float(d.get("width") or 1.0)
+            except (TypeError, ValueError):
+                width_k = 1.0
+            width_k = max(0.3, min(2.0, width_k))
             text = manual_breaks(text)
             if kind == "sfx":
                 # auto-fit: un cri long ou un TITRE de couverture ne doit pas
@@ -1538,13 +1566,13 @@ def render_lettering(project, page, sheet, face_detector=None,
                 sw = max(1, int(round(max(3, fpx_d // 5) * outline_k)))
                 bb = draw.textbbox((0, 0), text, font=sfx_font, stroke_width=sw,
                                    align="center")
-                while size > 10 and bb[2] - bb[0] > int(w * 0.92 * scale):
+                while size > 10 and bb[2] - bb[0] > int(w * 0.92 * width_k):
                     size = int(size * 0.85)
                     sfx_font = _font(sfx_fonts, size)
                     bb = draw.textbbox((0, 0), text, font=sfx_font, stroke_width=sw,
                                        align="center")
                 bw_, bh_ = bb[2] - bb[0], bb[3] - bb[1]
-                (rx, ry, _, _), clean = _pos_rect(d, rect, bw_, bh_, forbidden) \
+                (rx, ry, _, _), clean = _pos_rect(d, rect, bw_, bh_, forbidden, page=sheet.size) \
                     or _place_rect(rect, bw_, bh_, forbidden, taken, "center", inside=inside)
                 draw.text((rx, ry), text, font=sfx_font, fill="#ffffff",
                           stroke_width=sw, stroke_fill="#000000", align="center")
@@ -1556,9 +1584,9 @@ def render_lettering(project, page, sheet, face_detector=None,
 
             # la largeur de coupe suit l'echelle (vraie homothetie: la bulle
             # garde ses proportions), plafonnee a la case
-            max_text_w = min(int(w * 0.92),
-                             int(w * (0.86 if kind == "caption" else 0.58)
-                                 * scale))
+            max_text_w = int(min(w * 0.92,
+                                 w * (0.86 if kind == "caption" else 0.58) * scale)
+                             * width_k)
             lines = _wrap(draw, text, font_d, max_text_w)
             line_h = fpx_d + 4
             text_w = max(int(draw.textlength(l, font=font_d)) for l in lines)
@@ -1566,7 +1594,7 @@ def render_lettering(project, page, sheet, face_detector=None,
 
             if kind == "caption":
                 bw_, bh_ = text_w + pad_d * 2, text_h + pad_d * 2
-                (bx0, by0, _, _), clean = _pos_rect(d, rect, bw_, bh_, forbidden) \
+                (bx0, by0, _, _), clean = _pos_rect(d, rect, bw_, bh_, forbidden, page=sheet.size) \
                     or _place_rect(rect, bw_, bh_, forbidden, taken, "left", inside=inside)
                 draw.rectangle([bx0, by0, bx0 + bw_, by0 + bh_],
                                fill="#fdf6d8", outline="#000000", width=bw)
@@ -1597,7 +1625,7 @@ def render_lettering(project, page, sheet, face_detector=None,
             if fc:  # pres du locuteur: colonne du cote de son visage
                 prefer = "left" if (fc["box"][0] + fc["box"][2]) / 2 < x + w / 2 \
                     else "right"
-            (bx0, by0, _, _), clean = _pos_rect(d, rect, bw_, bh_, forbidden) \
+            (bx0, by0, _, _), clean = _pos_rect(d, rect, bw_, bh_, forbidden, page=sheet.size) \
                 or _place_rect(rect, bw_, bh_, forbidden, taken, prefer, inside=inside)
             cx, cy = bx0 + bw_ // 2, by0 + bh_ // 2
 

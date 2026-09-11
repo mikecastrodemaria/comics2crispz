@@ -264,6 +264,8 @@ def fmt_dialogue(dlg):
             extra.append("font=" + str(x["font"]))
         if x.get("outline") not in (None, "", 1, 1.0):
             extra.append("outline=" + ("%g" % float(x["outline"])))
+        if x.get("width") not in (None, "", 1, 1.0):
+            extra.append("width=" + ("%g" % float(x["width"])))
         if k in ("caption", "sfx"):
             head = "CAP" if k == "caption" else "SFX"
             lines.append(f"{head} ({', '.join(extra)}): {t}" if extra else f"{head}: {t}")

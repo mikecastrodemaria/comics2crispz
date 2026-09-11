@@ -765,6 +765,15 @@ Bruno (think): Of course...
           </div>
           <div class="field">
             <span class="lbl" style="display:flex;align-items:center;gap:6px">
+              Width <b id="bubwidthval" style="color:var(--fg)">×1.0</b>
+              <button class="helpb" style="margin-left:0"
+                data-help="Width of the balloon (line wrapping) or of the SFX text: 0.3x to 2x the usual width. Above 1x a balloon or a title can be wider than its panel. Drag a balloon anywhere, including outside its panel: it only stays inside the page.">?</button>
+              <span style="margin-left:auto">wrap width · can exceed the panel</span>
+            </span>
+            <input id="bubwidth" type="range" min="0.3" max="2" step="0.05" value="1">
+          </div>
+          <div class="field">
+            <span class="lbl" style="display:flex;align-items:center;gap:6px">
               Outline <b id="buboutval" style="color:var(--fg)">×1.0</b>
               <button class="helpb" style="margin-left:0"
                 data-help="Thickness of the balloon border, or of the black stroke around SFX / title letters (0.3x to 3x). Line breaks: type \\n inside the text where the line must break (e.g. 'La fille des\\nruines fleuries'); speech balloons still wrap automatically around it.">?</button>
@@ -1622,8 +1631,9 @@ function makeDraggable(el, pl, mode){
       const sw = st.clientWidth, sh = st.clientHeight;
       const px = chPn.rect[0] * sw, py = chPn.rect[1] * sh;
       const pw = chPn.rect[2] * sw, ph = chPn.rect[3] * sh;
-      const fx = Math.max(0, Math.min(1, (parseFloat(el.style.left) - px) / pw));
-      const fy = Math.max(0, Math.min(1, (parseFloat(el.style.top) - py) / ph));
+      // une bulle peut sortir de sa case (gouttiere, case voisine, marge)
+      const fx = Math.max(-1, Math.min(2, (parseFloat(el.style.left) - px) / pw));
+      const fy = Math.max(-1, Math.min(2, (parseFloat(el.style.top) - py) / ph));
       const payload = {cid: SEL.cid, pid: SEL.pid, pnid: pl.panel,
                        index: pl.index};
       payload[mode] = [fx, fy];
@@ -1666,6 +1676,9 @@ function renderBubBox(){
   $('bubscaleval').textContent = '×' + Number(sc).toFixed(1);
   $('bubstyle').disabled = ['caption', 'sfx'].includes(dlg.kind || 'speech');
   $('bubhidden').checked = !!dlg.hidden;
+  const wk_ = dlg.width || 1.0;
+  $('bubwidth').value = wk_;
+  $('bubwidthval').textContent = '×' + Number(wk_).toFixed(2);
   const ok_ = dlg.outline || 1.0;
   $('bubout').value = ok_;
   $('buboutval').textContent = '×' + Number(ok_).toFixed(1);
@@ -1690,6 +1703,8 @@ $('bubscale').oninput = () =>
   $('bubscaleval').textContent = '×' + Number($('bubscale').value).toFixed(1);
 $('bubout').oninput = () =>
   $('buboutval').textContent = '×' + Number($('bubout').value).toFixed(1);
+$('bubwidth').oninput = () =>
+  $('bubwidthval').textContent = '×' + Number($('bubwidth').value).toFixed(2);
 $('bubkind').onchange = () =>
   $('bubstyle').disabled = ['caption', 'sfx'].includes($('bubkind').value);
 $('bubapply').onclick = async () => {
@@ -1698,7 +1713,7 @@ $('bubapply').onclick = async () => {
     pnid: SELBUB.panel, index: SELBUB.index,
     kind: $('bubkind').value, style: $('bubstyle').value,
     scale: parseFloat($('bubscale').value), hidden: $('bubhidden').checked,
-    outline: parseFloat($('bubout').value),
+    outline: parseFloat($('bubout').value), width: parseFloat($('bubwidth').value),
     font: $('bubfont').value}, 'Recomposing the page…');
   if(res){ IDX = res; status($('bubhidden').checked ?
     'Balloon hidden — it stays in the dialogue box as "(hidden)"; remove that to show it again' :
