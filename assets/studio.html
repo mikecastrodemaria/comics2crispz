@@ -1647,7 +1647,7 @@ function renderBubBox(){
   box.style.display = dlg ? '' : 'none';
   if(!dlg) return;
   $('bubhead').textContent = 'Balloon — ' +
-    ((dlg.speaker ? dlg.speaker + ': ' : '') + dlg.text).replace(/\n/g, ' / ').slice(0, 40);
+    ((dlg.speaker ? dlg.speaker + ': ' : '') + dlg.text).replace(/\\n/g, ' / ').slice(0, 40);
   $('bubkind').value = dlg.kind || 'speech';
   $('bubstyle').value = dlg.style || '';
   const sc = dlg.scale || 1.0;
