@@ -256,6 +256,14 @@ panel's history). A sketch is a structure check, not a preview of the exact
 final image: the final render is a new drawing.
 
 
+### 4c. The panel box — five tabs, no scrolling
+
+Selecting a panel opens a box organised like a toolbar: **✏️ Panel** (what
+to draw, @Name chips, dialogue, Save), **🎲 Render** (seed, lock,
+Regenerate), **🖌 Edit** (edit by instruction, Variation, Inpaint, use as a
+reference), **🔷 Shape** (corners, break the frame), **🕘 Versions**. The last
+tab you used is remembered; Edit and Versions wait for a drawing.
+
 ### 5a. Balloons — add, hide, font
 
 Under the panel's dialogue box, **➕ balloon** appends a line (`Name: text`;

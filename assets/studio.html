@@ -260,6 +260,12 @@ font-size:11px}
 #shapesvg .shm{fill:var(--acc);stroke:#fff;stroke-width:1.5;cursor:copy;pointer-events:all;opacity:.85}
 .laypre.dim{opacity:.4}
 .laypre{position:relative}
+.pntabs{display:flex;gap:4px;margin:6px 0 10px;position:sticky;top:0;background:var(--pan);z-index:2;padding-bottom:4px}
+.pntabs button{flex:1;padding:5px 0;font-size:12px;border-radius:6px;white-space:nowrap}
+.pntabs button.on{background:var(--bg);border-color:var(--acc);color:#fff}
+.pntabs button:disabled{opacity:.4}
+.pnpane{display:none}
+.pnpane.on{display:block}
 </style>
 </head>
 <body>
@@ -1725,6 +1731,9 @@ function renderPanelBox(p){
   applyEngineCaps();
   renderShapeEditor();
   renderBreakout(pn);
+  $('bobox').style.display = pn.img ? '' : 'none';
+  $('histbox').style.display = (pn.history || []).length ? '' : 'none';
+  showPanelTab();
 }
 function renderBreakout(pn){
   const bo = pn.breakout || {};
@@ -3293,6 +3302,72 @@ document.addEventListener('keydown', ev => {
     showPage(p.cid, p.pid);
   }
 });
+
+/* ---------- panneau de case en ONGLETS (barre d'outils, pas un long defile) ----------
+   Text: quoi dessiner, dialogue, seed, regenerer · Retouch: edit, variation,
+   inpaint, reference · Shape: coins, hors cadre · Versions: historique.
+   Les blocs existants sont deplaces dans les onglets (leurs ids et
+   handlers ne bougent pas). */
+const PNTABS = [['text', '✏️ Panel'], ['render', '🎲 Render'], ['retouch', '🖌 Edit'],
+                ['shape', '🔷 Shape'], ['versions', '🕘 Versions']];
+let PNTAB = 'text';
+try{ PNTAB = localStorage.getItem('c2c.pntab') || 'text'; }catch(_){}
+function buildPanelTabs(){
+  const box = $('pnbox');
+  const strip = document.createElement('div');
+  strip.className = 'pntabs'; strip.id = 'pntabs';
+  const panes = {};
+  PNTABS.forEach(([k, label]) => {
+    const b = document.createElement('button');
+    b.dataset.tab = k; b.textContent = label;
+    b.onclick = () => { if(b.disabled) return; PNTAB = k;
+      try{ localStorage.setItem('c2c.pntab', k); }catch(_){}
+      showPanelTab(); };
+    strip.appendChild(b);
+    const d = document.createElement('div');
+    d.className = 'pnpane'; d.id = 'pnpane-' + k;
+    panes[k] = d;
+  });
+  const head = $('pnhead');
+  head.after(strip);
+  PNTABS.forEach(([k]) => strip.after(panes[k]));   // (reversed order fixed below)
+  // ordre visuel: text, retouch, shape, versions
+  PNTABS.map(([k]) => panes[k]).forEach(d => box.appendChild(d));
+  const mv = (el, k) => { if(el) panes[k].appendChild(el); };
+  mv($('pntext').closest('.field'), 'text');
+  mv($('pndlg').closest('.field'), 'text');
+  // Save stays with the text; seed / lock / regenerate form the Render tab
+  const saveRow = document.createElement('div');
+  saveRow.className = 'row'; saveRow.style.cssText = 'margin-top:10px;justify-content:flex-end';
+  saveRow.appendChild($('savepnbtn'));
+  panes.text.appendChild(saveRow);
+  mv($('pnseed').closest('.row'), 'render');
+  mv($('regenbtn'), 'render');
+  mv(box.querySelector(':scope > .hint'), 'render');
+  mv($('bobox'), 'shape');
+  mv($('histbox'), 'versions');
+  mv($('shpbox'), 'shape');
+  mv($('editbox'), 'retouch');
+  showPanelTab();
+}
+function showPanelTab(){
+  const pn = LASTPAGE && LASTPAGE.panels.find(x => x.id === SELPN);
+  const hasImg = !!(pn && pn.img);
+  document.querySelectorAll('#pntabs button').forEach(b => {
+    const k = b.dataset.tab;
+    b.disabled = (k === 'retouch' || k === 'versions') && !hasImg;
+    if(k === 'render') b.textContent = '🎲 Render' + (hasImg ? '' : ' ●');
+    b.title = b.disabled ? 'Draw the panel first' : '';
+    if(k === 'versions') b.textContent = '🕘 Versions' +
+      (pn && pn.history && pn.history.length ? ' (' + pn.history.length + ')' : '');
+  });
+  let cur = PNTAB;
+  const btn = document.querySelector('#pntabs button[data-tab="' + cur + '"]');
+  if(!btn || btn.disabled) cur = 'text';
+  document.querySelectorAll('#pntabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === cur));
+  document.querySelectorAll('#pnbox .pnpane').forEach(d => d.classList.toggle('on', d.id === 'pnpane-' + cur));
+}
+buildPanelTabs();
 
 load();
 </script>

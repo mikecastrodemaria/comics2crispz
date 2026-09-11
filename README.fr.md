@@ -190,6 +190,14 @@ style (les croquis restent dans l'historique). Un croquis valide la
 structure, pas l'image exacte : le rendu final est un nouveau dessin.
 
 
+### Le panneau de la case — cinq onglets, plus de défilement
+
+Sélectionner une case ouvre un panneau organisé comme une barre d'outils :
+**✏️ Panel** (quoi dessiner, puces @Nom, dialogue, Save), **🎲 Render** (seed,
+verrou, Regenerate), **🖌 Edit** (retouche par instruction, Variation,
+Inpaint, référence), **🔷 Shape** (coins, hors cadre), **🕘 Versions**. Le
+dernier onglet utilisé est mémorisé ; Edit et Versions attendent un dessin.
+
 ### Bulles — ajouter, masquer, police
 
 Sous la zone de dialogue d'une case, **➕ balloon** ajoute une ligne
