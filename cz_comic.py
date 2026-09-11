@@ -1208,12 +1208,38 @@ def _face_zone(box, panel_rect, grow=0.15):
     return (int(x1), int(y1), max(0, int(x2 - x1)), max(0, int(y2 - y1)))
 
 
-def _place_rect(panel_rect, bw, bh, forbidden, taken, prefer):
+def _point_in_poly(px, py, poly):
+    """Point dans un polygone (ray casting)."""
+    inside = False
+    n = len(poly)
+    for i in range(n):
+        x1, y1 = poly[i]
+        x2, y2 = poly[(i + 1) % n]
+        if (y1 > py) != (y2 > py):
+            xi = x1 + (py - y1) * (x2 - x1) / ((y2 - y1) or 1e-9)
+            if px < xi:
+                inside = not inside
+    return inside
+
+
+def _rect_in_poly(r, poly, inset=2):
+    """Le rect (x, y, w, h) tient-il ENTIEREMENT dans le polygone ? Les quatre
+    coins et les milieux des cotes (une case oblique peut couper un cote)."""
+    x, y, w, h = r
+    x0, y0, x1, y1 = x + inset, y + inset, x + w - inset, y + h - inset
+    pts = [(x0, y0), (x1, y0), (x1, y1), (x0, y1),
+           ((x0 + x1) / 2, y0), ((x0 + x1) / 2, y1), (x0, (y0 + y1) / 2), (x1, (y0 + y1) / 2)]
+    return all(_point_in_poly(px, py, poly) for px, py in pts)
+
+
+def _place_rect(panel_rect, bw, bh, forbidden, taken, prefer, inside=None):
     """Position d'un rect bw x bh dans la case: balaye du haut vers le bas,
     ordre des colonnes selon `prefer` ('left' / 'right' / 'center').
 
     Priorite absolue: ZERO recouvrement des zones visage (`forbidden`) et des
-    bulles deja posees (`taken`). Si aucune position propre n'existe, renvoie
+    bulles deja posees (`taken`). `inside(rect) -> bool` (case a forme):
+    une bulle doit tenir dans le polygone; les positions hors forme ne sont
+    prises qu'en dernier recours. Si aucune position propre n'existe, renvoie
     celle qui recouvre le MOINS de visage (dernier recours, jamais silencieux:
     le placement est signale clipped=True dans le retour du lettrage)."""
     x, y, w, h = panel_rect
@@ -1221,8 +1247,15 @@ def _place_rect(panel_rect, bw, bh, forbidden, taken, prefer):
     cols = {"left": [x + pad, x + w - bw - pad, x + (w - bw) // 2],
             "right": [x + w - bw - pad, x + pad, x + (w - bw) // 2],
             "center": [x + (w - bw) // 2, x + pad, x + w - bw - pad]}[prefer]
+    if inside is not None:
+        # case a forme: plus de colonnes candidates (un coin oblique peut
+        # interdire les bords), toujours dans l'ordre de preference
+        span = max(0, w - bw - 2 * pad)
+        extra = [x + pad + span * k / 6.0 for k in range(7)]
+        cols = cols + [c for c in extra if all(abs(c - o) > 4 for o in cols)]
     step = max(16, bh // 3)
     best, best_ov = None, None
+    best_out, best_out_ov = None, None
     yy = y + pad
     while yy + bh <= y + h - pad:
         for xx in cols:
@@ -1231,12 +1264,18 @@ def _place_rect(panel_rect, bw, bh, forbidden, taken, prefer):
             if any(_overlap_area(r, t) > 0 for t in taken):
                 continue
             ov = sum(_overlap_area(r, f) for f in forbidden)
+            if inside is not None and not inside(r):
+                if best_out is None or ov < best_out_ov:
+                    best_out, best_out_ov = r, ov
+                continue
             if ov == 0:
                 return r, True
             if best is None or ov < best_ov:
                 best, best_ov = r, ov
         yy += step
-    return (best or (cols[0], y + pad, bw, bh)), False
+    if best is not None:
+        return best, False
+    return (best_out or (cols[0], y + pad, bw, bh)), False
 
 
 def _pos_rect(d, panel_rect, bw, bh, forbidden):
@@ -1357,7 +1396,8 @@ def render_lettering(project, page, sheet, face_detector=None,
     Sans detecteur: comportement v1 (empilage haut, alternance gauche/droite)."""
     pg = page_size(project.get("page"))
     cells = layout_cells(page["layout"])
-    rects = page_rects(project, page, pg)
+    geom = page_geometry(project, page, pg)
+    rects = [g_["rect"] for g_ in geom]
     draw = ImageDraw.Draw(sheet)
     placements = []
 
@@ -1369,6 +1409,8 @@ def render_lettering(project, page, sheet, face_detector=None,
         if not dialogue:
             continue
         x, y, w, h = rect
+        poly_i = geom[i]["poly"] if i < len(geom) else None
+        inside = (lambda r_, _p=poly_i: _rect_in_poly(r_, _p)) if poly_i else None
 
         # --- visages de la case (coordonnees planche) ---
         faces = []
@@ -1454,7 +1496,7 @@ def render_lettering(project, page, sheet, face_detector=None,
                                        align="center")
                 bw_, bh_ = bb[2] - bb[0], bb[3] - bb[1]
                 (rx, ry, _, _), clean = _pos_rect(d, rect, bw_, bh_, forbidden) \
-                    or _place_rect(rect, bw_, bh_, forbidden, taken, "center")
+                    or _place_rect(rect, bw_, bh_, forbidden, taken, "center", inside=inside)
                 draw.text((rx, ry), text, font=sfx_font, fill="#ffffff",
                           stroke_width=sw, stroke_fill="#000000", align="center")
                 taken.append((rx, ry, bw_, bh_))
@@ -1476,7 +1518,7 @@ def render_lettering(project, page, sheet, face_detector=None,
             if kind == "caption":
                 bw_, bh_ = text_w + pad_d * 2, text_h + pad_d * 2
                 (bx0, by0, _, _), clean = _pos_rect(d, rect, bw_, bh_, forbidden) \
-                    or _place_rect(rect, bw_, bh_, forbidden, taken, "left")
+                    or _place_rect(rect, bw_, bh_, forbidden, taken, "left", inside=inside)
                 draw.rectangle([bx0, by0, bx0 + bw_, by0 + bh_],
                                fill="#fdf6d8", outline="#000000", width=bw)
                 ty = by0 + pad_d
@@ -1507,7 +1549,7 @@ def render_lettering(project, page, sheet, face_detector=None,
                 prefer = "left" if (fc["box"][0] + fc["box"][2]) / 2 < x + w / 2 \
                     else "right"
             (bx0, by0, _, _), clean = _pos_rect(d, rect, bw_, bh_, forbidden) \
-                or _place_rect(rect, bw_, bh_, forbidden, taken, prefer)
+                or _place_rect(rect, bw_, bh_, forbidden, taken, prefer, inside=inside)
             cx, cy = bx0 + bw_ // 2, by0 + bh_ // 2
 
             # pointe de la queue: anchor explicite > bouche du locuteur > bord

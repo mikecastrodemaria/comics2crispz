@@ -157,7 +157,9 @@ double-clic sur un coin pour le retirer (3 minimum), arrondir le coin
 sélectionné avec le curseur ; **⬆ Front / ⬇ Back** empile la case au-dessus
 ou au-dessous de ses voisines (une case large peut passer sous deux petites,
 avec un halo de gouttière). Le dessin est généré au ratio de la boîte de la
-forme puis découpé à la composition ; le contour suit le polygone.
+forme puis découpé à la composition ; le contour suit le polygone, et les
+bulles automatiques se placent à l'intérieur de la forme (une bulle punaisée
+à la main reste où tu l'as mise).
 **▭ Reset** revient au rectangle. Dans le script : `shape=fx,fy[,r] …`
 (fractions de page, `r` = arrondi 0–1) et `z=N` ; `shape=rect` remet le
 rectangle.
