@@ -184,7 +184,14 @@ def apply_bundle(project, bundle, ref_exists=None):
             if k in st_ and st_[k] != project.get(k):
                 if k == "page":
                     try:
-                        project["page"] = cz_comic.page_size(st_["page"])
+                        # merge: a key absent from the bundle keeps the book's
+                        # value (reading direction, border...), never reset
+                        merged = dict(project.get("page") or {})
+                        merged.update(st_["page"] if isinstance(st_["page"], dict)
+                                      else cz_comic.page_size(st_["page"]))
+                        if merged == (project.get("page") or {}):
+                            continue
+                        project["page"] = cz_comic.page_size(merged)
                     except Exception as e:
                         rep["warnings"].append(f"page settings ignored: {e}")
                         continue

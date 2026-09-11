@@ -105,6 +105,18 @@ Clavier en vue Page : **← →** (ou ↑ ↓, PageUp/PageDown) planche précéd
 suivante dans l'ordre du livre (en manga, ← → suivent le sens de lecture) ;
 **Esc** retourne au chemin de fer.
 
+### Le format du livre
+
+Le wizard demande le **format du livre** : Franco-Belge 24×32 cm, A4, comic
+US 17×26 cm, manga 13×18 cm (coche le sens de lecture droite → gauche),
+roman graphique 17×24 cm, album carré 21×21 cm, à l'italienne 29,7×21 cm
+(tous en 300 dpi, marges d'impression et gouttières de 5 mm), ou Web /
+Webtoon pour l'écran. Les cases sont dessinées à ~1 mégapixel quel que soit
+le format (l'export print les agrandit) ; le format fixe les proportions de
+la planche et la résolution du lettrage. Le texte des bulles est dimensionné
+**par rapport à la planche**, même proportion à l'écran et à l'impression.
+Gabarits de `splash` au gaufrier 4×3 `12-grid`.
+
 ### Le livre en texte — onglet Script (.czs)
 
 **Script** (onglet d'en-tête) montre tout le livre, ou un chapitre, en texte

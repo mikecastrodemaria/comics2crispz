@@ -99,6 +99,18 @@ D:\Github\crispz-krea2\czp.bat caps
 
 `"instance": {"running": true, …}` = ready.
 
+### 1b. Pick the book format
+
+The wizard asks for the **book format**: Franco-Belge 24×32 cm, A4, US comic
+17×26 cm, Manga 13×18 cm (ticks the right-to-left reading), Graphic novel
+17×24 cm, Square album 21×21 cm, Landscape 29.7×21 cm (all 300 dpi with
+print-realistic margins and 5 mm gutters), or Web / Webtoon for the screen.
+Panels are drawn at about 1 megapixel whatever the format (the print export
+upscales them); the format decides the page proportions and the lettering
+resolution. Balloon text is sized **relative to the page**, so it keeps the
+same proportion on screen and in the print export. Layouts range from
+`splash` to the 4×3 `12-grid` waffle.
+
 ### 2. Write the book as a script
 
 A book is chapters → pages (with a **role**: `cover`, `title`, `story`,

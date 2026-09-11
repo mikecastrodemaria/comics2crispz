@@ -601,6 +601,11 @@ Bruno (think): Of course...
         id="wizfun"> ✨ Fun mode — the AI invents the whole book from the
         title (story, characters, panels); you edit everything after
         <button class="helpb" data-help="The fun mode checkbox in the book creation wizard: Ollama invents synopsis, casting, page layouts, panel prompts and dialogue from the title alone. Everything stays editable afterwards.">?</button></label>
+      <div class="field">
+        <span class="lbl">Book format
+          <button class="helpb" data-help="Page size of the book. Panels are drawn at about 1 megapixel whatever the format (the print export upscales them), so the format mostly decides the page proportions, the lettering resolution and the printed size: A4 / A5 / US comic / square album / landscape album at 300 dpi for print, Web (fast, screen) or Webtoon (tall mobile scroll) for digital. Balloon text keeps the same proportion on screen and in print.">?</button></span>
+        <select id="wizformat" class="w100"></select>
+      </div>
       <label class="lorarow"><input type="checkbox" id="wizmanga"> ↤ Manga
         reading direction (right → left)</label>
     </div>
@@ -1049,6 +1054,14 @@ let WIZ = null, ENGDATA = {};
 function openWizard(){
   WIZ = {step: 1, engine: '', model: '', loras: []};
   $('wizname').value = ''; $('wizpages').value = '12';
+  rawPost('formats', {}).then(r => {
+    if(!r || !r.ok) return;
+    $('wizformat').innerHTML = r.formats.map(f => '<option value="' + esc(f.name) + '"' +
+      (f.name === 'A4 300dpi' ? ' selected' : '') + '>' + esc(f.name) + ' — ' + esc(f.note || '') +
+      ' (' + f.width + '×' + f.height + ')</option>').join('');
+    // un format manga coche le sens de lecture droite -> gauche (decochable)
+    $('wizformat').onchange = () => { if(/manga/i.test($('wizformat').value)) $('wizmanga').checked = true; };
+  }).catch(() => {});
   $('wizconcept').value = ''; $('wizlang').value = '';
   $('wizfun').checked = false; $('wizmanga').checked = false;
   $('wizpreset').innerHTML = Object.keys(STYLE_PRESETS).map(k =>
@@ -1164,6 +1177,7 @@ $('wiznext').onclick = async () => {
     concept: $('wizconcept').value.trim(),
     language: $('wizlang').value,
     pages: parseInt($('wizpages').value || '0', 10) || 0,
+    page: $('wizformat').value || 'Web',
     fun: fun, manga: $('wizmanga').checked,
     engine: WIZ.engine || null, model: WIZ.model || null,
     loras: WIZ.loras,

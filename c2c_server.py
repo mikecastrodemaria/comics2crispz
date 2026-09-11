@@ -576,6 +576,12 @@ class Studio:
         res.update({"removed_ref": ref, "name": key})
         return res
 
+    def op_formats(self, _data):
+        """Formats de livre proposes a la creation (presets de page)."""
+        return {"ok": True,
+                "formats": [{"name": n, "note": cz_comic.PAGE_NOTES.get(n, ""), **v}
+                            for n, v in cz_comic.PAGE_PRESETS.items()]}
+
     def op_fonts(self, _data):
         """Polices utilisables pour les bulles: candidates systeme qui se
         chargent + fonts/ du module + fonts/ du livre."""
@@ -1656,7 +1662,12 @@ def books_op(op, data):
                     raise ValueError(f"a book named '{slug}' already exists - "
                                      f"pick it in the list or choose another "
                                      f"name")
-                p = cz_comic.new_project(title, page="Web")
+                fmt = str(data.get("page") or "Web").strip()
+                if fmt not in cz_comic.PAGE_PRESETS:
+                    return {"ok": False,
+                            "error": f"unknown book format '{fmt}' (known: "
+                                     f"{', '.join(cz_comic.PAGE_PRESETS)})"}
+                p = cz_comic.new_project(title, page=fmt)
                 p["page"]["page_numbers"] = True
                 if data.get("manga"):
                     p["page"]["reading"] = "rtl"   # sens manga (droite→gauche)
