@@ -192,11 +192,15 @@ structure, pas l'image exacte : le rendu final est un nouveau dessin.
 
 ### Le panneau de la case — cinq onglets, plus de défilement
 
-Sélectionner une case ouvre un panneau organisé comme une barre d'outils :
-**✏️ Panel** (quoi dessiner, puces @Nom, dialogue, Save), **🎲 Render** (seed,
-verrou, Regenerate), **🖌 Edit** (retouche par instruction, Variation,
-Inpaint, référence), **🔷 Shape** (coins, hors cadre), **🕘 Versions**. Le
-dernier onglet utilisé est mémorisé ; Edit et Versions attendent un dessin.
+Sélectionner une case ouvre un panneau avec une barre d'outils : **✏️ Panel**
+(quoi dessiner, puces @Nom, dialogue, Save), **🎲 Render** (seed, verrou,
+Regenerate), **🖌 Edit** (retouche par instruction, Variation, Inpaint,
+référence), **🔷 Shape** (coins, hors cadre), **🕘 Versions**. Chaque bouton
+ouvre ou replie sa section, plusieurs peuvent rester ouvertes, et la
+combinaison est mémorisée. Edit et Versions attendent un dessin. Chaque bloc
+de la colonne de droite (planche, bulle, case, raccourcis) a un en-tête façon
+Adobe : glisser pour réordonner, ▾ ou double-clic pour replier ; ordre et
+états repliés sont mémorisés.
 
 ### Bulles — ajouter, masquer, police
 

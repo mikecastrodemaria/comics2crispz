@@ -258,11 +258,15 @@ final image: the final render is a new drawing.
 
 ### 4c. The panel box — five tabs, no scrolling
 
-Selecting a panel opens a box organised like a toolbar: **✏️ Panel** (what
-to draw, @Name chips, dialogue, Save), **🎲 Render** (seed, lock,
-Regenerate), **🖌 Edit** (edit by instruction, Variation, Inpaint, use as a
-reference), **🔷 Shape** (corners, break the frame), **🕘 Versions**. The last
-tab you used is remembered; Edit and Versions wait for a drawing.
+Selecting a panel opens a box with a toolbar: **✏️ Panel** (what to draw,
+@Name chips, dialogue, Save), **🎲 Render** (seed, lock, Regenerate),
+**🖌 Edit** (edit by instruction, Variation, Inpaint, use as a reference),
+**🔷 Shape** (corners, break the frame), **🕘 Versions**. Each button opens or
+collapses its section and several can stay open; the set you keep open is
+remembered. Edit and Versions wait for a drawing. Every block of the right
+column (page, balloon, panel, shortcuts) has an Adobe-style header: drag it
+to reorder, ▾ or double-click to collapse — order and collapsed states are
+remembered too.
 
 ### 5a. Balloons — add, hide, font
 

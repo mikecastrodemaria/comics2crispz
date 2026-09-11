@@ -270,6 +270,17 @@ font-size:11px}
 #pgside textarea,#pgside input[type=text],#pgside input[type=number],#pgside input:not([type]){user-select:text;-webkit-user-select:text}
 #stage{user-select:none;-webkit-user-select:none}
 .pntabs{flex-wrap:wrap}
+.pnlhead{display:flex;align-items:center;gap:6px;cursor:grab;margin:-2px -4px 6px;padding:2px 4px;border-radius:6px}
+.pnlhead:hover{background:var(--pan2)}
+.pnlhead h3{margin:0 !important;flex:1;min-width:0}
+.pnlhead .grip{color:var(--mut);font-size:14px;letter-spacing:-2px;cursor:grab}
+.pnlhead .caret{width:20px;height:20px;padding:0;border-radius:4px;font-size:11px;line-height:1;color:var(--mut)}
+.box.collapsed > :not(.pnlhead){display:none !important}
+.box.dragging{opacity:.45}
+.box.over-before{box-shadow:0 -3px 0 0 var(--acc)}
+.box.over-after{box-shadow:0 3px 0 0 var(--acc)}
+.pnpane{border-top:1px solid var(--bd);padding-top:8px;margin-top:8px}
+.pnpane.on::before{content:attr(data-title);display:block;font-size:11px;color:var(--mut);letter-spacing:.3px;margin-bottom:4px;text-transform:uppercase}
 </style>
 </head>
 <body>
@@ -705,7 +716,7 @@ Bruno (think): Of course...
 <div id="page">
       <div id="stagewrap"><div id="stage"></div></div>
       <div id="pgside">
-        <div class="box">
+        <div class="box" id="pgbox">
           <h3 id="pghead">Page</h3>
           <div class="row">
             <button id="backflat">📖 Flatplan</button>
@@ -902,7 +913,7 @@ Bruno (think): Of course...
           this panel (the rest of the page is untouched). Save alone updates
           text and balloons without redrawing.</div>
         </div>
-        <div class="box hint"><kbd>Esc</kbd> back to the flatplan · <kbd>←</kbd> <kbd>→</kbd> previous / next page (follows the reading direction)</div>
+        <div class="box hint" id="hintbox"><kbd>Esc</kbd> back to the flatplan · <kbd>←</kbd> <kbd>→</kbd> previous / next page (follows the reading direction)</div>
       </div>
     </div>
   </div>
@@ -3314,8 +3325,11 @@ document.addEventListener('keydown', ev => {
    handlers ne bougent pas). */
 const PNTABS = [['text', '✏️ Panel'], ['render', '🎲 Render'], ['retouch', '🖌 Edit'],
                 ['shape', '🔷 Shape'], ['versions', '🕘 Versions']];
-let PNTAB = 'text';
-try{ PNTAB = localStorage.getItem('c2c.pntab') || 'text'; }catch(_){}
+// barre d'outils: chaque bouton OUVRE / REPLIE son panneau, plusieurs
+// peuvent rester ouverts (memorise dans le navigateur)
+let PNOPEN = ['text'];
+try{ PNOPEN = JSON.parse(localStorage.getItem('c2c.pnopen') || '["text"]'); }catch(_){}
+if(!Array.isArray(PNOPEN) || !PNOPEN.length) PNOPEN = ['text'];
 function buildPanelTabs(){
   const box = $('pnbox');
   const strip = document.createElement('div');
@@ -3324,12 +3338,14 @@ function buildPanelTabs(){
   PNTABS.forEach(([k, label]) => {
     const b = document.createElement('button');
     b.dataset.tab = k; b.textContent = label;
-    b.onclick = () => { if(b.disabled) return; PNTAB = k;
-      try{ localStorage.setItem('c2c.pntab', k); }catch(_){}
+    b.title = 'Open / collapse this panel (several can stay open)';
+    b.onclick = () => { if(b.disabled) return;
+      PNOPEN = PNOPEN.includes(k) ? PNOPEN.filter(x => x !== k) : PNOPEN.concat([k]);
+      try{ localStorage.setItem('c2c.pnopen', JSON.stringify(PNOPEN)); }catch(_){}
       showPanelTab(); };
     strip.appendChild(b);
     const d = document.createElement('div');
-    d.className = 'pnpane'; d.id = 'pnpane-' + k;
+    d.className = 'pnpane'; d.id = 'pnpane-' + k; d.dataset.title = label;
     panes[k] = d;
   });
   const head = $('pnhead');
@@ -3365,13 +3381,82 @@ function showPanelTab(){
     if(k === 'versions') b.textContent = '🕘 Versions' +
       (pn && pn.history && pn.history.length ? ' (' + pn.history.length + ')' : '');
   });
-  let cur = PNTAB;
-  const btn = document.querySelector('#pntabs button[data-tab="' + cur + '"]');
-  if(!btn || btn.disabled) cur = 'text';
-  document.querySelectorAll('#pntabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === cur));
-  document.querySelectorAll('#pnbox .pnpane').forEach(d => d.classList.toggle('on', d.id === 'pnpane-' + cur));
+  const open = k => PNOPEN.includes(k) &&
+    !document.querySelector('#pntabs button[data-tab="' + k + '"]').disabled;
+  document.querySelectorAll('#pntabs button').forEach(b => b.classList.toggle('on', open(b.dataset.tab)));
+  document.querySelectorAll('#pnbox .pnpane').forEach(d =>
+    d.classList.toggle('on', open(d.id.replace('pnpane-', ''))));
 }
 buildPanelTabs();
+
+/* ---------- panneaux de la colonne de droite: repliables et deplacables (Adobe) ----------
+   Chaque .box recoit un en-tete (poignee + titre + chevron). Clic sur le
+   chevron ou double-clic sur l'en-tete = replier; glisser l'en-tete =
+   reordonner. Ordre et etats replies memorises dans le navigateur. */
+function initSidePanels(){
+  const side = $('pgside');
+  let order = [], collapsed = [];
+  try{
+    order = JSON.parse(localStorage.getItem('c2c.pgside.order') || '[]');
+    collapsed = JSON.parse(localStorage.getItem('c2c.pgside.collapsed') || '[]');
+  }catch(_){}
+  const save = () => { try{
+    localStorage.setItem('c2c.pgside.order', JSON.stringify(
+      [...side.querySelectorAll(':scope > .box')].map(b => b.id)));
+    localStorage.setItem('c2c.pgside.collapsed', JSON.stringify(
+      [...side.querySelectorAll(':scope > .box.collapsed')].map(b => b.id)));
+  }catch(_){} };
+  const boxes = [...side.querySelectorAll(':scope > .box')];
+  boxes.forEach((box, i) => {
+    if(!box.id) box.id = 'sidebox' + i;
+    let h3 = box.querySelector(':scope > h3');
+    if(!h3){ h3 = document.createElement('h3'); h3.textContent = 'Shortcuts'; }
+    const head = document.createElement('div');
+    head.className = 'pnlhead';
+    head.draggable = true;
+    head.title = 'Drag to reorder · double-click or ▾ to collapse';
+    const grip = document.createElement('span'); grip.className = 'grip'; grip.textContent = '⋮⋮';
+    const caret = document.createElement('button'); caret.className = 'caret'; caret.textContent = '▾';
+    head.appendChild(grip); head.appendChild(h3); head.appendChild(caret);
+    box.prepend(head);
+    const toggle = () => { box.classList.toggle('collapsed');
+      caret.textContent = box.classList.contains('collapsed') ? '▸' : '▾'; save(); };
+    caret.onclick = ev => { ev.stopPropagation(); toggle(); };
+    head.ondblclick = ev => { if(ev.target === caret) return; toggle(); };
+    if(collapsed.includes(box.id)){ box.classList.add('collapsed'); caret.textContent = '▸'; }
+    head.ondragstart = ev => { box.classList.add('dragging');
+      ev.dataTransfer.setData('text/plain', box.id); ev.dataTransfer.effectAllowed = 'move'; };
+    head.ondragend = () => { box.classList.remove('dragging');
+      side.querySelectorAll('.over-before,.over-after').forEach(b => b.classList.remove('over-before', 'over-after')); };
+  });
+  // ordre memorise (les boites inconnues restent a la fin, dans leur ordre)
+  order.forEach(id => { const b = document.getElementById(id); if(b && b.parentElement === side) side.appendChild(b); });
+  side.ondragover = ev => {
+    const dragging = side.querySelector('.box.dragging');
+    if(!dragging) return;
+    ev.preventDefault();
+    const target = ev.target.closest && ev.target.closest('#pgside > .box');
+    side.querySelectorAll('.over-before,.over-after').forEach(b => b.classList.remove('over-before', 'over-after'));
+    if(!target || target === dragging) return;
+    const r = target.getBoundingClientRect();
+    target.classList.add(ev.clientY < r.top + r.height / 2 ? 'over-before' : 'over-after');
+  };
+  side.ondrop = ev => {
+    const dragging = side.querySelector('.box.dragging');
+    if(!dragging) return;
+    ev.preventDefault();
+    const target = ev.target.closest && ev.target.closest('#pgside > .box');
+    if(target && target !== dragging){
+      const r = target.getBoundingClientRect();
+      if(ev.clientY < r.top + r.height / 2) side.insertBefore(dragging, target);
+      else target.after(dragging);
+    }
+    dragging.classList.remove('dragging');
+    side.querySelectorAll('.over-before,.over-after').forEach(b => b.classList.remove('over-before', 'over-after'));
+    save();
+  };
+}
+initSidePanels();
 
 load();
 </script>
