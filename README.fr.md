@@ -218,6 +218,17 @@ titre) ; tapez `
 ` dans le texte d'une bulle pour forcer un retour à la ligne
 (`La fille des
 ruines fleuries`).
+**Width** (×0,3 à ×2, ou `(width=1.5)` dans le texte) règle la largeur de
+coupe d'une bulle, ou la largeur maximale d'un SFX ; au-dessus de ×1 un titre
+peut être plus large que sa case. Une bulle glissée à la main peut être
+déposée **hors de sa case** (sur la gouttière, la voisine ou la marge, pour
+un titre de couverture) : seule la page la retient, la pointe de la queue
+continue de viser dans la case.
+
+Les répliques acceptent des modificateurs entre parenthèses, cumulables :
+`Lea (think, rounded, hidden, font=comicbd.ttf, outline=2, width=1.3): …`,
+idem sur `CAP (…)` / `SFX (…)` ; la boîte de la bulle les écrit pour toi,
+l'onglet Script les montre.
 
 ### Corriger une case — Régénérer, Retoucher, Variation, Versions
 
