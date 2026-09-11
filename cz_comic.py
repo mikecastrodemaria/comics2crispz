@@ -353,6 +353,49 @@ def _round_corners(pts, steps=10):
     return out
 
 
+def _inset_polygon(poly, d):
+    """Polygone rentre de d px vers l'interieur (chaque cote decale le long
+    de sa normale, sommets = intersections des cotes decales). Sert a
+    reserver la demi-gouttiere entre deux cases obliques voisines, comme
+    panel_rects le fait pour les rectangles."""
+    n = len(poly)
+    if n < 3 or d <= 0:
+        return list(poly)
+    area = 0.0
+    for i in range(n):
+        x1, y1 = poly[i]
+        x2, y2 = poly[(i + 1) % n]
+        area += x1 * y2 - x2 * y1
+    sign = -1.0 if area > 0 else 1.0          # sens de parcours -> normale interieure
+    lines = []
+    for i in range(n):
+        x1, y1 = poly[i]
+        x2, y2 = poly[(i + 1) % n]
+        dx, dy = x2 - x1, y2 - y1
+        L = math.hypot(dx, dy)
+        if L < 1e-9:
+            lines.append(None)
+            continue
+        nx, ny = sign * dy / L, -sign * dx / L
+        lines.append((x1 + nx * d, y1 + ny * d, dx, dy))
+    out = []
+    for i in range(n):
+        a = lines[i - 1]
+        b = lines[i]
+        if a is None or b is None:
+            out.append(tuple(poly[i]))
+            continue
+        ax, ay, adx, ady = a
+        bx, by, bdx, bdy = b
+        den = adx * bdy - ady * bdx
+        if abs(den) < 1e-9:                    # cotes paralleles (arrondis denses)
+            out.append((bx, by))
+            continue
+        t = ((bx - ax) * bdy - (by - ay) * bdx) / den
+        out.append((ax + adx * t, ay + ady * t))
+    return out
+
+
 def shape_points(shape, pg):
     """panel['shape'] -> [(x, y, r)] en px de page, ou None si pas de forme."""
     pts = (shape or {}).get("points") or []
@@ -382,6 +425,8 @@ def page_geometry(project, page, pg=None):
         pts = shape_points(shape, pg) if shape else None
         if pts:
             poly = _round_corners(pts)
+            # demi-gouttiere reservee tout autour, comme pour les cellules
+            poly = _inset_polygon(poly, float(pg.get("gutter") or 0) / 2.0)
             xs = [q[0] for q in poly]
             ys = [q[1] for q in poly]
             x0, y0 = int(math.floor(min(xs))), int(math.floor(min(ys)))
@@ -869,14 +914,18 @@ def compose_page(project, page, images=None, fit="cover", placeholders=True):
         layer = Image.new("RGB", (pg["width"], pg["height"]), pg["background"])
         layer.paste(img, (x, y))
         closed = poly + [poly[0]]
-        if gutter > 0:
-            # halo de gouttiere: efface le voisin deja pose sur `gutter` px
-            # autour de la forme (la moitie interieure est recouverte ensuite)
+        if border > 0:
+            # contour trace SUR le calque puis decoupe par le masque: il
+            # reste a l'interieur de la forme (comme le cadre des
+            # rectangles), jamais sur les voisines, jamais rogne par elles
+            ImageDraw.Draw(layer).line(closed, fill=pg.get("border_color", "#000000"),
+                                       width=2 * border, joint="curve")
+        if gutter > 0 and g["z"] > 0:
+            # insert pose PAR-DESSUS: un halo de fond le detache de la case
+            # du dessous (les voisines de meme niveau ont deja leur demi-
+            # gouttiere par le retrait du polygone)
             draw.line(closed, fill=pg["background"], width=2 * gutter, joint="curve")
         sheet.paste(layer, (0, 0), mask)
-        if border > 0:
-            draw.line(closed, fill=pg.get("border_color", "#000000"),
-                      width=border, joint="curve")
     # ---- sujets hors cadre: le detourage (RGBA, taille du dessin) est pose
     # par-dessus TOUTES les cases, sans decoupe, cadre au meme zoom que le
     # dessin; un lisere optionnel (px) le detache des voisines
