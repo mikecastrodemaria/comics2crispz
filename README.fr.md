@@ -148,6 +148,20 @@ absente est signalée par son chemin (les images sont listées, pas incluses :
 le bundle est la recette, `panels/` et `pages/` sont le résultat). Une copie
 `book.md` est gardée dans le dossier du livre après chaque import.
 
+### Formes de case — bords obliques, coins arrondis, chevauchement
+
+Une case est par défaut le rectangle de sa cellule. Dans le panneau de la
+case, **✎ Edit corners** affiche des poignées sur la planche : glisser un
+coin, cliquer le point bleu au milieu d'un côté pour en ajouter un,
+double-clic sur un coin pour le retirer (3 minimum), arrondir le coin
+sélectionné avec le curseur ; **⬆ Front / ⬇ Back** empile la case au-dessus
+ou au-dessous de ses voisines (une case large peut passer sous deux petites,
+avec un halo de gouttière). Le dessin est généré au ratio de la boîte de la
+forme puis découpé à la composition ; le contour suit le polygone.
+**▭ Reset** revient au rectangle. Dans le script : `shape=fx,fy[,r] …`
+(fractions de page, `r` = arrondi 0–1) et `z=N` ; `shape=rect` remet le
+rectangle.
+
 ### Bulles — ajouter, masquer, police
 
 Sous la zone de dialogue d'une case, **➕ balloon** ajoute une ligne

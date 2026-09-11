@@ -216,6 +216,19 @@ recomposes with lettering:
 The status bar reports the engine, the seeds (replayable) and any warnings
 (unknown casting names, empty panels, dropped refs — never silent).
 
+### 4b. Panel shapes — slanted edges, rounded corners, overlaps
+
+A panel is the rectangle of its layout cell by default. In the panel box,
+**✎ Edit corners** shows handles on the page: drag a corner, click the blue
+midpoint of a side to add one, double-click a corner to remove it (3
+minimum), round the selected corner with the slider; **⬆ Front / ⬇ Back**
+stacks the panel over or under its neighbours (a wide panel can sit under
+two smaller ones, with a gutter halo). The drawing is generated at the
+shape's bounding box and clipped by the shape at composition; the border
+follows the polygon. **▭ Reset** returns to the rectangle. In the script a
+panel carries `shape=fx,fy[,r] fx,fy …` (page fractions, `r` = corner
+rounding 0–1) and `z=N`; `shape=rect` resets.
+
 ### 5a. Balloons — add, hide, font
 
 Under the panel's dialogue box, **➕ balloon** appends a line (`Name: text`;

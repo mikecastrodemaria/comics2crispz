@@ -253,6 +253,11 @@ font-size:11px}
 #prodlist .pl{display:flex;gap:10px;align-items:center;padding:5px 8px;border-bottom:1px solid var(--bd);font-size:12px}
 #prodlist .pl a{color:var(--warn);text-decoration:none;white-space:nowrap}
 #prodlist .pl span{color:var(--mut);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#shapesvg{position:absolute;left:0;top:0;z-index:20;pointer-events:none;overflow:visible}
+#shapesvg .shpoly{fill:#ffd27a14;stroke:var(--warn);stroke-width:2;stroke-dasharray:6 4}
+#shapesvg .shc{fill:#fff;stroke:var(--warn);stroke-width:2;cursor:grab;pointer-events:all}
+#shapesvg .shc.sel{fill:var(--warn)}
+#shapesvg .shm{fill:var(--acc);stroke:#fff;stroke-width:1.5;cursor:copy;pointer-events:all;opacity:.85}
 </style>
 </head>
 <body>
@@ -791,6 +796,22 @@ Bruno (think): Of course...
               <input type="checkbox" id="pnlock"> 🔒 lock</label>
             <button id="savepnbtn" style="margin-left:auto"
                     title="Save text and balloons, recompose the page — no redraw">💾 Save</button>
+          </div>
+          <div id="shpbox" class="field">
+            <span class="lbl">Panel shape — corners, rounding, stacking
+              <button class="helpb" data-help="By default a panel is the rectangle of its layout cell. Edit corners shows draggable handles on the page: drag a corner, click the small blue midpoint of a side to add a corner, double-click a corner to remove it (3 minimum), and round the selected corner with the slider. Bring to front / Send back stacks a panel over or under its neighbours (a wide panel can sit under two smaller ones). The drawing is generated at the shape's bounding box and clipped by the shape at composition. Reset returns to the rectangle. Shapes travel in the script as shape= and z= lines.">?</button></span>
+            <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center">
+              <button id="shpedit">✎ Edit corners</button>
+              <button id="shpreset" title="Back to the layout rectangle">▭ Reset</button>
+              <button id="shpfront" title="Stack this panel over its neighbours (z+1)">⬆ Front</button>
+              <button id="shpback" title="Stack this panel under its neighbours (z-1)">⬇ Back</button>
+              <span id="shpz" class="hint"></span>
+            </div>
+            <div class="row" id="shpround" style="align-items:center;margin-top:6px;display:none">
+              <span class="lbl" style="margin:0">round corner <b id="shproundval" style="color:var(--fg)">0.00</b></span>
+              <input id="shpradius" type="range" min="0" max="1" step="0.05" value="0" style="flex:1;min-width:90px">
+              <span class="hint" id="shphint">select a corner</span>
+            </div>
           </div>
           <button id="regenbtn" class="primary"
                   style="width:100%;margin-top:10px"
@@ -1439,6 +1460,7 @@ async function showPage(cid, pid){
   const st = $('stage');
   st.style.width = sw + 'px'; st.style.height = sh + 'px';
   if(INP.on) inpaintOff();                 // le stage est reconstruit
+  if(SHP.on && (!SEL || SEL.cid !== cid || SEL.pid !== pid)){ SHP.on = false; SHP.pts = null; }
   st.innerHTML = '';
   if(p.url){
     const img = document.createElement('img');
@@ -1451,7 +1473,10 @@ async function showPage(cid, pid){
     const d = document.createElement('div');
     d.className = 'pn' + (SELPN === pn.id ? ' sel' : '');
     d.dataset.pn = pn.id;
-    d.title = pn.id + (pn.text ? ' — ' + pn.text : '') + '  (click to select)';
+    d.title = pn.id + (pn.text ? ' — ' + pn.text : '') + (pn.shape ? '  · custom shape' : '') + '  (click to select)';
+    if(pn.poly) d.style.clipPath = 'polygon(' + pn.poly.map(q =>
+      ((q[0] - pn.rect[0]) / pn.rect[2] * 100).toFixed(2) + '% ' +
+      ((q[1] - pn.rect[1]) / pn.rect[3] * 100).toFixed(2) + '%').join(',') + ')';
     d.style.left = (pn.rect[0] * sw) + 'px';
     d.style.top = (pn.rect[1] * sh) + 'px';
     d.style.width = (pn.rect[2] * sw) + 'px';
@@ -1463,6 +1488,7 @@ async function showPage(cid, pid){
     }
     d.onclick = () => {
       if(INP.on) inpaintOff();
+      if(SHP.on && SELPN !== pn.id){ SHP.on = false; SHP.pts = null; SHP.sel = -1; }
       SELPN = (SELPN === pn.id ? null : pn.id);
       document.querySelectorAll('#stage .pn').forEach(x =>
         x.classList.toggle('sel', x.dataset.pn === SELPN));
@@ -1671,6 +1697,7 @@ function renderPanelBox(p){
   renderHistory(pn);
   renderCastChips();
   applyEngineCaps();
+  renderShapeEditor();
 }
 /* ce que le moteur DU LIVRE sait faire (variation = img2img, inpaint): les
    boutons se grisent avec la raison au lieu d'echouer apres coup */
@@ -1721,6 +1748,140 @@ function renderHistory(pn){
     strip.appendChild(d);
   });
 }
+/* ---------- ✎ forme de case: coins, arrondis, superposition ---------- */
+const SHP = {on: false, pts: null, sel: -1, pn: null, drag: null};
+function shapeStageSize(){
+  const st = $('stage');
+  return [parseFloat(st.style.width) || st.clientWidth, parseFloat(st.style.height) || st.clientHeight];
+}
+function shapeDefaultPoints(pn){
+  const r = pn.rect;                       // fractions de page [x, y, w, h]
+  return [[r[0], r[1], 0], [r[0] + r[2], r[1], 0], [r[0] + r[2], r[1] + r[3], 0], [r[0], r[1] + r[3], 0]];
+}
+function renderShapeEditor(){
+  const old = document.getElementById('shapesvg');
+  if(old) old.remove();
+  const pn = LASTPAGE && LASTPAGE.panels.find(x => x.id === SELPN);
+  $('shpbox').style.display = pn ? '' : 'none';
+  if(!pn) return;
+  const sh = pn.shape || null;
+  $('shpz').textContent = sh ? ('custom shape · z ' + (sh.z || 0)) : 'rectangle (layout cell)';
+  $('shpedit').classList.toggle('on', SHP.on);
+  $('shpedit').textContent = SHP.on ? '✓ Editing — click to finish' : '✎ Edit corners';
+  $('shpround').style.display = SHP.on ? '' : 'none';
+  if(!SHP.on) return;
+  if(!SHP.pts || SHP.pn !== pn.id){
+    SHP.pts = (sh && sh.points ? sh.points : shapeDefaultPoints(pn)).map(q => [q[0], q[1], q[2] || 0]);
+    SHP.pn = pn.id; SHP.sel = -1;
+  }
+  const [sw, sh_] = shapeStageSize();
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.id = 'shapesvg'; svg.setAttribute('width', sw); svg.setAttribute('height', sh_);
+  const P = SHP.pts;
+  const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+  poly.setAttribute('class', 'shpoly');
+  poly.setAttribute('points', P.map(q => (q[0] * sw) + ',' + (q[1] * sh_)).join(' '));
+  svg.appendChild(poly);
+  // milieux de cotes: clic = ajouter un coin
+  P.forEach((q, i) => {
+    const n = P[(i + 1) % P.length];
+    const m = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    const mx = (q[0] + n[0]) / 2 * sw, my = (q[1] + n[1]) / 2 * sh_;
+    m.setAttribute('class', 'shm'); m.setAttribute('x', mx - 5); m.setAttribute('y', my - 5);
+    m.setAttribute('width', 10); m.setAttribute('height', 10);
+    m.setAttribute('title', 'add a corner here');
+    m.onclick = ev => { ev.stopPropagation();
+      P.splice(i + 1, 0, [(q[0] + n[0]) / 2, (q[1] + n[1]) / 2, 0]); SHP.sel = i + 1;
+      renderShapeEditor(); applyShape(); };
+    svg.appendChild(m);
+  });
+  // coins: glisser, double-clic = retirer
+  P.forEach((q, i) => {
+    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    c.setAttribute('class', 'shc' + (i === SHP.sel ? ' sel' : ''));
+    c.setAttribute('cx', q[0] * sw); c.setAttribute('cy', q[1] * sh_); c.setAttribute('r', 7);
+    c.onpointerdown = ev => {
+      ev.preventDefault(); ev.stopPropagation();
+      SHP.sel = i; SHP.drag = {i, moved: false};
+      try{ c.setPointerCapture(ev.pointerId); }catch(_){}
+      document.querySelectorAll('#shapesvg .shc').forEach((e, k) => e.classList.toggle('sel', k === i));
+      shapeSelectUI();
+    };
+    c.onpointermove = ev => {
+      if(!SHP.drag || SHP.drag.i !== i) return;
+      const r = $('stage').getBoundingClientRect();
+      const fx = Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+      const fy = Math.max(0, Math.min(1, (ev.clientY - r.top) / r.height));
+      P[i][0] = fx; P[i][1] = fy; SHP.drag.moved = true;
+      c.setAttribute('cx', fx * sw); c.setAttribute('cy', fy * sh_);
+      poly.setAttribute('points', P.map(z => (z[0] * sw) + ',' + (z[1] * sh_)).join(' '));
+    };
+    c.onpointerup = c.onpointercancel = ev => {
+      if(!SHP.drag) return;
+      const moved = SHP.drag.moved; SHP.drag = null;
+      if(moved) applyShape();
+    };
+    c.ondblclick = ev => { ev.stopPropagation();
+      if(P.length <= 3){ status('A shape keeps at least 3 corners', 'warn'); return; }
+      P.splice(i, 1); SHP.sel = -1; renderShapeEditor(); applyShape(); };
+    svg.appendChild(c);
+  });
+  $('stage').appendChild(svg);
+  shapeSelectUI();
+}
+function shapeSelectUI(){
+  const ok = SHP.sel >= 0 && SHP.pts && SHP.pts[SHP.sel];
+  $('shpradius').disabled = !ok;
+  $('shphint').textContent = ok ? 'corner ' + (SHP.sel + 1) + ' of ' + SHP.pts.length +
+    ' — drag it, double-click to remove' : 'select a corner';
+  const v = ok ? (SHP.pts[SHP.sel][2] || 0) : 0;
+  $('shpradius').value = v; $('shproundval').textContent = Number(v).toFixed(2);
+}
+async function applyShape(extra){
+  if(!SEL || !SELPN || !SHP.pts) return;
+  const pnid = SELPN;
+  const payload = Object.assign({cid: SEL.cid, pid: SEL.pid, pnid: pnid,
+    points: SHP.pts.map(q => [q[0], q[1], q[2] || 0])}, extra || {});
+  const res = await api('set_shape', payload, 'Recomposing the page…');
+  if(!res) return;
+  IDX = res; SELPN = pnid;
+  await showPage(SEL.cid, SEL.pid);          // renderPanelBox -> renderShapeEditor
+}
+$('shpedit').onclick = () => {
+  SHP.on = !SHP.on;
+  if(!SHP.on){ SHP.pts = null; SHP.sel = -1; }
+  renderShapeEditor();
+  if(SHP.on) status('Drag the corners on the page; click a blue midpoint to add one; double-click a corner to remove it', 'ok');
+};
+$('shpreset').onclick = async () => {
+  if(!SEL || !SELPN) return;
+  const pnid = SELPN;
+  SHP.pts = null; SHP.sel = -1;
+  const res = await api('set_shape', {cid: SEL.cid, pid: SEL.pid, pnid: pnid, points: null},
+                        'Back to the rectangle…');
+  if(!res) return;
+  IDX = res; SELPN = pnid; await showPage(SEL.cid, SEL.pid);
+};
+async function shapeZ(delta){
+  if(!SEL || !SELPN) return;
+  const pn = LASTPAGE.panels.find(x => x.id === SELPN);
+  const z = ((pn.shape && pn.shape.z) || 0) + delta;
+  const pnid = SELPN;
+  const payload = {cid: SEL.cid, pid: SEL.pid, pnid: pnid, z: z};
+  if(!(pn.shape && pn.shape.points)) payload.points = shapeDefaultPoints(pn);
+  const res = await api('set_shape', payload, 'Restacking…');
+  if(!res) return;
+  IDX = res; SELPN = pnid; await showPage(SEL.cid, SEL.pid);
+}
+$('shpfront').onclick = () => shapeZ(1);
+$('shpback').onclick = () => shapeZ(-1);
+$('shpradius').oninput = () => {
+  if(SHP.sel < 0 || !SHP.pts) return;
+  SHP.pts[SHP.sel][2] = parseFloat($('shpradius').value);
+  $('shproundval').textContent = Number($('shpradius').value).toFixed(2);
+};
+$('shpradius').onchange = () => { if(SHP.sel >= 0 && SHP.pts) applyShape(); };
+
 /* ---------- 🖌 inpaint: masque peint sur la case selectionnee ---------- */
 const INP = {on: false, eraser: false, cv: null, ctx: null, painting: false,
              pn: null};
