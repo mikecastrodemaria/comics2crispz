@@ -266,6 +266,10 @@ font-size:11px}
 .pntabs button:disabled{opacity:.4}
 .pnpane{display:none}
 .pnpane.on{display:block}
+#pgside{user-select:none;-webkit-user-select:none}
+#pgside textarea,#pgside input[type=text],#pgside input[type=number],#pgside input:not([type]){user-select:text;-webkit-user-select:text}
+#stage{user-select:none;-webkit-user-select:none}
+.pntabs{flex-wrap:wrap}
 </style>
 </head>
 <body>
@@ -1643,7 +1647,7 @@ function renderBubBox(){
   box.style.display = dlg ? '' : 'none';
   if(!dlg) return;
   $('bubhead').textContent = 'Balloon — ' +
-    ((dlg.speaker ? dlg.speaker + ': ' : '') + dlg.text).slice(0, 40);
+    ((dlg.speaker ? dlg.speaker + ': ' : '') + dlg.text).replace(/\n/g, ' / ').slice(0, 40);
   $('bubkind').value = dlg.kind || 'speech';
   $('bubstyle').value = dlg.style || '';
   const sc = dlg.scale || 1.0;
