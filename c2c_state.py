@@ -88,6 +88,7 @@ def book_index(project, project_dir):
     return {"ok": True, "name": project.get("name") or "Untitled",
             "engine": project.get("engine") or None,
             "layouts": sorted(cz_comic.LAYOUTS),
+            "bubble": (project.get("style") or {}).get("bubble") or "round",
             "casting": [{"name": n, "kind": (c or {}).get("kind", "character")}
                         for n, c in sorted((project.get("casting") or {}).items(),
                                            key=lambda kv: kv[0].lower())],
@@ -735,7 +736,8 @@ def bible_state(project, project_dir):
                       "negative": style.get("negative") or "",
                       "loras": list(style.get("loras") or []),
                       "mood": style.get("mood") or "",
-                      "font": style.get("font") or ""},
+                      "font": style.get("font") or "",
+                      "bubble": style.get("bubble") or "round"},
             "chapters": [{"id": ch["id"], "name": ch.get("name") or ch["id"],
                           "mood": ch.get("mood") or "",
                           "pages": len(ch.get("pages") or [])}

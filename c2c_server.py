@@ -599,6 +599,12 @@ class Studio:
             for k in ("prompt_suffix", "negative", "mood", "font"):
                 if k in data:
                     style[k] = str(data.get(k) or "").strip()
+            if "bubble" in data:
+                b = str(data.get("bubble") or "round")
+                if b not in cz_comic.BUBBLE_STYLES:
+                    return {"ok": False, "error": f"bubble shape must be one of "
+                                                  f"{cz_comic.BUBBLE_STYLES}"}
+                style["bubble"] = b
             if "loras" in data:
                 style["loras"] = [str(x).strip() for x in (data.get("loras") or [])
                                   if str(x).strip()]

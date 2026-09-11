@@ -564,6 +564,15 @@ Bruno (think): Of course...
         </div>
       </div>
       <div class="field">
+        <span class="lbl">Default balloon shape of the book
+          <button class="helpb" data-help="Shape of every speech/thought balloon unless a balloon overrides it: round = the classic oval, rounded = a soft rectangle (compact, dense reading), angular = jagged edges for a hard or mechanical voice. Captions and SFX are not affected.">?</button></span>
+        <select id="bsbubble" class="w100">
+          <option value="round">round — oval, classic speech</option>
+          <option value="rounded">rounded — soft rectangle</option>
+          <option value="angular">angular — jagged, hard voice</option>
+        </select>
+      </div>
+      <div class="field">
         <span class="lbl">Balloon font of the book
           <button class="helpb" data-help="Default font for every balloon and caption of this book (a balloon can override it in the Page view). The list shows the fonts found on this machine; put .ttf/.otf comic fonts in a fonts/ folder next to the app or inside the book folder to add yours.">?</button></span>
         <select id="bsfont" class="w100"><option value="">(built-in comic font)</option></select>
@@ -672,9 +681,9 @@ Bruno (think): Of course...
       <div class="row" style="align-items:center;margin-top:10px">
         <span class="lbl" style="margin:0">Balloon shape</span>
         <select id="wizbubble">
-          <option value="round" selected>round</option>
-          <option value="rounded">rounded</option>
-          <option value="angular">angular</option>
+          <option value="round" selected>round — oval, classic speech</option>
+          <option value="rounded">rounded — soft rectangle</option>
+          <option value="angular">angular — jagged, hard voice</option>
         </select>
       </div>
     </div>
@@ -747,9 +756,9 @@ Bruno (think): Of course...
               <span class="lbl">Shape</span>
               <select id="bubstyle" class="w100">
                 <option value="">(book default)</option>
-                <option value="round">round</option>
-                <option value="rounded">rounded</option>
-                <option value="angular">angular</option>
+                <option value="round">round — oval, classic speech</option>
+                <option value="rounded">rounded — soft rectangle</option>
+                <option value="angular">angular — jagged, hard voice</option>
               </select>
             </div>
           </div>
@@ -1670,6 +1679,7 @@ function renderBubBox(){
   $('bubhead').textContent = 'Balloon — ' +
     ((dlg.speaker ? dlg.speaker + ': ' : '') + dlg.text).replace(/\\n/g, ' / ').slice(0, 40);
   $('bubkind').value = dlg.kind || 'speech';
+  $('bubstyle').options[0].textContent = '(book default: ' + ((IDX && IDX.bubble) || 'round') + ')';
   $('bubstyle').value = dlg.style || '';
   const sc = dlg.scale || 1.0;
   $('bubscale').value = sc;
@@ -2964,6 +2974,7 @@ function renderStyleTab(){
   $('bsuffix').value = st.prompt_suffix; $('bsneg').value = st.negative;
   $('bsloras').value = loraLines(st.loras); $('bmood').value = st.mood;
   fillFontSelect($('bsfont'), st.font || '', '(built-in comic font)');
+  $('bsbubble').value = st.bubble || 'round';
   const cm = $('bchmoods');
   cm.innerHTML = '';
   BIBLE.chapters.forEach(ch => {
@@ -3078,7 +3089,8 @@ $('bstylesave').onclick = async () => {
   document.querySelectorAll('#bchmoods input').forEach(i => cm[i.dataset.cid] = i.value);
   const res = await api('save_style', {prompt_suffix: $('bsuffix').value,
     negative: $('bsneg').value, loras: parseLoras($('bsloras').value),
-    mood: $('bmood').value, font: $('bsfont').value, chapter_moods: cm}, 'Saving the style…');
+    mood: $('bmood').value, font: $('bsfont').value, bubble: $('bsbubble').value,
+    chapter_moods: cm}, 'Saving the style…');
   if(!res) return;
   BIBLE = res; renderBible(); refreshIndexQuiet();
   status('Style saved — future drawings use it (🎨 Redraw to update the book); the font applies at the next compose (🧩 Compose book)', 'ok');

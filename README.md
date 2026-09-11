@@ -289,6 +289,10 @@ panel. A balloon you drag can be dropped **outside its panel** (over the
 gutter, a neighbour, or the page margin, for a cover title): only the page
 holds it back, while the tail tip keeps aiming inside the panel.
 
+The book's **default balloon shape** (round = classic oval, rounded = soft
+rectangle, angular = jagged) is set in the wizard and in 📖 Bible › Style; a
+balloon's Shape "(book default: …)" follows it, or overrides it.
+
 Balloon lines accept modifiers in parentheses, combinable with commas:
 `Lea (think, rounded, hidden, font=comicbd.ttf, outline=2, width=1.3): …`
 and the same on `CAP (…)` / `SFX (…)` lines; the balloon box writes them for
