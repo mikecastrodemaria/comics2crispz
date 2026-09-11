@@ -190,6 +190,7 @@ def chapter_state(project, project_dir, cid):
                 "rect": ([rects[i][0] / W, rects[i][1] / H,
                           rects[i][2] / W, rects[i][3] / H]
                          if i < len(rects) else None),
+                "storyboard": bool(pn.get("storyboard")),
                 "shape": pn.get("shape") or None,
                 "poly": ([[q[0] / W, q[1] / H] for q in geom[i]["poly"]]
                          if i < len(geom) and geom[i]["poly"] else None)})
@@ -761,9 +762,10 @@ def production_state(project, project_dir):
     casting = project.get("casting") or {}
     tot = {"panels": 0, "drawn": 0, "missing": 0, "locked": 0, "empty": 0,
            "unknown": 0, "pages": 0, "composed": 0, "stale": 0, "never": 0,
-           "dirty_balloons": 0, "drift": 0}
+           "dirty_balloons": 0, "drift": 0, "sketched": 0}
     lists = {"missing": [], "locked": [], "empty": [], "unknown": [],
-             "never": [], "stale": [], "dirty_balloons": [], "drift": []}
+             "never": [], "stale": [], "dirty_balloons": [], "drift": [],
+             "sketched": []}
     for ch, pg in cz_comic.book_order(project):
         cid, pid = ch["id"], pg["id"]
         tot["pages"] += 1
@@ -781,7 +783,10 @@ def production_state(project, project_dir):
                 tot["drawn"] += 1
                 newest_panel = max(newest_panel, os.path.getmtime(img))
                 sig = pn.get("style_sig")
-                if sig and sig != sig_now:
+                if pn.get("storyboard"):
+                    tot["sketched"] += 1
+                    lists["sketched"].append(ref)
+                elif sig and sig != sig_now:
                     tot["drift"] += 1
                     lists["drift"].append(ref)
             if pn.get("status") == "locked":

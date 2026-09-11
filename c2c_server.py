@@ -777,6 +777,42 @@ class Studio:
                                   face_detector=fd, char_embeddings=emb)
         return c2c_state.book_index(project, self.dir)
 
+    def op_shape_presets(self, _data):
+        """Gabarits obliques: [{name, label, count, shapes (u/v)}] pour l'UI."""
+        return {"ok": True,
+                "presets": [{"name": n, "label": v["label"], "count": len(v["shapes"]),
+                             "shapes": v["shapes"]}
+                            for n, v in cz_comic.SHAPE_PRESETS.items()]}
+
+    def op_apply_shape_preset(self, data):
+        """Pose un gabarit oblique sur une planche: {cid, pid, name}. La
+        planche doit avoir autant de cases que le gabarit (sinon message:
+        changer d'abord de mise en page). Recompose."""
+        cid, pid, name = data["cid"], data["pid"], str(data.get("name") or "")
+        with _LOCK:
+            project = self.load()
+            page = cz_comic.find_page(project, cid, pid)
+            pg = cz_comic.page_size(project.get("page"))
+            try:
+                shapes = cz_comic.shape_preset_shapes(name, pg)
+            except ValueError as e:
+                return {"ok": False, "error": str(e)}
+            n = len(page.get("panels") or [])
+            if n != len(shapes):
+                return {"ok": False,
+                        "error": f"'{name}' is for {len(shapes)} panels, this page "
+                                 f"has {n} - pick a layout with {len(shapes)} "
+                                 f"panels first (Layout), then apply the preset"}
+            for pn, sh in zip(page["panels"], shapes):
+                pn["shape"] = sh
+            cz_comic.save_project(project, self.dir)
+            fd, emb = self._letter_kit(project)
+            c2c_state.compose_one(project, self.dir, cid, pid,
+                                  face_detector=fd, char_embeddings=emb)
+        idx = c2c_state.book_index(project, self.dir)
+        idx["applied"] = name
+        return idx
+
     def op_set_bubble(self, data):
         """Deplace une bulle: {cid, pid, pnid, index, pos|anchor: [fx, fy]}
         ou {clear: ["pos", "anchor"]}. pos = coin haut-gauche de la bulle,
@@ -893,6 +929,9 @@ class Studio:
                     "unit": "panel" if data.get("panels") else "page",
                     "last_s": 0.0, "log": [], "paused": False})
         engine = data.get("engine")
+        storyboard = bool(data.get("storyboard"))
+        if storyboard:
+            job["label"] = str(data.get("label") or "Storyboard (quick sketches)")[:120]
 
         def worker():
             try:
@@ -908,7 +947,8 @@ class Studio:
                     t1 = time.time()
                     res = self.op_generate({"cid": cid, "pid": pid,
                                             "pnid": pnid, "force": force,
-                                            "engine": engine})
+                                            "engine": engine,
+                                            "storyboard": storyboard})
                     job["last_s"] = round(time.time() - t1, 1)
                     if not res.get("ok"):
                         job["errors"].append(f"{cid}.{pid}: "
@@ -1330,7 +1370,31 @@ class Studio:
                 warnings.append(f"{panel['id']}: empty panel text - skipped "
                                 f"(write the panel description first)")
                 continue
-            spec = cz_comic.resolve_panel(project, page, panel, index=i)
+            storyboard = bool(data.get("storyboard"))
+            if storyboard:
+                # 🎞 profil storyboard: croquis rapide pour valider decoupage,
+                # cadrage et place du texte - style remplace par un crayonne,
+                # pas de mood, pas de LoRA, pas de refs, moitie de pixels,
+                # 4 steps. La case est marquee 'storyboard' -> Production
+                # propose le rendu final.
+                import copy
+                sb = copy.deepcopy(project)
+                sb["style"] = {"prompt_suffix": "rough pencil storyboard sketch, loose "
+                                                "lines, greyscale, simple shapes, "
+                                                "clear composition",
+                               "negative": "color, detailed, photo, text", "loras": [],
+                               "mood": ""}
+                for c_ in sb.get("chapters") or []:
+                    c_["mood"] = ""
+                for c_ in (sb.get("casting") or {}).values():
+                    c_["refs"], c_["loras"] = [], []
+                sb_page = cz_comic.find_page(sb, cid, pid)
+                spec = cz_comic.resolve_panel(sb, sb_page, sb_page["panels"][i],
+                                              index=i, target_pixels=512 * 512)
+                spec["loras"], spec["refs"] = [], []
+                spec["steps"] = int(self.config.get("storyboard_steps") or 4)
+            else:
+                spec = cz_comic.resolve_panel(project, page, panel, index=i)
             if not (spec["prompt"] or "").strip():
                 warnings.append(f"{panel['id']}: empty panel text - skipped "
                                 f"(write the panel description first)")
@@ -1356,6 +1420,8 @@ class Studio:
                        "width": spec["width"], "height": spec["height"],
                        "seed": spec["seed"], "loras": spec["loras"],
                        "refs": refs}
+            if storyboard:
+                payload["steps"] = spec["steps"]
             # Detailer auto: une case qui met en scene un PERSONNAGE du
             # casting recoit la passe visages (ADetailer cote moteur).
             # Absent sinon -> reglage par defaut de l'outil. Mains: opt-in
@@ -1363,9 +1429,10 @@ class Studio:
             used = cz_comic.resolve_casting(
                 panel.get("text") or "", project.get("casting"))["used"]
             if any((project.get("casting", {}).get(u) or {})
-                   .get("kind", "character") == "character" for u in used):
+                   .get("kind", "character") == "character" for u in used) \
+                    and not storyboard:
                 payload["detail_faces"] = True
-            if self.config.get("detail_hands"):
+            if self.config.get("detail_hands") and not storyboard:
                 payload["detail_hands"] = True
             res = eng.gen(payload)
             if not res.get("ok"):
@@ -1390,7 +1457,12 @@ class Studio:
                 pn = cz_comic.find_panel(project, cid, pid, panel["id"])
                 pn["image"] = dst
                 pn["status"] = "rendered"
-                pn["style_sig"] = c2c_state.style_signature(project, page)
+                pn["style_sig"] = ("storyboard" if storyboard else
+                                   c2c_state.style_signature(project, page))
+                if storyboard:
+                    pn["storyboard"] = True
+                else:
+                    pn.pop("storyboard", None)
                 cz_comic.save_project(project, self.dir)
             done.append({"panel": panel["id"],
                          "seed_used": res.get("seed_used"),

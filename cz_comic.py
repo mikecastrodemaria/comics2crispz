@@ -255,6 +255,70 @@ def gen_size(rect_w, rect_h, target_pixels=1024 * 1024, align=GEN_ALIGN, max_sid
 MAX_GEN_ASPECT = 2.5
 
 
+
+# ----------------------------------------------------------------------------
+# Gabarits obliques: des formes pretes pour N cases, en fractions de la ZONE
+# UTILE (interieur des marges, u/v 0..1). apply_shape_preset les convertit en
+# fractions de page pour la planche courante. La mise en page (layout) reste
+# celle de la planche: seules les formes changent.
+# ----------------------------------------------------------------------------
+SHAPE_PRESETS = {
+    "diagonal-2": {                     # deux cases separees par une diagonale
+        "label": "Diagonal split (2)",
+        "shapes": [{"pts": [[0, 0], [1, 0], [1, 0.38], [0, 0.62]], "z": 0},
+                   {"pts": [[0, 0.62], [1, 0.38], [1, 1], [0, 1]], "z": 0}]},
+    "slant-3": {                        # bande large + deux cases obliques (page de gauche)
+        "label": "Slanted trio (3)",
+        "shapes": [{"pts": [[0, 0], [1, 0], [1, 0.42], [0, 0.42]], "z": 0},
+                   {"pts": [[0, 0.42], [0.62, 0.42], [0.42, 1], [0, 1]], "z": 0},
+                   {"pts": [[0.62, 0.42], [1, 0.42], [1, 1], [0.42, 1]], "z": 0}]},
+    "stairs-3": {                       # trois cases en escalier
+        "label": "Stairs (3)",
+        "shapes": [{"pts": [[0, 0], [1, 0], [1, 0.25], [0, 0.4]], "z": 0},
+                   {"pts": [[0, 0.4], [1, 0.25], [1, 0.62], [0, 0.72]], "z": 0},
+                   {"pts": [[0, 0.72], [1, 0.62], [1, 1], [0, 1]], "z": 0}]},
+    "burst-4": {                        # eclat manga: 4 cases en croix diagonale
+        "label": "Manga burst (4)",
+        "shapes": [{"pts": [[0, 0], [1, 0], [0.5, 0.5]], "z": 0},
+                   {"pts": [[1, 0], [1, 1], [0.5, 0.5]], "z": 0},
+                   {"pts": [[1, 1], [0, 1], [0.5, 0.5]], "z": 0},
+                   {"pts": [[0, 1], [0, 0], [0.5, 0.5]], "z": 0}]},
+    "wide-under-2": {                   # une case pleine page dessous, deux inserts devant
+        "label": "Wide under two inserts (3)",
+        "shapes": [{"pts": [[0, 0], [1, 0], [1, 1], [0, 1]], "z": 0},
+                   {"pts": [[0.05, 0.55], [0.47, 0.55], [0.47, 0.95], [0.05, 0.95]], "z": 1},
+                   {"pts": [[0.53, 0.55], [0.95, 0.55], [0.95, 0.95], [0.53, 0.95]], "z": 1}]},
+    "inset-2": {                        # un gros plan arrondi pose sur une case pleine page
+        "label": "Rounded inset (2)",
+        "shapes": [{"pts": [[0, 0], [1, 0], [1, 1], [0, 1]], "z": 0},
+                   {"pts": [[0.58, 0.05, 0.4], [0.95, 0.05, 0.4], [0.95, 0.4, 0.4],
+                            [0.58, 0.4, 0.4]], "z": 1}]},
+    "tilt-4": {                         # quatre cases, gouttieres penchees (action)
+        "label": "Tilted grid (4)",
+        "shapes": [{"pts": [[0, 0], [0.55, 0], [0.45, 0.5], [0, 0.5]], "z": 0},
+                   {"pts": [[0.55, 0], [1, 0], [1, 0.5], [0.45, 0.5]], "z": 0},
+                   {"pts": [[0, 0.5], [0.45, 0.5], [0.55, 1], [0, 1]], "z": 0},
+                   {"pts": [[0.45, 0.5], [1, 0.5], [1, 1], [0.55, 1]], "z": 0}]},
+}
+
+
+def shape_preset_shapes(name, pg):
+    """Formes d'un gabarit oblique converties en fractions de PAGE pour ce
+    format (zone utile = interieur des marges)."""
+    preset = SHAPE_PRESETS.get(name)
+    if preset is None:
+        raise ValueError(f"unknown shape preset '{name}' (known: "
+                         f"{', '.join(sorted(SHAPE_PRESETS))})")
+    W, H = float(pg["width"]), float(pg["height"])
+    m = float(pg.get("margin") or 0)
+    cw, ch = W - 2 * m, H - 2 * m
+    out = []
+    for sh in preset["shapes"]:
+        pts = [[round((m + u * cw) / W, 4), round((m + v * ch) / H, 4),
+                (float(q[2]) if len(q) > 2 else 0.0)] for q in sh["pts"] for u, v in [q[:2]]]
+        out.append({"points": pts, "z": int(sh.get("z") or 0)})
+    return out
+
 # ----------------------------------------------------------------------------
 # Forme d'une case: par defaut le rectangle de sa cellule; optionnellement
 # panel['shape'] = {"points": [[fx, fy, r?], ...], "z": 0} en FRACTIONS DE
@@ -786,8 +850,10 @@ def compose_page(project, page, images=None, fit="cover", placeholders=True):
         layer = Image.new("RGB", (pg["width"], pg["height"]), pg["background"])
         layer.paste(img, (x, y))
         closed = poly + [poly[0]]
-        if gutter > 0 and g["z"] > 0:
-            draw.line(closed, fill=pg["background"], width=gutter, joint="curve")
+        if gutter > 0:
+            # halo de gouttiere: efface le voisin deja pose sur `gutter` px
+            # autour de la forme (la moitie interieure est recouverte ensuite)
+            draw.line(closed, fill=pg["background"], width=2 * gutter, joint="curve")
         sheet.paste(layer, (0, 0), mask)
         if border > 0:
             draw.line(closed, fill=pg.get("border_color", "#000000"),

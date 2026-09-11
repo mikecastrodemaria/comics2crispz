@@ -228,6 +228,23 @@ shape's bounding box and clipped by the shape at composition; the border
 follows the polygon. **▭ Reset** returns to the rectangle. In the script a
 panel carries `shape=fx,fy[,r] fx,fy …` (page fractions, `r` = corner
 rounding 0–1) and `z=N`; `shape=rect` resets.
+**Slanted presets** (Layout dialog › ✂): diagonal split, slanted trio, stairs,
+manga burst, a wide panel under two inserts, a rounded inset, a tilted
+grid — applied on a page with the same panel count, then adjustable corner
+by corner.
+
+### 6c. Storyboard first, final render later
+
+**Production › 🎞 Storyboard missing** sketches every missing panel in a
+few seconds each: 4 steps, half size, a greyscale pencil style instead of
+the book style, no LoRA / references / detailers. Balloons are lettered
+exactly as in the final, so you check the cuts, framing, reading flow and
+text room on the whole book before paying the real render. Sketched panels
+show as "storyboard sketch"; **Production › storyboard sketches › 🎨 Final
+render these** redraws them with the real style (the sketches stay in each
+panel's history). A sketch is a structure check, not a preview of the exact
+final image: the final render is a new drawing.
+
 
 ### 5a. Balloons — add, hide, font
 

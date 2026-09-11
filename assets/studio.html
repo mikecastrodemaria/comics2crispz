@@ -258,6 +258,8 @@ font-size:11px}
 #shapesvg .shc{fill:#fff;stroke:var(--warn);stroke-width:2;cursor:grab;pointer-events:all}
 #shapesvg .shc.sel{fill:var(--warn)}
 #shapesvg .shm{fill:var(--acc);stroke:#fff;stroke-width:1.5;cursor:copy;pointer-events:all;opacity:.85}
+.laypre.dim{opacity:.4}
+.laypre{position:relative}
 </style>
 </head>
 <body>
@@ -418,6 +420,7 @@ Bruno (think): Of course...
         <span id="prodstat" class="hint"></span>
         <span style="margin-left:auto"></span>
         <button id="prodrefresh">↻ Refresh</button>
+        <button id="prodstory" title="Quick greyscale sketches of every missing panel: 4 steps, half size, no LoRA/refs/detailers - to check layouts, framing and text room before the real render">🎞 Storyboard missing</button>
         <button id="prodgen" class="primary" title="Generate every missing panel (background job)">🎨 Generate missing</button>
         <button id="prodcompose" title="Compose (letter) every page">🧩 Compose book</button>
         <button id="prodprint" title="Print export (upscale + PDF)">🖨 Export print</button>
@@ -665,6 +668,11 @@ Bruno (think): Of course...
   <div class="box" style="width:470px">
     <h3 id="layhead">Add pages</h3>
     <div id="laygrid"></div>
+    <div id="layshapes" style="display:none;margin-top:10px">
+      <span class="lbl">✂ Slanted presets — shapes on top of the current grid (same panel count)
+        <button class="helpb" data-help="Ready-made slanted layouts: diagonal split, slanted trio, stairs, manga burst, a wide panel under two inserts, a rounded inset, a tilted grid. A preset needs a page with the same number of panels (pick the grid first). It sets each panel's shape; the grid stays and Edit corners lets you adjust afterwards. Reset a panel to get its rectangle back.">?</button></span>
+      <div id="layshapegrid"></div>
+    </div>
     <div class="row" style="align-items:center;margin-top:12px" id="layaddopts">
       <span class="lbl" style="margin:0">Role</span>
       <select id="layrole">
@@ -1686,7 +1694,7 @@ function renderPanelBox(p){
   const pn = p.panels.find(x => x.id === SELPN);
   box.style.display = pn ? '' : 'none';
   if(!pn) return;
-  $('pnhead').textContent = 'Panel ' + pn.id + ' (' + pn.status + ')';
+  $('pnhead').textContent = 'Panel ' + pn.id + ' (' + pn.status + (pn.storyboard ? ' · storyboard sketch' : '') + ')';
   $('pntext').value = pn.text || '';
   $('pndlg').value = pn.dialogue_text || '';
   $('pnseed').value = pn.seed;
@@ -2094,6 +2102,7 @@ const PRODCARDS = [
   ['stale', 'pages to recompose', 'stale', 'warn'],
   ['dirty_balloons', 'balloons over a face', 'dirty_balloons', 'warn'],
   ['drift', 'panels with an old style', 'drift', 'warn'],
+  ['sketched', 'storyboard sketches (not final)', 'sketched', 'warn'],
 ];
 function renderProd(){
   const t = PROD.totals, g = $('prodgrid');
@@ -2116,9 +2125,10 @@ function renderProd(){
   head.className = 'row';
   head.style.cssText = 'align-items:center;gap:8px;margin:6px 0';
   head.innerHTML = '<b>' + items.length + ' item(s)</b>';
-  if(['drift', 'unknown', 'missing'].includes(PRODSEL) && items.length){
+  if(['drift', 'unknown', 'missing', 'sketched'].includes(PRODSEL) && items.length){
     const b = document.createElement('button');
-    b.textContent = PRODSEL === 'missing' ? '🎨 Draw these' : '🎨 Redraw these panels';
+    b.textContent = PRODSEL === 'missing' ? '🎨 Draw these' :
+                    PRODSEL === 'sketched' ? '🎨 Final render these' : '🎨 Redraw these panels';
     b.title = 'Background job on exactly these panels (previous drawings stay in their history)';
     b.onclick = async () => {
       if(!confirm(b.textContent + ' — ' + items.length + ' panel(s)?')) return;
@@ -2157,6 +2167,12 @@ $('prodrefresh').onclick = prodReload;
 $('prodgen').onclick = async () => {
   if(!confirm('Generate every missing panel of the book (background job)?')) return;
   await startJob({}, 'Generating the missing panels…');
+};
+$('prodstory').onclick = async () => {
+  if(!confirm('Storyboard every missing panel? Quick greyscale sketches (4 steps, half size) to ' +
+              'check layouts, framing and text room. Final render replaces them later (Production ' +
+              '› storyboard sketches › Final render these).')) return;
+  await startJob({storyboard: true}, 'Storyboard (quick sketches)…');
 };
 $('prodcompose').onclick = async () => {
   const res = await api('compose_book', {}, 'Composing every page…');
@@ -2447,7 +2463,39 @@ function openLayoutPicker(ctx){
   }
   Object.keys(IDX.layouts || {}).sort().forEach(n =>
     g.appendChild(layoutPreviewEl(n, IDX.layouts[n])));
+  $('layshapes').style.display = ctx.mode === 'change' ? '' : 'none';
+  if(ctx.mode === 'change') renderShapePresets();
   $('laymodal').classList.add('on');
+}
+let SHAPE_PRESETS = null;
+async function renderShapePresets(){
+  const g = $('layshapegrid');
+  if(!SHAPE_PRESETS){
+    const r = await rawPost('shape_presets', {});
+    SHAPE_PRESETS = (r && r.ok) ? r.presets : [];
+  }
+  const page = IDX.book.find(p => p.cid === LAYCTX.cid && p.pid === LAYCTX.pid);
+  const n = page ? page.panels_total : 0;
+  g.innerHTML = '';
+  SHAPE_PRESETS.forEach(pr => {
+    const d = document.createElement('div');
+    d.className = 'laypre' + (pr.count === n ? '' : ' dim');
+    d.title = pr.label + ' — ' + pr.count + ' panels' +
+      (pr.count === n ? '' : ' (this page has ' + n + ': pick a ' + pr.count + '-panel grid first)');
+    const svg = '<svg viewBox="0 0 100 130" style="position:absolute;inset:2%;width:96%;height:96%">' +
+      pr.shapes.map(sh => '<polygon points="' + sh.pts.map(q => (q[0] * 100).toFixed(1) + ',' +
+        (q[1] * 130).toFixed(1)).join(' ') + '" fill="' + (sh.z ? '#ffd27a55' : '#4d82c455') +
+        '" stroke="#fff" stroke-width="2"/>').join('') + '</svg>';
+    d.innerHTML = svg + '<span class="nm">' + esc(pr.label) + '</span>';
+    d.onclick = async () => {
+      if(pr.count !== n){ status(d.title, 'warn'); return; }
+      $('laymodal').classList.remove('on');
+      const res = await api('apply_shape_preset', {cid: LAYCTX.cid, pid: LAYCTX.pid, name: pr.name},
+                            'Applying ' + pr.label + '…');
+      if(res){ IDX = res; showPage(LAYCTX.cid, LAYCTX.pid); status(pr.label + ' applied — ✎ Edit corners to adjust', 'ok'); }
+    };
+    g.appendChild(d);
+  });
 }
 $('layclose').onclick = () => $('laymodal').classList.remove('on');
 $('laymodal').onclick = ev => { if(ev.target === $('laymodal'))

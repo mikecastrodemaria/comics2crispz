@@ -161,6 +161,23 @@ forme puis découpé à la composition ; le contour suit le polygone.
 **▭ Reset** revient au rectangle. Dans le script : `shape=fx,fy[,r] …`
 (fractions de page, `r` = arrondi 0–1) et `z=N` ; `shape=rect` remet le
 rectangle.
+**Gabarits obliques** (fenêtre Layout › ✂) : diagonale, trio oblique,
+escalier, éclat manga, case large sous deux inserts, insert arrondi, grille
+penchée ; appliqués sur une planche du même nombre de cases, puis ajustables
+coin par coin.
+
+### Storyboard d'abord, rendu final ensuite
+
+**Production › 🎞 Storyboard missing** croque chaque case manquante en
+quelques secondes : 4 steps, demi-taille, style crayonné gris à la place du
+style du livre, sans LoRA, références ni détaillers. Les bulles sont
+lettrées comme dans le final : on vérifie découpage, cadrage, sens de
+lecture et place du texte sur tout le livre avant de payer le vrai rendu.
+Les cases croquées sont marquées « storyboard sketch » ; **Production ›
+storyboard sketches › 🎨 Final render these** les redessine avec le vrai
+style (les croquis restent dans l'historique). Un croquis valide la
+structure, pas l'image exacte : le rendu final est un nouveau dessin.
+
 
 ### Bulles — ajouter, masquer, police
 
