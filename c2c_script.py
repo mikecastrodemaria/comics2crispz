@@ -135,13 +135,9 @@ def parse_script(text):
             if any(p["id"] == pnid for p in page["panels"]):
                 raise ScriptError(no, f"panel {pnid} declared twice on this page")
             cells = len(cz_comic.layout_cells(page["layout"]))
-            if len(page["panels"]) >= cells:
-                raise ScriptError(no, f"page has layout '{page['layout']}' "
-                                      f"({cells} cells) but a {len(page['panels']) + 1}"
-                                      f"th panel [{pnid}] - pick a larger layout or "
-                                      f"split the page (texts are never dropped)")
             panel = {"id": pnid, "text": m.group(2).strip(), "seed": None,
-                     "dialogue_lines": [], "line": no}
+                     "dialogue_lines": [], "line": no,
+                     "free": len(page["panels"]) >= cells, "cells": cells}
             page["panels"].append(panel)
             in_text = True
             continue
@@ -175,6 +171,9 @@ def parse_script(text):
             panel["shape"] = {"points": pts, "z": (panel.get("shape") or {}).get("z", 0)
                               if isinstance(panel.get("shape"), dict) else 0}
             continue
+        if stripped.lower() in ("frameless", "frameless=1", "frameless=true"):
+            panel["frameless"] = True
+            continue
         m = _RE_Z.match(stripped)
         if m:
             if "shape" in panel and panel["shape"] is None:
@@ -192,6 +191,13 @@ def parse_script(text):
     for c in chapters:
         for pg in c["pages"]:
             for pn in pg["panels"]:
+                if pn.pop("free", False) and not (isinstance(pn.get("shape"), dict)
+                                                  and pn["shape"].get("points")):
+                    raise ScriptError(pn["line"], f"page has layout '{pg['layout']}' "
+                                      f"({pn['cells']} cells): [{pn['id']}] is a free "
+                                      f"panel beyond the grid and needs a shape= line "
+                                      f"(or pick a larger layout / split the page)")
+                pn.pop("cells", None)
                 pn["dialogue"] = cz_comic.parse_dialogue("\n".join(pn["dialogue_lines"]))
                 del pn["dialogue_lines"]
                 if not pn["text"]:
@@ -232,6 +238,8 @@ def format_script(project, chapter_id=None):
                         for q in sh["points"]))
                     if int(sh.get("z") or 0):
                         out.append(f"z={int(sh['z'])}")
+                if pn.get("frameless"):
+                    out.append("frameless")
                 dlg = c2c_state.fmt_dialogue(pn.get("dialogue") or [])
                 if dlg:
                     out.append(dlg)
@@ -308,6 +316,11 @@ def apply_script(project, outline):
                         rep["panels_unchanged"] += 1
                 if spn.get("seed") is not None:
                     pn["seed"] = int(spn["seed"])
+                if spn.get("frameless"):
+                    pn["frameless"] = True
+                    pn["breakout"] = dict(pn.get("breakout") or {}, enabled=True)
+                elif "frameless" in spn or True:
+                    pass
                 if "shape" in spn:
                     if spn["shape"] is None:
                         pn.pop("shape", None)

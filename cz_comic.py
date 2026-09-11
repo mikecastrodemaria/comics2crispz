@@ -410,17 +410,33 @@ def shape_points(shape, pg):
     return out
 
 
+# Une case AJOUTEE au-dela des cellules du gabarit ('case libre'): pas de
+# cellule, donc une forme obligatoire - par defaut un rectangle centre, pose
+# par-dessus (z 1). Un papillon qui traverse deux cases, un insert, un
+# element decoratif: c'est une case libre, souvent 'frameless' (sans cadre ni
+# fond, seul son sujet detoure est dessine).
+FREE_PANEL_DEFAULT = {"points": [[0.3, 0.35, 0], [0.7, 0.35, 0], [0.7, 0.65, 0], [0.3, 0.65, 0]],
+                      "z": 1}
+
+
 def page_geometry(project, page, pg=None):
     """Geometrie de chaque case: [{'rect': (x, y, w, h), 'poly': [(x, y)...]|None,
     'z': int, 'index': i}]. rect = cellule du gabarit, ou boite englobante du
-    polygone quand la case a une forme."""
+    polygone quand la case a une forme. Les cases libres (au-dela des
+    cellules) ont toujours une forme (FREE_PANEL_DEFAULT a defaut)."""
     pg = pg or page_size(project.get("page"))
     cells = layout_cells(page["layout"])
     base = panel_rects(cells, pg["width"], pg["height"], pg["margin"], pg["gutter"])
+    panels = page.get("panels") or []
     out = []
-    for i, rect in enumerate(base):
-        panel = page["panels"][i] if i < len(page.get("panels") or []) else None
-        shape = (panel or {}).get("shape") or None
+    for i in range(max(len(base), len(panels))):
+        panel = panels[i] if i < len(panels) else None
+        if i < len(base):
+            rect = base[i]
+            shape = (panel or {}).get("shape") or None
+        else:
+            rect = None
+            shape = (panel or {}).get("shape") or FREE_PANEL_DEFAULT
         poly, z = None, 0
         pts = shape_points(shape, pg) if shape else None
         if pts:
@@ -436,6 +452,8 @@ def page_geometry(project, page, pg=None):
                 z = int(shape.get("z") or 0)
             except (TypeError, ValueError):
                 z = 0
+        if rect is None:                      # case libre sans forme lisible
+            rect = base[0] if base else (0, 0, pg["width"], pg["height"])
         out.append({"rect": rect, "poly": poly, "z": z, "index": i})
     return out
 
@@ -698,8 +716,12 @@ def set_layout(project, chapter_id, page_id, layout):
         panels.append(new_panel(f"pn{len(panels) + 1}"))
     removed = []
     if len(panels) > n:
-        removed = panels[n:]
+        # les cases LIBRES (forme propre, au-dela des cellules) survivent au
+        # changement de gabarit; les cases de cellule en trop sont rendues
+        keep = [pn for pn in panels[n:] if pn.get("shape")]
+        removed = [pn for pn in panels[n:] if not pn.get("shape")]
         del panels[n:]
+        panels.extend(keep)
     page["layout"] = layout
     return page, removed
 
@@ -751,13 +773,12 @@ def resolve_panel(project, page, panel, index=None, target_pixels=1024 * 1024):
     Le style du projet est applique en SUFFIXE (apres le texte du panneau) et ses
     LoRA passent en dernier: une LoRA de personnage prime sur la LoRA de style si
     les deux designent le meme fichier."""
-    cells = layout_cells(page["layout"])
     if index is None:
         index = page["panels"].index(panel)
-    if index >= len(cells):
-        raise ValueError(f"panel {panel['id']} has no cell in layout '{page['layout']}'")
     pg = page_size(project.get("page"))
     rects = page_rects(project, page, pg)
+    if index >= len(rects):
+        raise ValueError(f"panel {panel['id']} has no cell in layout '{page['layout']}'")
     rw, rh = rects[index][2], rects[index][3]
 
     res = resolve_casting(panel.get("text", ""), project.get("casting"))
@@ -869,6 +890,14 @@ def compose_page(project, page, images=None, fit="cover", placeholders=True):
         x, y, w, h = rect
         bo = panel.get("breakout") or {}
         zoom = 1.0
+        if panel.get("frameless"):
+            # sans cadre ni fond: seul le sujet detoure existe sur la planche
+            img = None
+            if panel.get("image") and os.path.isfile(panel["image"]):
+                with Image.open(panel["image"]) as im_:
+                    fitted = ImageOps.fit(im_.convert("RGB"), (w, h), Image.LANCZOS)
+                breakouts.append((panel, g, fitted, (x, y)))
+            continue
         if bo.get("enabled"):
             try:
                 zoom = max(1.0, min(1.6, float(bo.get("zoom") or 1.0)))
@@ -915,11 +944,18 @@ def compose_page(project, page, images=None, fit="cover", placeholders=True):
         layer.paste(img, (x, y))
         closed = poly + [poly[0]]
         if border > 0:
-            # contour trace SUR le calque puis decoupe par le masque: il
-            # reste a l'interieur de la forme (comme le cadre des
-            # rectangles), jamais sur les voisines, jamais rogne par elles
-            ImageDraw.Draw(layer).line(closed, fill=pg.get("border_color", "#000000"),
-                                       width=2 * border, joint="curve")
+            # cadre = anneau d'epaisseur constante entre la forme et son
+            # retrait de `border` px (un trait large ferait des coins en
+            # biseau aux angles aigus); dessine SUR le calque puis decoupe
+            # par le masque: toujours a l'interieur, jamais sur une voisine
+            ring = Image.new("L", (pg["width"], pg["height"]), 0)
+            rd = ImageDraw.Draw(ring)
+            rd.polygon(poly, fill=255)
+            inner = _inset_polygon(poly, border)
+            if len(inner) >= 3:
+                rd.polygon(inner, fill=0)
+            layer.paste(Image.new("RGB", layer.size, pg.get("border_color", "#000000")),
+                        (0, 0), ring)
         if gutter > 0 and g["z"] > 0:
             # insert pose PAR-DESSUS: un halo de fond le detache de la case
             # du dessous (les voisines de meme niveau ont deja leur demi-

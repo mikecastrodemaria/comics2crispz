@@ -238,6 +238,17 @@ itself when the drawing changes; if it takes too much or too little, brush
 the area with the Paint tool and use ➕ add painted / ➖ remove painted.
 Balloons stay on top.
 
+**Free panels and frameless elements.** **➕ Panel** (page box) adds a panel
+beyond the grid, with its own shape on top of the page (an insert; move and
+resize it with Edit corners). Tick **🦋 frameless** (Shape section) and the
+panel draws nothing but its cut-out subject: generate "three butterflies,
+isolated on a plain white background", and they float across two panels with
+a transparent background. **🗑 Remove panel** takes a free panel away (text
+reported, drawing kept in `_removed/`); a grid cell is removed by picking a
+smaller layout. Free panels survive a layout change. In the script a free
+panel is any `[pn]` beyond the grid: it needs a `shape=` line, and
+`frameless` on its own line.
+
 **Slanted presets** (Layout dialog › ✂): diagonal split, slanted trio, stairs,
 manga burst, a wide panel under two inserts, a rounded inset, a tilted
 grid — applied on a page with the same panel count, then adjustable corner

@@ -172,6 +172,18 @@ se recalcule quand le dessin change ; s'il prend trop ou pas assez, peins la
 zone avec l'outil Paint puis ➕ add painted / ➖ remove painted. Les bulles
 restent au-dessus.
 
+**Cases libres et éléments sans cadre.** **➕ Panel** (bloc de la planche)
+ajoute une case au-delà de la grille, avec sa propre forme posée par-dessus
+(un insert ; déplace et redimensionne avec Edit corners). Coche **🦋
+frameless** (section Shape) et la case ne dessine que son sujet détouré :
+génère « three butterflies, isolated on a plain white background » et les
+papillons flottent sur deux cases avec un fond transparent. **🗑 Remove
+panel** retire une case libre (texte cité, dessin gardé dans `_removed/`) ;
+une cellule de grille se retire en choisissant une grille plus petite. Les
+cases libres survivent à un changement de gabarit. Dans le script, une case
+libre est tout `[pn]` au-delà de la grille : il lui faut une ligne `shape=`,
+et `frameless` seul sur une ligne.
+
 **Gabarits obliques** (fenêtre Layout › ✂) : diagonale, trio oblique,
 escalier, éclat manga, case large sous deux inserts, insert arrondi, grille
 penchée ; appliqués sur une planche du même nombre de cases, puis ajustables

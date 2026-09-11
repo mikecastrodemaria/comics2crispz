@@ -732,6 +732,7 @@ Bruno (think): Of course...
             <button id="composeone" class="primary">🧩 Compose</button>
             <button id="genmissing" title="Generate the panels without an image through the configured engine (family CLI protocol)">🎨 Generate missing</button>
             <button id="laybtn" title="Change this page's panel grid — removed panels report their text, nothing is lost silently">🔲 Layout</button>
+            <button id="addpnbtn" title="Add a free panel over this page (its own shape, on top): an insert, or a frameless element like butterflies crossing two panels">➕ Panel</button>
             <button id="delpagebtn" title="Remove this page from the book (generated files stay on disk, recoverable)">🗑</button>
           </div>
           <div class="hint" style="margin-top:8px"><b>Click a panel</b> to
@@ -853,6 +854,11 @@ Bruno (think): Of course...
               <button id="shpfront" title="Stack this panel over its neighbours (z+1)">⬆ Front</button>
               <button id="shpback" title="Stack this panel under its neighbours (z-1)">⬇ Back</button>
               <span id="shpz" class="hint"></span>
+            </div>
+            <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
+              <label class="lorarow" style="margin:0"><input type="checkbox" id="pnframeless"> 🦋 frameless — no frame, no background, only the cut-out subject
+                <button class="helpb" data-help="A frameless panel draws nothing but its cut-out subject: generate it on a plain background ('three butterflies, isolated on white'), tick frameless, then move and resize its shape over the page - the butterflies float across the neighbouring panels with a transparent background. Uses the same cutout as Break the frame (rembg); balloons stay on top.">?</button></label>
+              <button id="rmpnbtn" style="margin-left:auto;color:var(--err)" title="Remove this free panel (its text is reported, its drawing moved to _removed/); a grid cell cannot be removed - change the layout instead">🗑 Remove panel</button>
             </div>
             <div class="row" id="shpround" style="align-items:center;margin-top:6px;display:none">
               <span class="lbl" style="margin:0">round corner <b id="shproundval" style="color:var(--fg)">0.00</b></span>
@@ -1881,7 +1887,11 @@ function renderShapeEditor(){
   $('shpbox').style.display = pn ? '' : 'none';
   if(!pn) return;
   const sh = pn.shape || null;
-  $('shpz').textContent = sh ? ('custom shape · z ' + (sh.z || 0)) : 'rectangle (layout cell)';
+  $('shpz').textContent = (pn.free ? 'free panel · ' : '') + (sh ? ('custom shape · z ' + (sh.z || 0)) : 'rectangle (layout cell)');
+  $('pnframeless').checked = !!pn.frameless;
+  $('rmpnbtn').disabled = !pn.free;
+  $('rmpnbtn').title = pn.free ? 'Remove this free panel (text reported, drawing kept in _removed/)'
+                              : 'A grid cell cannot be removed: change the layout instead';
   $('shpedit').classList.toggle('on', SHP.on);
   $('shpedit').textContent = SHP.on ? '✓ Editing — click to finish' : '✎ Edit corners';
   $('shpround').style.display = SHP.on ? '' : 'none';
@@ -2001,6 +2011,33 @@ async function shapeZ(delta){
   if(!res) return;
   IDX = res; SELPN = pnid; await showPage(SEL.cid, SEL.pid);
 }
+$('addpnbtn').onclick = async () => {
+  if(!SEL) return;
+  const fl = confirm('Add a FRAMELESS panel (only its cut-out subject, e.g. butterflies crossing two panels)?\n\nOK = frameless · Cancel = a normal free panel with a frame');
+  const res = await api('add_panel', {cid: SEL.cid, pid: SEL.pid, frameless: fl}, 'Adding a panel…');
+  if(!res) return;
+  IDX = res; SELPN = res.added;
+  await showPage(SEL.cid, SEL.pid);
+  status(res.added + ' added on top of the page — write its text, Regenerate, then Shape › Edit corners to place it', 'ok');
+};
+$('rmpnbtn').onclick = async () => {
+  if(!SEL || !SELPN) return;
+  if(!confirm('Remove panel ' + SELPN + ' from this page? Its text is kept in the report and its drawing moved to _removed/.')) return;
+  const pnid = SELPN;
+  const res = await api('remove_panel', {cid: SEL.cid, pid: SEL.pid, pnid}, 'Removing…');
+  if(!res) return;
+  IDX = res; SELPN = null;
+  await showPage(SEL.cid, SEL.pid);
+  status(pnid + ' removed' + (res.text ? ' — its text was: "' + res.text.slice(0, 80) + '"' : ''), 'ok');
+};
+$('pnframeless').onchange = async () => {
+  if(!SEL || !SELPN) return;
+  const pnid = SELPN;
+  const res = await api('set_frameless', {cid: SEL.cid, pid: SEL.pid, pnid, frameless: $('pnframeless').checked},
+                        $('pnframeless').checked ? 'Cutting the subject out…' : 'Recomposing…');
+  if(!res){ $('pnframeless').checked = !$('pnframeless').checked; return; }
+  IDX = res; SELPN = pnid; await showPage(SEL.cid, SEL.pid);
+};
 $('shpfront').onclick = () => shapeZ(1);
 $('shpback').onclick = () => shapeZ(-1);
 $('shpradius').oninput = () => {

@@ -906,6 +906,91 @@ class Studio:
         idx["mode"] = mode
         return idx
 
+    def op_add_panel(self, data):
+        """➕ Case LIBRE sur une planche: {cid, pid, text?, frameless?}. Elle
+        s'ajoute au-dela des cellules du gabarit avec une forme par defaut
+        (rectangle centre, z 1) - a deplacer avec Edit corners. frameless =
+        sans cadre ni fond: seul le sujet detoure est dessine (papillons,
+        objet qui traverse deux cases)."""
+        cid, pid = data["cid"], data["pid"]
+        with _LOCK:
+            project = self.load()
+            page = cz_comic.find_page(project, cid, pid)
+            taken = {p_["id"] for p_ in page["panels"]}
+            n_ = len(page["panels"]) + 1
+            while f"pn{n_}" in taken:              # ids pn1, pn2... sans zero
+                n_ += 1
+            pn = cz_comic.new_panel(f"pn{n_}", str(data.get("text") or ""))
+            pn["shape"] = {"points": [list(q) for q in cz_comic.FREE_PANEL_DEFAULT["points"]],
+                           "z": cz_comic.FREE_PANEL_DEFAULT["z"]}
+            if data.get("frameless"):
+                pn["frameless"] = True
+                pn["breakout"] = {"enabled": True}
+            page["panels"].append(pn)
+            cz_comic.save_project(project, self.dir)
+            fd, emb = self._letter_kit(project)
+            c2c_state.compose_one(project, self.dir, cid, pid,
+                                  face_detector=fd, char_embeddings=emb)
+        idx = c2c_state.book_index(project, self.dir)
+        idx["added"] = pn["id"]
+        return idx
+
+    def op_remove_panel(self, data):
+        """🗑 Retire une case: {cid, pid, pnid}. Une case de cellule ne peut
+        pas etre retiree (changer de gabarit); une case libre oui. Son texte
+        est renvoye, son dessin part dans panels/<ch>/<page>/_removed/."""
+        cid, pid, pnid = data["cid"], data["pid"], data["pnid"]
+        with _LOCK:
+            project = self.load()
+            page = cz_comic.find_page(project, cid, pid)
+            cells = len(cz_comic.layout_cells(page["layout"]))
+            idx_ = next((i for i, p_ in enumerate(page["panels"]) if p_["id"] == pnid), -1)
+            if idx_ < 0:
+                return {"ok": False, "error": f"no panel {pnid} on {cid}.{pid}"}
+            if idx_ < cells:
+                return {"ok": False,
+                        "error": f"{pnid} is a cell of the '{page['layout']}' layout: "
+                                 f"pick a smaller layout to drop it (its text is "
+                                 f"reported), or remove a free panel"}
+            pn = page["panels"].pop(idx_)
+            img = pn.get("image")
+            moved = None
+            if img and os.path.isfile(img):
+                d = os.path.join(os.path.dirname(img), "_removed")
+                os.makedirs(d, exist_ok=True)
+                moved = os.path.join(d, f"{pnid}-{int(time.time())}.png")
+                shutil.move(img, moved)
+            cz_comic.save_project(project, self.dir)
+            fd, emb = self._letter_kit(project)
+            c2c_state.compose_one(project, self.dir, cid, pid,
+                                  face_detector=fd, char_embeddings=emb)
+        idx = c2c_state.book_index(project, self.dir)
+        idx.update({"removed": pnid, "text": pn.get("text") or "",
+                    "image_moved_to": moved})
+        return idx
+
+    def op_set_frameless(self, data):
+        """Case sans cadre ni fond (seul le sujet detoure): {cid, pid, pnid,
+        frameless}. Active le detourage; sans rembg: refus clair."""
+        cid, pid, pnid = data["cid"], data["pid"], data["pnid"]
+        with _LOCK:
+            project = self.load()
+            panel = cz_comic.find_panel(project, cid, pid, pnid)
+            on = bool(data.get("frameless"))
+            if on:
+                ok, why = c2c_cutout.available()
+                if not ok:
+                    return {"ok": False, "error": f"frameless needs the cutout: {why}"}
+                panel["frameless"] = True
+                panel["breakout"] = dict(panel.get("breakout") or {}, enabled=True)
+            else:
+                panel.pop("frameless", None)
+            cz_comic.save_project(project, self.dir)
+            fd, emb = self._letter_kit(project)
+            c2c_state.compose_one(project, self.dir, cid, pid,
+                                  face_detector=fd, char_embeddings=emb)
+        return c2c_state.book_index(project, self.dir)
+
     def op_set_bubble(self, data):
         """Deplace une bulle: {cid, pid, pnid, index, pos|anchor: [fx, fy]}
         ou {clear: ["pos", "anchor"]}. pos = coin haut-gauche de la bulle,

@@ -192,6 +192,8 @@ def chapter_state(project, project_dir, cid):
                           rects[i][2] / W, rects[i][3] / H]
                          if i < len(rects) else None),
                 "storyboard": bool(pn.get("storyboard")),
+                "frameless": bool(pn.get("frameless")),
+                "free": i >= len(cz_comic.layout_cells(page["layout"])),
                 "breakout": ({"enabled": bool(pn["breakout"].get("enabled")),
                               "zoom": pn["breakout"].get("zoom", 1.0),
                               "outline": pn["breakout"].get("outline", 0),
@@ -867,6 +869,8 @@ def refresh_breakouts(page):
     import c2c_cutout
     for pn in page.get("panels") or []:
         bo = pn.get("breakout")
+        if pn.get("frameless") and not (isinstance(bo, dict) and bo.get("enabled")):
+            bo = pn["breakout"] = dict(bo or {}, enabled=True)   # sans cadre = detoure
         if not (isinstance(bo, dict) and bo.get("enabled")):
             continue
         img = pn.get("image")
