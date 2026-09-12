@@ -15,4 +15,11 @@ if [ ! -x "$PY" ]; then
     [ -f config.json ] || cp config-sample.json config.json
     [ -f books/exemple/project.json ] || "$PY" tools/make_example.py
 fi
+# requirements.txt changed since the last install (new optional deps such as
+# rembg)? bring the venv up to date before serving.
+if ! cmp -s requirements.txt .venv/requirements.stamp; then
+    echo "[start] requirements.txt changed - updating the venv..."
+    "$PY" -m pip install --quiet -r requirements.txt
+    cp requirements.txt .venv/requirements.stamp
+fi
 exec "$PY" c2c_server.py --open "$@"

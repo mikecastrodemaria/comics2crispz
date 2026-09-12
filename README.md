@@ -56,8 +56,11 @@ run.bat books\exemple             REM serve a specific book, no browser
 start.bat books\autre --port 8771 REM a second book side by side
 ```
 
-Dependencies: Python 3.10+, Pillow. The server is pure stdlib
-(http.server), no framework. Copy `config-sample.json` to `config.json`
+Dependencies: Python 3.10+, Pillow, and rembg for **Break the frame** /
+frameless panels (listed in `requirements.txt`, CPU is enough). `start.bat`
+re-runs `pip install -r requirements.txt` whenever that file changed since the
+last install, so an older venv picks new dependencies up by itself. The server
+is pure stdlib (http.server), no framework. Copy `config-sample.json` to `config.json`
 (local, gitignored) and point the `engines` entries to your crispz installs.
 
 ## The UI

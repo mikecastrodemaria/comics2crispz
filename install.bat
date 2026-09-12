@@ -18,6 +18,7 @@ echo [install] installing requirements ...
 ".venv\Scripts\python.exe" -m pip install --upgrade pip --quiet
 ".venv\Scripts\python.exe" -m pip install -r requirements.txt --quiet
 if errorlevel 1 ( echo [install] pip install FAILED & exit /b 1 )
+copy /y requirements.txt ".venvequirements.stamp" >nul
 
 if not exist "config.json" (
     copy config-sample.json config.json >nul

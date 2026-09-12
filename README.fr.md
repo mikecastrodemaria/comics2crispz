@@ -51,7 +51,11 @@ premier lancement affiche un écran d'accueil. Linux/macOS : `./start.sh`.
 Avancé : `run.bat books\exemple` (livre précis, sans navigateur),
 `start.bat books\autre --port 8771` (deux livres côte à côte).
 
-Copier `config-sample.json` en `config.json` (local, gitignoré) et pointer
+Dépendances : Python 3.10+, Pillow, et rembg pour **Break the frame** / les
+cases sans cadre (dans `requirements.txt`, le CPU suffit). `start.bat` relance
+`pip install -r requirements.txt` dès que ce fichier a changé depuis la
+dernière installation : un ancien venv récupère les nouvelles dépendances tout
+seul. Copier `config-sample.json` en `config.json` (local, gitignoré) et pointer
 les `engines` vers tes installations crispz.
 
 ## L'UI — quatre modes
