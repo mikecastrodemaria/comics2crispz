@@ -1004,6 +1004,38 @@ class Studio:
                     "image_moved_to": moved})
         return idx
 
+    def op_set_framing(self, data):
+        """Cadrage du dessin dans son cadre: {cid, pid, pnid, zoom? (1-3),
+        dx? dy? (-1..1, fraction du cadre), reset?}. Le dessin couvre le
+        cadre a zoom x et glisse de dx/dy sans laisser de vide; reset =
+        centre a zoom 1. Recompose la planche."""
+        cid, pid, pnid = data["cid"], data["pid"], data["pnid"]
+        with _LOCK:
+            project = self.load()
+            panel = cz_comic.find_panel(project, cid, pid, pnid)
+            fr = dict(panel.get("framing") or {})
+            if data.get("reset"):
+                fr = {}
+            for k, lo, hi in (("zoom", 1.0, cz_comic.MAX_FRAMING_ZOOM),
+                              ("dx", -1.0, 1.0), ("dy", -1.0, 1.0)):
+                if data.get(k) is not None:
+                    try:
+                        fr[k] = round(max(lo, min(hi, float(data[k]))), 3)
+                    except (TypeError, ValueError):
+                        return {"ok": False, "error": f"{k} must be a number"}
+            fr = {k: v for k, v in fr.items() if v not in (None, 0.0) and not (k == "zoom" and v == 1.0)}
+            if fr:
+                panel["framing"] = fr
+            else:
+                panel.pop("framing", None)
+            cz_comic.save_project(project, self.dir)
+            fd, emb = self._letter_kit(project)
+            c2c_state.compose_one(project, self.dir, cid, pid,
+                                  face_detector=fd, char_embeddings=emb)
+        idx = c2c_state.book_index(project, self.dir)
+        idx["framing"] = panel.get("framing") or {}
+        return idx
+
     def op_set_inset(self, data):
         """Marge interne d'une case: {cid, pid, pnid, inset} - fraction de la
         largeur de page (0-0.15), le cadre rentre d'autant tout autour en

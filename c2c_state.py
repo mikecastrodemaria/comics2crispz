@@ -207,6 +207,7 @@ def chapter_state(project, project_dir, cid):
                              if isinstance(pn.get("breakout"), dict) else None),
                 "shape": pn.get("shape") or None,
                 "inset": float(pn.get("inset") or 0),
+                "framing": pn.get("framing") or None,
                 "rect_raw": ([raw_rects[i][0] / W, raw_rects[i][1] / H,
                               raw_rects[i][2] / W, raw_rects[i][3] / H]
                              if i < len(raw_rects) else None),

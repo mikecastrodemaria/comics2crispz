@@ -262,6 +262,7 @@ font-size:11px}
 #shapesvg .she:hover{stroke:#ffd27a55}
 #shapesvg .she.h{cursor:ns-resize}#shapesvg .she.v{cursor:ew-resize}#shapesvg .she.d{cursor:move}
 #shapesvg .shx{fill:var(--acc);stroke:#fff;stroke-width:2;cursor:move;pointer-events:all}
+#stage .pn.framing{cursor:move;outline:2px dashed var(--acc);outline-offset:-2px;background:#4d82c414}
 #shapesvg .shx:hover{fill:var(--warn)}
 .laypre.dim{opacity:.4}
 .laypre{position:relative}
@@ -880,6 +881,14 @@ Bruno (think): Of course...
               <span class="lbl" style="margin:0">inner margin <b id="shpinsetval" style="color:var(--fg)">0</b>%
                 <button class="helpb" data-help="Extra margin inside this panel only: the frame steps back from the cell (or from the shape's corners) by this fraction of the page width, all around, on top of the book's half gutter. The drawing follows the smaller frame. 0 = none. In the script: inset=0.02.">?</button></span>
               <input id="shpinset" type="range" min="0" max="15" step="0.5" value="0" style="flex:1;min-width:80px" title="Inner margin of this panel, % of the page width">
+            </div>
+            <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
+              <span class="lbl" style="margin:0">framing <b id="frmzoomval" style="color:var(--fg)">×1.00</b>
+                <button class="helpb" data-help="How the drawing sits inside its frame (the frame is the clipping mask, the drawing the background): zoom enlarges the drawing inside the frame (it covers the frame at 1x), then Move image lets you drag the drawing on the page to choose what the frame shows - never leaving a gap. Reset centres it at 1x. Break the frame's own zoom multiplies this one. In the script: framing=zoom,dx,dy.">?</button></span>
+              <input id="frmzoom" type="range" min="1" max="3" step="0.05" value="1" style="flex:1;min-width:70px" title="Zoom of the drawing inside its frame">
+              <button id="frmmove" title="Drag the drawing inside its frame on the page">✥ Move image</button>
+              <button id="frmreset" title="Centre the drawing at zoom 1">↺</button>
+              <span id="frmpos" class="hint"></span>
             </div>
             <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
               <label class="lorarow" style="margin:0"><input type="checkbox" id="pnframeless"> 🦋 frameless — no frame, no background, only the cut-out subject
@@ -1594,6 +1603,7 @@ async function showPage(cid, pid){
     d.onclick = () => {
       if(INP.on) inpaintOff();
       if(SHP.on && SELPN !== pn.id){ SHP.on = false; SHP.pts = null; SHP.sel = -1; }
+      if(FRM.on && SELPN !== pn.id) FRM.on = false;
       SELPN = (SELPN === pn.id ? null : pn.id);
       document.querySelectorAll('#stage .pn').forEach(x =>
         x.classList.toggle('sel', x.dataset.pn === SELPN));
@@ -1939,6 +1949,7 @@ function renderShapeEditor(){
   $('shpz').textContent = (pn.free ? 'free panel · ' : '') + (sh ? ('custom shape · z ' + (sh.z || 0)) : 'rectangle (layout cell)');
   $('pnframeless').checked = !!pn.frameless;
   $('shpinset').value = Math.round((pn.inset || 0) * 200) / 2; $('shpinsetval').textContent = $('shpinset').value;
+  renderFraming(pn);
   $('rmpnbtn').disabled = !pn.free;
   $('rmpnbtn').title = pn.free ? 'Remove this free panel (text reported, drawing kept in _removed/)'
                               : 'A grid cell cannot be removed: change the layout instead';
@@ -2151,6 +2162,62 @@ $('rmpnbtn').onclick = async () => {
   IDX = res; SELPN = null;
   await showPage(SEL.cid, SEL.pid);
   status(pnid + ' removed' + (res.text ? ' — its text was: "' + res.text.slice(0, 80) + '"' : ''), 'ok');
+};
+/* Cadrage du dessin dans son cadre: zoom + glissement (drag sur la case). */
+const FRM = {on: false, drag: null};
+function renderFraming(pn){
+  const fr = pn.framing || {};
+  $('frmzoom').value = fr.zoom || 1; $('frmzoomval').textContent = '×' + Number(fr.zoom || 1).toFixed(2);
+  $('frmpos').textContent = (fr.dx || fr.dy) ? ('offset ' + Number(fr.dx || 0).toFixed(2) + ', ' + Number(fr.dy || 0).toFixed(2)) : '';
+  $('frmmove').classList.toggle('on', FRM.on);
+  $('frmmove').textContent = FRM.on ? '✓ Moving — click to finish' : '✥ Move image';
+  const d = document.querySelector('#stage .pn[data-pn="' + pn.id + '"]');
+  document.querySelectorAll('#stage .pn.framing').forEach(x => x.classList.remove('framing'));
+  if(!d) return;
+  if(!FRM.on){ d.onpointerdown = d.onpointermove = d.onpointerup = d.onpointercancel = null; return; }
+  d.classList.add('framing');
+  d.onpointerdown = ev => {
+    ev.preventDefault(); ev.stopPropagation();
+    const r = d.getBoundingClientRect();
+    FRM.drag = {x0: ev.clientX, y0: ev.clientY, w: r.width, h: r.height, moved: false};
+    try{ d.setPointerCapture(ev.pointerId); }catch(_){}
+  };
+  d.onpointermove = ev => {
+    if(!FRM.drag) return;
+    const ddx = (ev.clientX - FRM.drag.x0) / FRM.drag.w, ddy = (ev.clientY - FRM.drag.y0) / FRM.drag.h;
+    if(Math.abs(ddx) > 0.005 || Math.abs(ddy) > 0.005) FRM.drag.moved = true;
+    $('frmpos').textContent = 'offset ' + (Number(fr.dx || 0) + ddx).toFixed(2) + ', ' + (Number(fr.dy || 0) + ddy).toFixed(2);
+  };
+  d.onpointerup = d.onpointercancel = async ev => {
+    if(!FRM.drag) return;
+    const g = FRM.drag; FRM.drag = null;
+    if(!g.moved) return;
+    const ddx = (ev.clientX - g.x0) / g.w, ddy = (ev.clientY - g.y0) / g.h;
+    await applyFraming({dx: Math.max(-1, Math.min(1, Number(fr.dx || 0) + ddx)),
+                        dy: Math.max(-1, Math.min(1, Number(fr.dy || 0) + ddy))});
+  };
+  d.onclick = ev => { ev.stopPropagation(); };     // en mode deplacement, un clic ne deselectionne pas
+}
+async function applyFraming(extra){
+  if(!SEL || !SELPN) return;
+  const pnid = SELPN;
+  const res = await api('set_framing', Object.assign({cid: SEL.cid, pid: SEL.pid, pnid}, extra || {}),
+                        'Reframing the drawing…');
+  if(!res) return;
+  IDX = res; SELPN = pnid; await showPage(SEL.cid, SEL.pid);
+}
+$('frmzoom').oninput = () => $('frmzoomval').textContent = '×' + Number($('frmzoom').value).toFixed(2);
+$('frmzoom').onchange = () => applyFraming({zoom: parseFloat($('frmzoom').value)});
+$('frmreset').onclick = () => applyFraming({reset: true});
+$('frmmove').onclick = () => {
+  FRM.on = !FRM.on;
+  const pn = LASTPAGE && LASTPAGE.panels.find(x => x.id === SELPN);
+  if(pn) renderFraming(pn);
+  if(FRM.on){
+    const z = pn && pn.framing && pn.framing.zoom > 1;
+    status(z ? 'Drag the drawing inside its frame on the page; click ✓ when done'
+             : 'Raise the framing zoom first (at ×1 the drawing exactly covers the frame, there is nothing to slide)', z ? 'ok' : 'warn');
+  }
 };
 $('shpinset').oninput = () => $('shpinsetval').textContent = $('shpinset').value;
 $('shpinset').onchange = async () => {

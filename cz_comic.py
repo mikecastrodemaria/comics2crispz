@@ -424,6 +424,34 @@ FREE_PANEL_DEFAULT = {"points": [[0.3, 0.35, 0], [0.7, 0.35, 0], [0.7, 0.65, 0],
 
 
 MAX_PANEL_INSET = 0.15
+MAX_FRAMING_ZOOM = 3.0
+
+
+def frame_image(img, w, h, framing=None, zoom_extra=1.0):
+    """Cadrage du dessin dans son cadre (masque de decoupe + image de fond):
+    framing = {'zoom': 1..3, 'dx': -1..1, 'dy': -1..1}. Le dessin couvre le
+    cadre (ImageOps.fit) a zoom x, puis glisse de dx*w / dy*h pixels sans
+    jamais laisser de vide (borne au debattement). zoom_extra multiplie le
+    zoom (hors-cadre). Renvoie (vue w*h, dessin agrandi, origine de la vue
+    dans le dessin agrandi)."""
+    from PIL import ImageOps, Image
+    fr = framing or {}
+    try:
+        z = float(fr.get("zoom") or 1.0)
+    except (TypeError, ValueError):
+        z = 1.0
+    z = max(1.0, min(MAX_FRAMING_ZOOM, z)) * max(1.0, float(zoom_extra or 1.0))
+    def _f(k):
+        try:
+            return max(-1.0, min(1.0, float(fr.get(k) or 0.0)))
+        except (TypeError, ValueError):
+            return 0.0
+    dx, dy = _f("dx"), _f("dy")
+    zw, zh = max(w, int(round(w * z))), max(h, int(round(h * z)))
+    big = ImageOps.fit(img, (zw, zh), Image.LANCZOS)
+    ox = max(0, min(zw - w, int(round((zw - w) / 2.0 - dx * w))))
+    oy = max(0, min(zh - h, int(round((zh - h) / 2.0 - dy * h))))
+    return big.crop((ox, oy, ox + w, oy + h)), big, (ox, oy)
 
 
 def panel_inset_px(panel, pg):
@@ -935,8 +963,9 @@ def compose_page(project, page, images=None, fit="cover", placeholders=True):
             img = None
             if panel.get("image") and os.path.isfile(panel["image"]):
                 with Image.open(panel["image"]) as im_:
-                    fitted = ImageOps.fit(im_.convert("RGB"), (w, h), Image.LANCZOS)
-                breakouts.append((panel, g, fitted, (x, y)))
+                    _, big, (ox, oy) = frame_image(im_.convert("RGB"), w, h,
+                                                   panel.get("framing"))
+                breakouts.append((panel, g, big, (x - ox, y - oy)))
             continue
         if bo.get("enabled"):
             try:
@@ -958,18 +987,12 @@ def compose_page(project, page, images=None, fit="cover", placeholders=True):
                 canvas.paste(scaled, ((w - scaled.width) // 2, (h - scaled.height) // 2))
                 img = canvas
             else:
-                if zoom > 1.0:
-                    # case 'hors cadre': le dessin est cadre avec un zoom, le
-                    # cadre en montre le centre et le sujet detoure depasse
-                    zw, zh = int(round(w * zoom)), int(round(h * zoom))
-                    big = ImageOps.fit(img, (zw, zh), Image.LANCZOS)
-                    ox, oy = (zw - w) // 2, (zh - h) // 2
-                    img = big.crop((ox, oy, ox + w, oy + h))
+                # cadrage: le dessin couvre le cadre (zoom, glissement),
+                # le cadre en montre une fenetre; hors cadre, le sujet
+                # detoure du dessin agrandi depasse au meme cadrage
+                img, big, (ox, oy) = frame_image(img, w, h, panel.get("framing"), zoom)
+                if bo.get("enabled"):
                     breakouts.append((panel, g, big, (x - ox, y - oy)))
-                else:
-                    img = ImageOps.fit(img, (w, h), Image.LANCZOS)
-                    if bo.get("enabled"):
-                        breakouts.append((panel, g, img, (x, y)))
         if poly is None:
             sheet.paste(img, (x, y))
             if border > 0:

@@ -232,7 +232,11 @@ stacks the panel over or under its neighbours (a wide panel can sit under
 two smaller ones, with a gutter halo). The drawing is generated at the
 shape's bounding box and clipped by the shape at composition; the border
 follows the polygon, and automatic balloons are placed inside the shape (a
-balloon you pinned by hand stays where you put it). **▭ Reset** returns to the rectangle. **Inner margin**
+balloon you pinned by hand stays where you put it). **Framing** (zoom slider, **✥ Move image**, ↺): the frame is the clipping
+mask and the drawing its background; zoom enlarges the drawing inside the
+frame (at 1× it exactly covers it), then Move image lets you drag the
+drawing on the page to choose what the frame shows, never leaving a gap.
+`framing=zoom,dx,dy` in the script. **▭ Reset** returns to the rectangle. **Inner margin**
 (slider, % of the page width) steps this panel's frame back from its cell or
 shape corners all around, on top of the book's half gutter; the drawing
 follows the smaller frame. In the script a

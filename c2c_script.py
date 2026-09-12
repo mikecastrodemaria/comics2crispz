@@ -51,6 +51,8 @@ _RE_SEED = re.compile(r"^seed\s*=\s*(-?\d+)\s*$", re.IGNORECASE)
 _RE_SHAPE = re.compile(r"^shape\s*=\s*(.+?)\s*$", re.IGNORECASE)
 _RE_Z = re.compile(r"^z\s*=\s*(-?\d+)\s*$", re.IGNORECASE)
 _RE_INSET = re.compile(r"^inset\s*=\s*([0-9.]+)\s*$", re.IGNORECASE)
+_RE_FRAMING = re.compile(r"^framing\s*=\s*([-0-9.]+)\s*,\s*([-0-9.]+)\s*,\s*([-0-9.]+)\s*$",
+                         re.IGNORECASE)
 # a dialogue line: 'CAP:', 'SFX:', or 'Name: text' / 'Name (mods): text'
 _RE_DIALOGUE = re.compile(r"^(CAP|SFX|[^:\[\]#]{1,40}?(?:\s*\([^)]*\))?)\s*:\s*\S")
 
@@ -182,6 +184,15 @@ def parse_script(text):
             except ValueError:
                 raise ScriptError(no, f"bad inset '{m.group(1)}' (fraction of the page width)")
             continue
+        m = _RE_FRAMING.match(stripped)
+        if m:
+            try:
+                z, dx, dy = (float(m.group(i)) for i in (1, 2, 3))
+            except ValueError:
+                raise ScriptError(no, "bad framing (zoom,dx,dy)")
+            panel["framing"] = {"zoom": max(1.0, min(cz_comic.MAX_FRAMING_ZOOM, z)),
+                                "dx": max(-1.0, min(1.0, dx)), "dy": max(-1.0, min(1.0, dy))}
+            continue
         m = _RE_Z.match(stripped)
         if m:
             if "shape" in panel and panel["shape"] is None:
@@ -250,6 +261,11 @@ def format_script(project, chapter_id=None):
                     out.append("frameless")
                 if float(pn.get("inset") or 0) > 0:
                     out.append(f"inset={float(pn['inset']):g}")
+                fr = pn.get("framing") or {}
+                if fr:
+                    out.append("framing=%g,%g,%g" % (float(fr.get("zoom") or 1),
+                                                     float(fr.get("dx") or 0),
+                                                     float(fr.get("dy") or 0)))
                 dlg = c2c_state.fmt_dialogue(pn.get("dialogue") or [])
                 if dlg:
                     out.append(dlg)
@@ -334,6 +350,13 @@ def apply_script(project, outline):
                         pn["inset"] = spn["inset"]
                     else:
                         pn.pop("inset", None)
+                if "framing" in spn:
+                    fr = {k: v for k, v in spn["framing"].items()
+                          if v != 0 and not (k == "zoom" and v == 1.0)}
+                    if fr:
+                        pn["framing"] = fr
+                    else:
+                        pn.pop("framing", None)
                 if "shape" in spn:
                     if spn["shape"] is None:
                         pn.pop("shape", None)

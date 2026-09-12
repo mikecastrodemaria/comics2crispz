@@ -167,6 +167,11 @@ avec un halo de gouttière). Le dessin est généré au ratio de la boîte de la
 forme puis découpé à la composition ; le contour suit le polygone, et les
 bulles automatiques se placent à l'intérieur de la forme (une bulle punaisée
 à la main reste où tu l'as mise).
+**Framing** (curseur de zoom, **✥ Move image**, ↺) : le cadre est le masque
+de découpe et le dessin son fond ; le zoom agrandit le dessin dans le cadre
+(à 1× il le couvre exactement), puis Move image permet de faire glisser le
+dessin sur la planche pour choisir ce que le cadre montre, sans jamais
+laisser de vide. `framing=zoom,dx,dy` dans le script.
 **▭ Reset** revient au rectangle. **Inner margin** (curseur, % de la
 largeur de page) fait rentrer le cadre de cette case depuis sa cellule ou
 les coins de sa forme, tout autour, en plus de la demi-gouttière du livre ;
