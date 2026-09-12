@@ -171,10 +171,18 @@ rectangle.
 de son fond (rembg, dépendance optionnelle, quelques secondes sur CPU, modèle
 téléchargé une fois) et dessiné PAR-DESSUS les cases voisines pendant que le
 fond reste dans le cadre. *Zoom* cadre le dessin plus serré pour que le sujet
-déborde davantage, *Outline* ajoute un liseré couleur de page. Le détourage
-se recalcule quand le dessin change ; s'il prend trop ou pas assez, peins la
-zone avec l'outil Paint puis ➕ add painted / ➖ remove painted. Les bulles
-restent au-dessus.
+déborde davantage, *Outline* ajoute un liseré couleur de page. Deux
+détourages : **AI subject** (rembg) trouve le sujet principal, un personnage
+devant un décor ; **plain background** garde tout ce qui diffère de la couleur
+de fond relevée sur les bords du dessin, pour du trait ou plusieurs petits
+sujets (papillons, accessoires, SFX) sur un fond blanc uni, là où l'IA n'en
+garde qu'un ; *Tolerance* dit de combien un pixel peut s'écarter de cette
+couleur avant de compter comme sujet (monte-la si le grain du papier passe,
+baisse-la si les traits clairs disparaissent). Le détourage se recalcule
+quand le dessin change ; s'il prend trop ou pas assez, peins la zone avec
+l'outil Paint puis ➕ add painted / ➖ remove painted. Les bulles restent
+au-dessus. Sans rembg, les cases sans cadre passent d'elles-mêmes au
+détourage par couleur de fond.
 
 **Cases libres et éléments sans cadre.** **➕ Panel** (bloc de la planche)
 ajoute une case au-delà de la grille, avec sa propre forme posée par-dessus

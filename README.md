@@ -236,9 +236,17 @@ rounding 0–1) and `z=N`; `shape=rect` resets.
 background (rembg, optional dependency, a few seconds on CPU; the model is
 downloaded once) and drawn OVER the neighbouring panels while the background
 stays inside the frame. *Zoom* frames the drawing tighter so the subject
-overflows more, *Outline* adds a page-coloured rim. The matte refreshes
-itself when the drawing changes; if it takes too much or too little, brush
-the area with the Paint tool and use ➕ add painted / ➖ remove painted.
+overflows more, *Outline* adds a page-coloured rim. Two mattes: **AI
+subject** (rembg) finds the main subject — a character over a scene;
+**plain background** keeps everything that differs from the background
+colour sampled on the drawing's edges — line art or several small subjects
+(butterflies, props, SFX) on a plain white ground, where the AI keeps only
+one of them; *Tolerance* says how far a pixel may drift from that colour
+before it counts as subject (raise it if paper grain leaks through, lower it
+if light lines vanish). The matte refreshes itself when the drawing
+changes; if it takes too much or too little, brush the area with the Paint
+tool and use ➕ add painted / ➖ remove painted. Frameless panels use the
+plain-background matte automatically when rembg is not installed.
 Balloons stay on top.
 
 **Free panels and frameless elements.** **➕ Panel** (page box) adds a panel

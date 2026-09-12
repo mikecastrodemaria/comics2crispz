@@ -10,6 +10,15 @@ a crash.
 
 The matte is stored next to the panel drawing (<pnid>.cutout.png, RGBA at
 the drawing's size) and refreshed automatically when the drawing changes.
+
+Two matte modes:
+- "ai": rembg finds the main subject. Right for a character over a scene.
+- "key": everything that is NOT the plain background colour is kept (the
+  colour is sampled on the drawing's edges; `tolerance` 0-100 says how far
+  a pixel may drift from it before it counts as subject). Right for line
+  art or several small subjects on a plain white/cream ground - butterflies,
+  sound effects, props - where the AI keeps only one of them. Needs nothing
+  but Pillow.
 """
 
 import os
@@ -44,9 +53,104 @@ def _session():
     return _SESSION[name]
 
 
-def cutout(image):
-    """PIL image -> RGBA matte of its main subject (same size). Raises
-    RuntimeError with a clear message when rembg is unavailable."""
+MATTE_MODES = ("ai", "key")
+DEFAULT_TOLERANCE = 25
+
+
+def background_colour(image):
+    """Dominant colour of the drawing's edges (median per channel of a
+    thin border strip): the plain ground of a 'key' matte."""
+    img = image.convert("RGB")
+    w, h = img.size
+    t = max(2, min(w, h) // 40)
+    strips = [img.crop((0, 0, w, t)), img.crop((0, h - t, w, h)),
+              img.crop((0, 0, t, h)), img.crop((w - t, 0, w, h))]
+    chans = ([], [], [])
+    for st in strips:
+        for px in st.getdata():
+            for i in range(3):
+                chans[i].append(px[i])
+    return tuple(sorted(c)[len(c) // 2] for c in chans)
+
+
+def cutout_key(image, tolerance=DEFAULT_TOLERANCE, colour=None):
+    """Colour-key matte: alpha grows with the distance from the background
+    colour. `tolerance` 0-100 (percent of the colour range): below 60% of
+    it a pixel is ground, above it the pixel is fully kept, soft ramp
+    between the two. Pure Pillow."""
+    from PIL import Image, ImageChops, ImageFilter
+    img = image.convert("RGB")
+    bg = tuple(colour) if colour else background_colour(img)
+    diff = ImageChops.difference(img, Image.new("RGB", img.size, bg))
+    r, g, b = diff.split()
+    dist = ImageChops.lighter(ImageChops.lighter(r, g), b)
+    try:
+        tol = max(0, min(100, int(tolerance)))
+    except (TypeError, ValueError):
+        tol = DEFAULT_TOLERANCE
+    hi = max(4, int(round(tol * 2.55)))
+    lo = int(hi * 0.6)
+    lut = [0 if v <= lo else 255 if v >= hi else int((v - lo) * 255 / (hi - lo))
+           for v in range(256)]
+    alpha = dist.point(lut).filter(ImageFilter.MedianFilter(3))   # kills speckles
+    # only the ground CONNECTED TO THE EDGES goes transparent: a white area
+    # enclosed in a drawing (the inside of a butterfly's wing, a face) is
+    # part of the subject and stays opaque
+    enclosed = _enclosed_ground(alpha)
+    if enclosed is not None:
+        alpha = ImageChops.lighter(alpha, enclosed)
+    out = img.convert("RGBA")
+    out.putalpha(alpha)
+    out.info["background"] = bg
+    return out
+
+
+def _enclosed_ground(alpha):
+    """L mask (255) of the transparent areas NOT reachable from the image
+    border through transparent pixels. scipy when present (fast), else a
+    Pillow flood fill from the border; None when nothing is enclosed."""
+    from PIL import Image, ImageChops
+    ground = alpha.point(lambda v: 255 if v < 128 else 0)      # 255 = ground
+    try:
+        import numpy as np
+        from scipy import ndimage
+        g = np.asarray(ground) > 0
+        lab, n = ndimage.label(g)
+        if n == 0:
+            return None
+        border = set(np.unique(lab[0, :])) | set(np.unique(lab[-1, :])) \
+            | set(np.unique(lab[:, 0])) | set(np.unique(lab[:, -1]))
+        keep = np.isin(lab, [i for i in range(1, n + 1) if i not in border]) & g
+        if not keep.any():
+            return None
+        return Image.fromarray((keep * 255).astype("uint8"), "L")
+    except Exception:
+        pass
+    from PIL import ImageDraw
+    w, h = ground.size
+    reach = ground.copy()                                   # 255 ground, 0 subject
+    px = reach.load()
+    for x in range(w):
+        for y in (0, h - 1):
+            if px[x, y] == 255:
+                ImageDraw.floodfill(reach, (x, y), 128)
+    for y in range(h):
+        for x in (0, w - 1):
+            if px[x, y] == 255:
+                ImageDraw.floodfill(reach, (x, y), 128)
+    enclosed = reach.point(lambda v: 255 if v == 255 else 0)   # ground never reached
+    return enclosed if enclosed.getbbox() else None
+
+
+def cutout(image, mode="ai", tolerance=DEFAULT_TOLERANCE):
+    """PIL image -> RGBA matte (same size). mode 'ai' = rembg subject
+    (RuntimeError with a clear message when rembg is unavailable),
+    'key' = everything but the plain background colour."""
+    if mode == "key":
+        t0 = time.time()
+        out = cutout_key(image, tolerance)
+        out.info["seconds"] = round(time.time() - t0, 1)
+        return out
     ok, why = available()
     if not ok:
         raise RuntimeError(why)
@@ -73,14 +177,14 @@ def is_stale(image_path):
         return True
 
 
-def refresh(image_path, force=False):
+def refresh(image_path, force=False, mode="ai", tolerance=DEFAULT_TOLERANCE):
     """Compute (or recompute) the matte of a drawing; returns its path."""
     from PIL import Image
     cp = cutout_path(image_path)
     if not force and not is_stale(image_path):
         return cp
     with Image.open(image_path) as im:
-        m = cutout(im)
+        m = cutout(im, mode=mode, tolerance=tolerance)
     tmp = cp + f".{os.getpid()}.tmp"
     m.save(tmp, "PNG")
     os.replace(tmp, cp)

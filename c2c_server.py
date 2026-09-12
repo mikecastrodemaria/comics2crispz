@@ -822,17 +822,37 @@ class Studio:
 
     def op_breakout_panel(self, data):
         """🧍 Sujet hors cadre: {cid, pid, pnid, enabled, zoom?, outline?,
-        recompute?}. Active = detourage du dessin (rembg) pose par-dessus
-        les cases voisines a la composition; zoom (1-1.6) cadre le dessin
-        plus serre pour que le sujet deborde davantage; outline (px) =
-        lisere de fond autour du sujet. Sans rembg: refus clair."""
+        matte? ('ai' | 'key'), tolerance? (0-100), recompute?}. Active =
+        detourage du dessin pose par-dessus les cases voisines a la
+        composition; matte 'ai' = sujet principal (rembg), 'key' = tout
+        sauf la couleur de fond unie (papillons, trait sur fond blanc) ;
+        zoom (1-1.6) cadre le dessin plus serre pour que le sujet deborde
+        davantage; outline (px) = lisere de fond autour du sujet. Un
+        changement de matte/tolerance recalcule. Sans rembg: refus clair
+        pour 'ai' seulement."""
         cid, pid, pnid = data["cid"], data["pid"], data["pnid"]
+        recompute = bool(data.get("recompute"))
         with _LOCK:
             project = self.load()
             panel = cz_comic.find_panel(project, cid, pid, pnid)
             bo = dict(panel.get("breakout") or {})
             if "enabled" in data:
                 bo["enabled"] = bool(data["enabled"])
+            if "matte" in data:
+                m = str(data.get("matte") or "ai")
+                if m not in c2c_cutout.MATTE_MODES:
+                    return {"ok": False, "error": f"matte must be one of {c2c_cutout.MATTE_MODES}"}
+                if m != (bo.get("matte") or "ai"):
+                    recompute = True
+                bo["matte"] = m
+            if "tolerance" in data:
+                try:
+                    t = max(0, min(100, int(data["tolerance"])))
+                except (TypeError, ValueError):
+                    t = c2c_cutout.DEFAULT_TOLERANCE
+                if t != bo.get("tolerance", c2c_cutout.DEFAULT_TOLERANCE):
+                    recompute = True
+                bo["tolerance"] = t
             if "zoom" in data:
                 try:
                     bo["zoom"] = round(max(1.0, min(1.6, float(data["zoom"]))), 2)
@@ -844,14 +864,19 @@ class Studio:
                 except (TypeError, ValueError):
                     pass
             if bo.get("enabled"):
-                ok, why = c2c_cutout.available()
-                if not ok:
-                    return {"ok": False, "error": f"cannot cut the subject out: {why}"}
+                mode = bo.get("matte") or "ai"
+                if mode == "ai":
+                    ok, why = c2c_cutout.available()
+                    if not ok:
+                        return {"ok": False, "error": f"cannot cut the subject out: {why} "
+                                                      f"(or pick the 'plain background' matte)"}
                 src = panel.get("image")
                 if not (src and os.path.isfile(src)):
                     return {"ok": False, "error": f"{pnid} has no drawing yet"}
                 try:
-                    bo["cutout"] = c2c_cutout.refresh(src, force=bool(data.get("recompute")))
+                    bo["cutout"] = c2c_cutout.refresh(
+                        src, force=recompute, mode=mode,
+                        tolerance=bo.get("tolerance", c2c_cutout.DEFAULT_TOLERANCE))
                     bo.pop("error", None)
                 except Exception as e:
                     return {"ok": False, "error": f"{pnid}: cutout failed: {e}"}
@@ -978,11 +1003,11 @@ class Studio:
             panel = cz_comic.find_panel(project, cid, pid, pnid)
             on = bool(data.get("frameless"))
             if on:
-                ok, why = c2c_cutout.available()
-                if not ok:
-                    return {"ok": False, "error": f"frameless needs the cutout: {why}"}
+                bo = dict(panel.get("breakout") or {}, enabled=True)
+                if (bo.get("matte") or "ai") == "ai" and not c2c_cutout.available()[0]:
+                    bo["matte"] = "key"          # no rembg: plain-background matte
                 panel["frameless"] = True
-                panel["breakout"] = dict(panel.get("breakout") or {}, enabled=True)
+                panel["breakout"] = bo
             else:
                 panel.pop("frameless", None)
             cz_comic.save_project(project, self.dir)
