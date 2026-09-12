@@ -994,6 +994,31 @@ class Studio:
                     "image_moved_to": moved})
         return idx
 
+    def op_set_inset(self, data):
+        """Marge interne d'une case: {cid, pid, pnid, inset} - fraction de la
+        largeur de page (0-0.15), le cadre rentre d'autant tout autour en
+        plus de la demi-gouttiere. 0 = retire. Recompose la planche."""
+        cid, pid, pnid = data["cid"], data["pid"], data["pnid"]
+        try:
+            f = float(data.get("inset") or 0)
+        except (TypeError, ValueError):
+            return {"ok": False, "error": "inset must be a number (fraction of the page width)"}
+        f = max(0.0, min(cz_comic.MAX_PANEL_INSET, f))
+        with _LOCK:
+            project = self.load()
+            panel = cz_comic.find_panel(project, cid, pid, pnid)
+            if f > 0:
+                panel["inset"] = round(f, 4)
+            else:
+                panel.pop("inset", None)
+            cz_comic.save_project(project, self.dir)
+            fd, emb = self._letter_kit(project)
+            c2c_state.compose_one(project, self.dir, cid, pid,
+                                  face_detector=fd, char_embeddings=emb)
+        idx = c2c_state.book_index(project, self.dir)
+        idx["inset"] = panel.get("inset", 0)
+        return idx
+
     def op_set_frameless(self, data):
         """Case sans cadre ni fond (seul le sujet detoure): {cid, pid, pnid,
         frameless}. Active le detourage; sans rembg: refus clair."""

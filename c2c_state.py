@@ -174,6 +174,8 @@ def chapter_state(project, project_dir, cid):
     for page in ch["pages"]:
         geom = cz_comic.page_geometry(project, page, pg_conf)
         rects = [g["rect"] for g in geom]
+        raw_rects = [g["rect"] for g in cz_comic.page_geometry(project, page, pg_conf,
+                                                               inset=False)]
         pp = cz_comic.page_path(project_dir, cid, page["id"])
         panels = []
         for i, pn in enumerate(page["panels"]):
@@ -203,6 +205,10 @@ def chapter_state(project, project_dir, cid):
                                             os.path.isfile(pn["breakout"]["cutout"]))}
                              if isinstance(pn.get("breakout"), dict) else None),
                 "shape": pn.get("shape") or None,
+                "inset": float(pn.get("inset") or 0),
+                "rect_raw": ([raw_rects[i][0] / W, raw_rects[i][1] / H,
+                              raw_rects[i][2] / W, raw_rects[i][3] / H]
+                             if i < len(raw_rects) else None),
                 "poly": ([[q[0] / W, q[1] / H] for q in geom[i]["poly"]]
                          if i < len(geom) and geom[i]["poly"] else None)})
         pages.append({"cid": cid, "pid": page["id"],

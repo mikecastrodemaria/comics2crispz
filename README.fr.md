@@ -167,9 +167,12 @@ avec un halo de gouttière). Le dessin est généré au ratio de la boîte de la
 forme puis découpé à la composition ; le contour suit le polygone, et les
 bulles automatiques se placent à l'intérieur de la forme (une bulle punaisée
 à la main reste où tu l'as mise).
-**▭ Reset** revient au rectangle. Dans le script : `shape=fx,fy[,r] …`
-(fractions de page, `r` = arrondi 0–1) et `z=N` ; `shape=rect` remet le
-rectangle.
+**▭ Reset** revient au rectangle. **Inner margin** (curseur, % de la
+largeur de page) fait rentrer le cadre de cette case depuis sa cellule ou
+les coins de sa forme, tout autour, en plus de la demi-gouttière du livre ;
+le dessin suit le cadre réduit. Dans le script : `shape=fx,fy[,r] …`
+(fractions de page, `r` = arrondi 0–1), `z=N` et `inset=0.02` ;
+`shape=rect` remet le rectangle.
 **🧍 Break the frame** (panneau de la case) : le sujet de la case est détouré
 de son fond (rembg, dépendance optionnelle, quelques secondes sur CPU, modèle
 téléchargé une fois) et dessiné PAR-DESSUS les cases voisines pendant que le

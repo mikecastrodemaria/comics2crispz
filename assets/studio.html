@@ -866,6 +866,11 @@ Bruno (think): Of course...
               <span id="shpz" class="hint"></span>
             </div>
             <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
+              <span class="lbl" style="margin:0">inner margin <b id="shpinsetval" style="color:var(--fg)">0</b>%
+                <button class="helpb" data-help="Extra margin inside this panel only: the frame steps back from the cell (or from the shape's corners) by this fraction of the page width, all around, on top of the book's half gutter. The drawing follows the smaller frame. 0 = none. In the script: inset=0.02.">?</button></span>
+              <input id="shpinset" type="range" min="0" max="15" step="0.5" value="0" style="flex:1;min-width:80px" title="Inner margin of this panel, % of the page width">
+            </div>
+            <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px">
               <label class="lorarow" style="margin:0"><input type="checkbox" id="pnframeless"> 🦋 frameless — no frame, no background, only the cut-out subject
                 <button class="helpb" data-help="A frameless panel draws nothing but its cut-out subject: generate it on a plain background ('three butterflies, isolated on white'), tick frameless, then move and resize its shape over the page - the butterflies float across the neighbouring panels with a transparent background. Uses the same cutout as Break the frame (rembg); balloons stay on top.">?</button></label>
               <button id="rmpnbtn" style="margin-left:auto;color:var(--err)" title="Remove this free panel (its text is reported, its drawing moved to _removed/); a grid cell cannot be removed - change the layout instead">🗑 Remove panel</button>
@@ -1900,7 +1905,7 @@ function shapeStageSize(){
   return [parseFloat(st.style.width) || st.clientWidth, parseFloat(st.style.height) || st.clientHeight];
 }
 function shapeDefaultPoints(pn){
-  const r = pn.rect;                       // fractions de page [x, y, w, h]
+  const r = pn.rect_raw || pn.rect;        // fractions de page [x, y, w, h], cellule brute (sans marge interne)
   return [[r[0], r[1], 0], [r[0] + r[2], r[1], 0], [r[0] + r[2], r[1] + r[3], 0], [r[0], r[1] + r[3], 0]];
 }
 function renderShapeEditor(){
@@ -1912,6 +1917,7 @@ function renderShapeEditor(){
   const sh = pn.shape || null;
   $('shpz').textContent = (pn.free ? 'free panel · ' : '') + (sh ? ('custom shape · z ' + (sh.z || 0)) : 'rectangle (layout cell)');
   $('pnframeless').checked = !!pn.frameless;
+  $('shpinset').value = Math.round((pn.inset || 0) * 200) / 2; $('shpinsetval').textContent = $('shpinset').value;
   $('rmpnbtn').disabled = !pn.free;
   $('rmpnbtn').title = pn.free ? 'Remove this free panel (text reported, drawing kept in _removed/)'
                               : 'A grid cell cannot be removed: change the layout instead';
@@ -2124,6 +2130,15 @@ $('rmpnbtn').onclick = async () => {
   IDX = res; SELPN = null;
   await showPage(SEL.cid, SEL.pid);
   status(pnid + ' removed' + (res.text ? ' — its text was: "' + res.text.slice(0, 80) + '"' : ''), 'ok');
+};
+$('shpinset').oninput = () => $('shpinsetval').textContent = $('shpinset').value;
+$('shpinset').onchange = async () => {
+  if(!SEL || !SELPN) return;
+  const pnid = SELPN;
+  const res = await api('set_inset', {cid: SEL.cid, pid: SEL.pid, pnid, inset: parseFloat($('shpinset').value) / 100},
+                        'Recomposing the page…');
+  if(!res) return;
+  IDX = res; SELPN = pnid; await showPage(SEL.cid, SEL.pid);
 };
 $('pnframeless').onchange = async () => {
   if(!SEL || !SELPN) return;

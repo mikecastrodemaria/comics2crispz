@@ -50,6 +50,7 @@ _RE_PANEL = re.compile(r"^\[(pn\d+)\]\s*(.*)$")
 _RE_SEED = re.compile(r"^seed\s*=\s*(-?\d+)\s*$", re.IGNORECASE)
 _RE_SHAPE = re.compile(r"^shape\s*=\s*(.+?)\s*$", re.IGNORECASE)
 _RE_Z = re.compile(r"^z\s*=\s*(-?\d+)\s*$", re.IGNORECASE)
+_RE_INSET = re.compile(r"^inset\s*=\s*([0-9.]+)\s*$", re.IGNORECASE)
 # a dialogue line: 'CAP:', 'SFX:', or 'Name: text' / 'Name (mods): text'
 _RE_DIALOGUE = re.compile(r"^(CAP|SFX|[^:\[\]#]{1,40}?(?:\s*\([^)]*\))?)\s*:\s*\S")
 
@@ -174,6 +175,13 @@ def parse_script(text):
         if stripped.lower() in ("frameless", "frameless=1", "frameless=true"):
             panel["frameless"] = True
             continue
+        m = _RE_INSET.match(stripped)
+        if m:
+            try:
+                panel["inset"] = max(0.0, min(cz_comic.MAX_PANEL_INSET, float(m.group(1))))
+            except ValueError:
+                raise ScriptError(no, f"bad inset '{m.group(1)}' (fraction of the page width)")
+            continue
         m = _RE_Z.match(stripped)
         if m:
             if "shape" in panel and panel["shape"] is None:
@@ -240,6 +248,8 @@ def format_script(project, chapter_id=None):
                         out.append(f"z={int(sh['z'])}")
                 if pn.get("frameless"):
                     out.append("frameless")
+                if float(pn.get("inset") or 0) > 0:
+                    out.append(f"inset={float(pn['inset']):g}")
                 dlg = c2c_state.fmt_dialogue(pn.get("dialogue") or [])
                 if dlg:
                     out.append(dlg)
@@ -319,8 +329,11 @@ def apply_script(project, outline):
                 if spn.get("frameless"):
                     pn["frameless"] = True
                     pn["breakout"] = dict(pn.get("breakout") or {}, enabled=True)
-                elif "frameless" in spn or True:
-                    pass
+                if "inset" in spn:
+                    if spn["inset"] > 0:
+                        pn["inset"] = spn["inset"]
+                    else:
+                        pn.pop("inset", None)
                 if "shape" in spn:
                     if spn["shape"] is None:
                         pn.pop("shape", None)

@@ -423,11 +423,28 @@ FREE_PANEL_DEFAULT = {"points": [[0.3, 0.35, 0], [0.7, 0.35, 0], [0.7, 0.65, 0],
                       "z": 1}
 
 
-def page_geometry(project, page, pg=None):
+MAX_PANEL_INSET = 0.15
+
+
+def panel_inset_px(panel, pg):
+    """Marge interne propre a la case (panel['inset'], fraction de la largeur
+    de page, 0-0.15) en pixels: le cadre rentre d'autant tout autour, en plus
+    de la demi-gouttiere commune."""
+    try:
+        f = float((panel or {}).get("inset") or 0)
+    except (TypeError, ValueError):
+        f = 0.0
+    f = max(0.0, min(MAX_PANEL_INSET, f))
+    return f * float(pg["width"]) if f > 0 else 0.0
+
+
+def page_geometry(project, page, pg=None, inset=True):
     """Geometrie de chaque case: [{'rect': (x, y, w, h), 'poly': [(x, y)...]|None,
     'z': int, 'index': i}]. rect = cellule du gabarit, ou boite englobante du
     polygone quand la case a une forme. Les cases libres (au-dela des
-    cellules) ont toujours une forme (FREE_PANEL_DEFAULT a defaut)."""
+    cellules) ont toujours une forme (FREE_PANEL_DEFAULT a defaut).
+    inset=False ignore la marge interne des cases (rect brut de la cellule,
+    point de depart de l'editeur de forme)."""
     pg = pg or page_size(project.get("page"))
     cells = layout_cells(page["layout"])
     base = panel_rects(cells, pg["width"], pg["height"], pg["margin"], pg["gutter"])
@@ -435,8 +452,13 @@ def page_geometry(project, page, pg=None):
     out = []
     for i in range(max(len(base), len(panels))):
         panel = panels[i] if i < len(panels) else None
+        ipx = panel_inset_px(panel, pg) if inset else 0.0
         if i < len(base):
             rect = base[i]
+            if ipx:
+                x, y, w, h = rect
+                d = int(round(min(ipx, (min(w, h) - 2) / 2.0)))
+                rect = (x + d, y + d, max(1, w - 2 * d), max(1, h - 2 * d))
             shape = (panel or {}).get("shape") or None
         else:
             rect = None
@@ -445,8 +467,9 @@ def page_geometry(project, page, pg=None):
         pts = shape_points(shape, pg) if shape else None
         if pts:
             poly = _round_corners(pts)
-            # demi-gouttiere reservee tout autour, comme pour les cellules
-            poly = _inset_polygon(poly, float(pg.get("gutter") or 0) / 2.0)
+            # demi-gouttiere reservee tout autour, comme pour les cellules,
+            # plus la marge interne propre a la case
+            poly = _inset_polygon(poly, float(pg.get("gutter") or 0) / 2.0 + ipx)
             xs = [q[0] for q in poly]
             ys = [q[1] for q in poly]
             x0, y0 = int(math.floor(min(xs))), int(math.floor(min(ys)))
@@ -462,17 +485,17 @@ def page_geometry(project, page, pg=None):
     return out
 
 
-def page_rects(project, page, pg=None):
+def page_rects(project, page, pg=None, inset=True):
     """Rectangles (boites) des cases, formes comprises - remplace panel_rects
     partout ou l'on a le projet sous la main."""
-    return [g["rect"] for g in page_geometry(project, page, pg)]
+    return [g["rect"] for g in page_geometry(project, page, pg, inset=inset)]
 
 
 def cell_shape(project, page, index):
     """La forme 'rectangle' d'une cellule en fractions de page: point de depart
     de l'editeur de coins (4 coins, pas d'arrondi)."""
     pg = page_size(project.get("page"))
-    x, y, w, h = page_rects(project, page, pg)[index]
+    x, y, w, h = page_rects(project, page, pg, inset=False)[index]
     W, H = float(pg["width"]), float(pg["height"])
     return {"points": [[x / W, y / H, 0], [(x + w) / W, y / H, 0],
                        [(x + w) / W, (y + h) / H, 0], [x / W, (y + h) / H, 0]], "z": 0}
