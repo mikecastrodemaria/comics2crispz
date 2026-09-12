@@ -1113,6 +1113,21 @@ class Studio:
                     dlg[idx].pop("outline", None)
                 else:
                     dlg[idx]["outline"] = round(ok_, 2)
+            if data.get("halo") is not None:
+                try:
+                    hk = max(0.0, min(3.0, float(data["halo"])))
+                except (TypeError, ValueError):
+                    hk = 0.0
+                if hk < 0.05:
+                    dlg[idx].pop("halo", None)
+                else:
+                    dlg[idx]["halo"] = round(hk, 2)
+            if "halo_color" in data:
+                c = cz_comic.outline_color(data.get("halo_color"))
+                if c and c != "#ffffff":
+                    dlg[idx]["halo_color"] = c
+                else:
+                    dlg[idx].pop("halo_color", None)   # blanc = defaut
             if "color" in data:
                 c = cz_comic.outline_color(data.get("color"))
                 if c and c != "#000000":
@@ -1126,7 +1141,8 @@ class Studio:
                 else:
                     dlg[idx].pop("font", None)      # police du livre
             for key in data.get("clear") or []:
-                if key in ("pos", "anchor", "scale", "style", "hidden", "font", "outline", "width", "color"):
+                if key in ("pos", "anchor", "scale", "style", "hidden", "font", "outline", "width",
+                           "color", "halo", "halo_color"):
                     dlg[idx].pop(key, None)
             if data.get("remove"):
                 # 🗑 la replique quitte le dialogue de la case (le texte est

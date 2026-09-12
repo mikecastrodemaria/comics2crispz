@@ -283,6 +283,10 @@ idem sur `CAP (…)` / `SFX (…)` ; la boîte de la bulle les écrit pour toi,
 l'onglet Script les montre. `color=` est la couleur du contour (bord et
 queue de la bulle, cadre du cartouche, trait des lettres SFX) : la pastille
 à côté du curseur Outline ouvre un sélecteur de couleur ; noir par défaut.
+`halo=1.5` ajoute un second trait, plus large, À L'EXTÉRIEUR du contour,
+`halo_color=#ffffff` sa couleur (blanc par défaut) : le moyen classique de
+décoller un cri, un titre ou une bulle d'un dessin chargé (curseur Halo et
+pastille dans la boîte de la bulle).
 
 ### Corriger une case — Régénérer, Retoucher, Variation, Versions
 

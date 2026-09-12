@@ -802,6 +802,16 @@ Bruno (think): Of course...
             </span>
             <input id="bubout" type="range" min="0.3" max="3" step="0.1" value="1">
           </div>
+          <div class="field">
+            <span class="lbl" style="display:flex;align-items:center;gap:6px">
+              Halo <b id="bubhaloval" style="color:var(--fg)">×0.0</b>
+              <input id="bubhalocolor" type="color" value="#ffffff" title="Colour of the halo (click to pick)" style="width:28px;height:22px;padding:0;border:1px solid var(--line);background:none;cursor:pointer">
+              <button class="helpb" style="margin-left:0"
+                data-help="A second, wider stroke OUTSIDE the outline (white by default): the classic way to lift a shout, a title or a balloon off a busy drawing. 0 = none, up to 3x. The swatch picks its colour. In the script: halo=1.5, halo_color=#ffffff.">?</button>
+              <span style="margin-left:auto">outer stroke around the outline</span>
+            </span>
+            <input id="bubhalo" type="range" min="0" max="3" step="0.1" value="0">
+          </div>
           <div class="grid2">
             <div class="field" style="margin-top:6px">
               <span class="lbl">Font
@@ -1723,6 +1733,8 @@ function renderBubBox(){
   $('bubout').value = ok_;
   $('buboutval').textContent = '×' + Number(ok_).toFixed(1);
   $('bubcolor').value = dlg.color || '#000000';
+  $('bubhalo').value = dlg.halo || 0; $('bubhaloval').textContent = '×' + Number(dlg.halo || 0).toFixed(1);
+  $('bubhalocolor').value = dlg.halo_color || '#ffffff';
   fillFontSelect($('bubfont'), dlg.font || '', '(book default)');
 }
 let FONTS = null;
@@ -1744,6 +1756,8 @@ $('bubscale').oninput = () =>
   $('bubscaleval').textContent = '×' + Number($('bubscale').value).toFixed(1);
 $('bubout').oninput = () =>
   $('buboutval').textContent = '×' + Number($('bubout').value).toFixed(1);
+$('bubhalo').oninput = () =>
+  $('bubhaloval').textContent = '×' + Number($('bubhalo').value).toFixed(1);
 $('bubwidth').oninput = () =>
   $('bubwidthval').textContent = '×' + Number($('bubwidth').value).toFixed(2);
 $('bubkind').onchange = () =>
@@ -1755,7 +1769,8 @@ $('bubapply').onclick = async () => {
     kind: $('bubkind').value, style: $('bubstyle').value,
     scale: parseFloat($('bubscale').value), hidden: $('bubhidden').checked,
     outline: parseFloat($('bubout').value), width: parseFloat($('bubwidth').value),
-    color: $('bubcolor').value, font: $('bubfont').value}, 'Recomposing the page…');
+    color: $('bubcolor').value, halo: parseFloat($('bubhalo').value),
+    halo_color: $('bubhalocolor').value, font: $('bubfont').value}, 'Recomposing the page…');
   if(res){ IDX = res; status($('bubhidden').checked ?
     'Balloon hidden — it stays in the dialogue box as "(hidden)"; remove that to show it again' :
     'Balloon updated', 'ok'); }

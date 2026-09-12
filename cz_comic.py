@@ -1190,14 +1190,24 @@ def parse_dialogue(block):
                         c = outline_color(tok[6:])
                         if c:
                             d["color"] = c
+                    elif tok.lower().startswith("halo_color="):
+                        c = outline_color(tok[11:])
+                        if c:
+                            d["halo_color"] = c
+                    elif tok.lower().startswith("halo="):
+                        try:
+                            d["halo"] = float(tok[5:])
+                        except ValueError:
+                            pass
             out.append(d)
         else:
             kind, style, hidden, font, outline, width = "speech", None, False, None, None, None
-            color = None
+            color, halo, halo_color = None, None, None
             m = re.match(r"^(.*?)\s*\(([^)]+)\)$", head)
             if m:
                 known = True
                 k2, s2, h2, f2, o2, w2, c2 = kind, style, hidden, font, None, None, None
+                hk2, hc2 = None, None
                 for tok in m.group(2).split(","):
                     tok = tok.strip()
                     tl = tok.lower()
@@ -1226,12 +1236,24 @@ def parse_dialogue(block):
                         if not c2:
                             known = False
                             break
+                    elif tl.startswith("halo_color="):
+                        hc2 = outline_color(tok[11:])
+                        if not hc2:
+                            known = False
+                            break
+                    elif tl.startswith("halo="):
+                        try:
+                            hk2 = float(tok[5:])
+                        except ValueError:
+                            known = False
+                            break
                     else:
                         known = False
                         break
                 if known:
                     head, kind, style, hidden, font = m.group(1).strip(), k2, s2, h2, f2
                     outline, width, color = o2, w2, c2
+                    halo, halo_color = hk2, hc2
             d = {"speaker": head, "text": text, "kind": kind}
             if style:
                 d["style"] = style
@@ -1245,6 +1267,10 @@ def parse_dialogue(block):
                 d["width"] = width
             if color:
                 d["color"] = color
+            if halo is not None:
+                d["halo"] = halo
+            if halo_color:
+                d["halo_color"] = halo_color
             out.append(d)
     return out
 
@@ -1652,6 +1678,15 @@ def render_lettering(project, page, sheet, face_detector=None,
             outline_k = max(0.3, min(3.0, outline_k))
             bw = max(1, int(round(3 * outline_k)))
             oc = outline_color(d.get("color")) or "#000000"   # couleur du contour
+            # halo: un second trait, plus large, A L'EXTERIEUR du contour
+            # (blanc par defaut) pour decoller un cri ou une bulle du dessin
+            try:
+                halo_k = float(d.get("halo") or 0.0)
+            except (TypeError, ValueError):
+                halo_k = 0.0
+            halo_k = max(0.0, min(3.0, halo_k))
+            hc = outline_color(d.get("halo_color")) or "#ffffff"
+            hpx = max(2, int(round(4 * halo_k))) if halo_k > 0 else 0
             # largeur de la bulle / du SFX: x0.3..x2 de la largeur habituelle
             # (>1 = plus large que la case, pour un titre ou un cri)
             try:
@@ -1677,6 +1712,10 @@ def render_lettering(project, page, sheet, face_detector=None,
                 bw_, bh_ = bb[2] - bb[0], bb[3] - bb[1]
                 (rx, ry, _, _), clean = _pos_rect(d, rect, bw_, bh_, forbidden, page=sheet.size) \
                     or _place_rect(rect, bw_, bh_, forbidden, taken, "center", inside=inside)
+                if hpx:
+                    hsw = sw + max(2, int(round(max(3, fpx_d // 5) * halo_k)))
+                    draw.text((rx, ry), text, font=sfx_font, fill=hc,
+                              stroke_width=hsw, stroke_fill=hc, align="center")
                 draw.text((rx, ry), text, font=sfx_font, fill="#ffffff",
                           stroke_width=sw, stroke_fill=oc, align="center")
                 taken.append((rx, ry, bw_, bh_))
@@ -1699,6 +1738,9 @@ def render_lettering(project, page, sheet, face_detector=None,
                 bw_, bh_ = text_w + pad_d * 2, text_h + pad_d * 2
                 (bx0, by0, _, _), clean = _pos_rect(d, rect, bw_, bh_, forbidden, page=sheet.size) \
                     or _place_rect(rect, bw_, bh_, forbidden, taken, "left", inside=inside)
+                if hpx:
+                    draw.rectangle([bx0 - hpx, by0 - hpx, bx0 + bw_ + hpx, by0 + bh_ + hpx],
+                                   fill=hc)
                 draw.rectangle([bx0, by0, bx0 + bw_, by0 + bh_],
                                fill="#fdf6d8", outline=oc, width=bw)
                 ty = by0 + pad_d
@@ -1760,6 +1802,24 @@ def render_lettering(project, page, sheet, face_detector=None,
             tail_up = tip[1] < by0
             base_y = by0 + int(bh_ * (0.18 if tail_up else 0.82))
             base_out = base_y + (3 if tail_up else -3)
+            if hpx:
+                if kind == "speech":
+                    tri = [(cx - fpx_d // 2, base_y), (cx + fpx_d // 2, base_y), tip]
+                    draw.polygon(tri, fill=hc)
+                    draw.line(tri + [tri[0]], fill=hc, width=2 * hpx, joint="curve")
+                if bstyle == "rounded":
+                    draw.rounded_rectangle([bx0 - hpx, by0 - hpx, bx0 + bw_ + hpx, by0 + bh_ + hpx],
+                                           radius=max(8, min(bh_ // 3, fpx_d)) + hpx, fill=hc)
+                elif bstyle == "angular":
+                    c_ = max(6, min(bw_, bh_) // 5)
+                    hp = [(bx0 + c_, by0), (bx0 + bw_ - c_, by0),
+                          (bx0 + bw_, by0 + c_), (bx0 + bw_, by0 + bh_ - c_),
+                          (bx0 + bw_ - c_, by0 + bh_), (bx0 + c_, by0 + bh_),
+                          (bx0, by0 + bh_ - c_), (bx0, by0 + c_)]
+                    draw.polygon(hp, fill=hc)
+                    draw.line(hp + [hp[0]], fill=hc, width=2 * hpx, joint="curve")
+                else:
+                    draw.ellipse([bx0 - hpx, by0 - hpx, bx0 + bw_ + hpx, by0 + bh_ + hpx], fill=hc)
             if kind == "speech":
                 draw.polygon([(cx - fpx_d // 2, base_y),
                               (cx + fpx_d // 2, base_y),
@@ -1804,6 +1864,9 @@ def render_lettering(project, page, sheet, face_detector=None,
                     r = max(2, int(round(fpx_d * (0.34 - 0.20 * k))))
                     px_ = int(ex + (tip[0] - ex) * k)
                     py_ = int(ey + (tip[1] - ey) * k)
+                    if hpx:
+                        draw.ellipse([px_ - r - hpx, py_ - r - hpx, px_ + r + hpx, py_ + r + hpx],
+                                     fill=hc)
                     draw.ellipse([px_ - r, py_ - r, px_ + r, py_ + r],
                                  fill="#ffffff", outline=oc, width=max(1, int(round(2 * outline_k))))
             ty = by0 + (bh_ - text_h) // 2

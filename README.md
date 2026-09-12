@@ -342,7 +342,10 @@ Balloon lines accept modifiers in parentheses, combinable with commas:
 and the same on `CAP (…)` / `SFX (…)` lines; the balloon box writes them for
 you, the Script tab shows them. `color=` is the outline colour (balloon
 border and tail, caption frame, SFX letter stroke): the swatch next to the
-Outline slider opens a colour picker; black when absent.
+Outline slider opens a colour picker; black when absent. `halo=1.5` adds a
+second, wider stroke OUTSIDE the outline, `halo_color=#ffffff` its colour
+(white when absent): the classic way to lift a shout, a title or a balloon
+off a busy drawing (Halo slider + swatch in the balloon box).
 
 ### 5b. Fix one panel — Regenerate, Edit, Variation, Versions
 
