@@ -338,9 +338,11 @@ rectangle, angular = jagged) is set in the wizard and in 📖 Bible › Style; a
 balloon's Shape "(book default: …)" follows it, or overrides it.
 
 Balloon lines accept modifiers in parentheses, combinable with commas:
-`Lea (think, rounded, hidden, font=comicbd.ttf, outline=2, width=1.3): …`
+`Lea (think, rounded, hidden, font=comicbd.ttf, outline=2, width=1.3, color=#c00000): …`
 and the same on `CAP (…)` / `SFX (…)` lines; the balloon box writes them for
-you, the Script tab shows them.
+you, the Script tab shows them. `color=` is the outline colour (balloon
+border and tail, caption frame, SFX letter stroke): the swatch next to the
+Outline slider opens a colour picker; black when absent.
 
 ### 5b. Fix one panel — Regenerate, Edit, Variation, Versions
 

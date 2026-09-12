@@ -795,8 +795,9 @@ Bruno (think): Of course...
           <div class="field">
             <span class="lbl" style="display:flex;align-items:center;gap:6px">
               Outline <b id="buboutval" style="color:var(--fg)">×1.0</b>
+              <input id="bubcolor" type="color" value="#000000" title="Colour of the outline: balloon border and tail, caption frame, SFX letter stroke (click to pick)" style="width:28px;height:22px;padding:0;border:1px solid var(--line);background:none;cursor:pointer">
               <button class="helpb" style="margin-left:0"
-                data-help="Thickness of the balloon border, or of the black stroke around SFX / title letters (0.3x to 3x). Line breaks: type \\n inside the text where the line must break (e.g. 'La fille des\\nruines fleuries'); speech balloons still wrap automatically around it.">?</button>
+                data-help="Thickness of the balloon border, or of the stroke around SFX / title letters (0.3x to 3x). The colour swatch next to it picks the outline colour (balloon border and tail, caption frame, SFX stroke): black by default, red for a shout, blue for a thought... written as color=#rrggbb in the script. Line breaks: type \\n inside the text where the line must break (e.g. 'La fille des\\nruines fleuries'); speech balloons still wrap automatically around it.">?</button>
               <span style="margin-left:auto">border / letter stroke · type \n to break a line</span>
             </span>
             <input id="bubout" type="range" min="0.3" max="3" step="0.1" value="1">
@@ -1721,6 +1722,7 @@ function renderBubBox(){
   const ok_ = dlg.outline || 1.0;
   $('bubout').value = ok_;
   $('buboutval').textContent = '×' + Number(ok_).toFixed(1);
+  $('bubcolor').value = dlg.color || '#000000';
   fillFontSelect($('bubfont'), dlg.font || '', '(book default)');
 }
 let FONTS = null;
@@ -1753,7 +1755,7 @@ $('bubapply').onclick = async () => {
     kind: $('bubkind').value, style: $('bubstyle').value,
     scale: parseFloat($('bubscale').value), hidden: $('bubhidden').checked,
     outline: parseFloat($('bubout').value), width: parseFloat($('bubwidth').value),
-    font: $('bubfont').value}, 'Recomposing the page…');
+    color: $('bubcolor').value, font: $('bubfont').value}, 'Recomposing the page…');
   if(res){ IDX = res; status($('bubhidden').checked ?
     'Balloon hidden — it stays in the dialogue box as "(hidden)"; remove that to show it again' :
     'Balloon updated', 'ok'); }

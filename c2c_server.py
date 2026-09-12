@@ -1113,6 +1113,12 @@ class Studio:
                     dlg[idx].pop("outline", None)
                 else:
                     dlg[idx]["outline"] = round(ok_, 2)
+            if "color" in data:
+                c = cz_comic.outline_color(data.get("color"))
+                if c and c != "#000000":
+                    dlg[idx]["color"] = c
+                else:
+                    dlg[idx].pop("color", None)     # noir = defaut
             if "font" in data:
                 f = str(data.get("font") or "").strip()
                 if f:
@@ -1120,7 +1126,7 @@ class Studio:
                 else:
                     dlg[idx].pop("font", None)      # police du livre
             for key in data.get("clear") or []:
-                if key in ("pos", "anchor", "scale", "style", "hidden", "font", "outline", "width"):
+                if key in ("pos", "anchor", "scale", "style", "hidden", "font", "outline", "width", "color"):
                     dlg[idx].pop(key, None)
             if data.get("remove"):
                 # 🗑 la replique quitte le dialogue de la case (le texte est

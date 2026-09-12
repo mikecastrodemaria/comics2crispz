@@ -278,9 +278,11 @@ rectangle doux, angular = pans coupés) se règle au wizard et dans 📖 Bible �
 Style ; la forme d'une bulle « (book default: …) » la suit, ou la remplace.
 
 Les répliques acceptent des modificateurs entre parenthèses, cumulables :
-`Lea (think, rounded, hidden, font=comicbd.ttf, outline=2, width=1.3): …`,
+`Lea (think, rounded, hidden, font=comicbd.ttf, outline=2, width=1.3, color=#c00000): …`,
 idem sur `CAP (…)` / `SFX (…)` ; la boîte de la bulle les écrit pour toi,
-l'onglet Script les montre.
+l'onglet Script les montre. `color=` est la couleur du contour (bord et
+queue de la bulle, cadre du cartouche, trait des lettres SFX) : la pastille
+à côté du curseur Outline ouvre un sélecteur de couleur ; noir par défaut.
 
 ### Corriger une case — Régénérer, Retoucher, Variation, Versions
 

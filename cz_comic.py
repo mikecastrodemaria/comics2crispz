@@ -1186,13 +1186,18 @@ def parse_dialogue(block):
                             d["width"] = float(tok[6:])
                         except ValueError:
                             pass
+                    elif tok.lower().startswith("color="):
+                        c = outline_color(tok[6:])
+                        if c:
+                            d["color"] = c
             out.append(d)
         else:
             kind, style, hidden, font, outline, width = "speech", None, False, None, None, None
+            color = None
             m = re.match(r"^(.*?)\s*\(([^)]+)\)$", head)
             if m:
                 known = True
-                k2, s2, h2, f2, o2, w2 = kind, style, hidden, font, None, None
+                k2, s2, h2, f2, o2, w2, c2 = kind, style, hidden, font, None, None, None
                 for tok in m.group(2).split(","):
                     tok = tok.strip()
                     tl = tok.lower()
@@ -1216,12 +1221,17 @@ def parse_dialogue(block):
                         except ValueError:
                             known = False
                             break
+                    elif tl.startswith("color="):
+                        c2 = outline_color(tok[6:])
+                        if not c2:
+                            known = False
+                            break
                     else:
                         known = False
                         break
                 if known:
                     head, kind, style, hidden, font = m.group(1).strip(), k2, s2, h2, f2
-                    outline, width = o2, w2
+                    outline, width, color = o2, w2, c2
             d = {"speaker": head, "text": text, "kind": kind}
             if style:
                 d["style"] = style
@@ -1233,8 +1243,24 @@ def parse_dialogue(block):
                 d["outline"] = outline
             if width is not None:
                 d["width"] = width
+            if color:
+                d["color"] = color
             out.append(d)
     return out
+
+
+def outline_color(value):
+    """'#rrggbb' (or '#rgb') -> normalised '#rrggbb'; None for anything else.
+    Colour of a balloon's border / tail, a caption's frame, a SFX's letter
+    stroke (modifier color=#rrggbb); black when absent."""
+    v = str(value or "").strip().lower()
+    m = re.match(r"^#?([0-9a-f]{6})$", v)
+    if m:
+        return "#" + m.group(1)
+    m = re.match(r"^#?([0-9a-f]{3})$", v)
+    if m:
+        return "#" + "".join(ch * 2 for ch in m.group(1))
+    return None
 
 
 # Polices proposees dans l'UI (fichier -> libelle). Sondees a la demande: seules
@@ -1625,6 +1651,7 @@ def render_lettering(project, page, sheet, face_detector=None,
                 outline_k = 1.0
             outline_k = max(0.3, min(3.0, outline_k))
             bw = max(1, int(round(3 * outline_k)))
+            oc = outline_color(d.get("color")) or "#000000"   # couleur du contour
             # largeur de la bulle / du SFX: x0.3..x2 de la largeur habituelle
             # (>1 = plus large que la case, pour un titre ou un cri)
             try:
@@ -1651,7 +1678,7 @@ def render_lettering(project, page, sheet, face_detector=None,
                 (rx, ry, _, _), clean = _pos_rect(d, rect, bw_, bh_, forbidden, page=sheet.size) \
                     or _place_rect(rect, bw_, bh_, forbidden, taken, "center", inside=inside)
                 draw.text((rx, ry), text, font=sfx_font, fill="#ffffff",
-                          stroke_width=sw, stroke_fill="#000000", align="center")
+                          stroke_width=sw, stroke_fill=oc, align="center")
                 taken.append((rx, ry, bw_, bh_))
                 placements.append({"panel": panel["id"], "kind": kind,
                                    "rect": (rx, ry, bw_, bh_), "tip": None,
@@ -1673,7 +1700,7 @@ def render_lettering(project, page, sheet, face_detector=None,
                 (bx0, by0, _, _), clean = _pos_rect(d, rect, bw_, bh_, forbidden, page=sheet.size) \
                     or _place_rect(rect, bw_, bh_, forbidden, taken, "left", inside=inside)
                 draw.rectangle([bx0, by0, bx0 + bw_, by0 + bh_],
-                               fill="#fdf6d8", outline="#000000", width=bw)
+                               fill="#fdf6d8", outline=oc, width=bw)
                 ty = by0 + pad_d
                 for l in lines:
                     draw.text((bx0 + pad_d, ty), l, font=font_d, fill="#000000")
@@ -1736,11 +1763,11 @@ def render_lettering(project, page, sheet, face_detector=None,
             if kind == "speech":
                 draw.polygon([(cx - fpx_d // 2, base_y),
                               (cx + fpx_d // 2, base_y),
-                              tip], fill="#ffffff", outline="#000000")
+                              tip], fill="#ffffff", outline=oc)
             if bstyle == "rounded":
                 draw.rounded_rectangle([bx0, by0, bx0 + bw_, by0 + bh_],
                                        radius=max(8, min(bh_ // 3, fpx_d)),
-                                       fill="#ffffff", outline="#000000", width=bw)
+                                       fill="#ffffff", outline=oc, width=bw)
             elif bstyle == "angular":
                 c = max(6, min(bw_, bh_) // 5)
                 pts = [(bx0 + c, by0), (bx0 + bw_ - c, by0),
@@ -1748,10 +1775,10 @@ def render_lettering(project, page, sheet, face_detector=None,
                        (bx0 + bw_ - c, by0 + bh_), (bx0 + c, by0 + bh_),
                        (bx0, by0 + bh_ - c), (bx0, by0 + c)]
                 draw.polygon(pts, fill="#ffffff")
-                draw.line(pts + [pts[0]], fill="#000000", width=bw, joint="curve")
+                draw.line(pts + [pts[0]], fill=oc, width=bw, joint="curve")
             else:
                 draw.ellipse([bx0, by0, bx0 + bw_, by0 + bh_],
-                             fill="#ffffff", outline="#000000", width=bw)
+                             fill="#ffffff", outline=oc, width=bw)
             if kind == "speech":
                 draw.polygon([(cx - fpx_d // 2 + 3, base_out),
                               (cx + fpx_d // 2 - 3, base_out),
@@ -1778,7 +1805,7 @@ def render_lettering(project, page, sheet, face_detector=None,
                     px_ = int(ex + (tip[0] - ex) * k)
                     py_ = int(ey + (tip[1] - ey) * k)
                     draw.ellipse([px_ - r, py_ - r, px_ + r, py_ + r],
-                                 fill="#ffffff", outline="#000000", width=max(1, int(round(2 * outline_k))))
+                                 fill="#ffffff", outline=oc, width=max(1, int(round(2 * outline_k))))
             ty = by0 + (bh_ - text_h) // 2
             for l in lines:
                 lw = draw.textlength(l, font=font_d)
