@@ -201,6 +201,7 @@ def chapter_state(project, project_dir, cid):
                               "outline": pn["breakout"].get("outline", 0),
                               "matte": pn["breakout"].get("matte") or "ai",
                               "tolerance": pn["breakout"].get("tolerance", 25),
+                              "keep": pn["breakout"].get("keep", 0),
                               "ready": bool(pn["breakout"].get("cutout") and
                                             os.path.isfile(pn["breakout"]["cutout"]))}
                              if isinstance(pn.get("breakout"), dict) else None),
@@ -889,7 +890,8 @@ def refresh_breakouts(page):
             if not bo.get("cutout") or c2c_cutout.is_stale(img):
                 bo["cutout"] = c2c_cutout.refresh(
                     img, mode=bo.get("matte") or "ai",
-                    tolerance=bo.get("tolerance", c2c_cutout.DEFAULT_TOLERANCE))
+                    tolerance=bo.get("tolerance", c2c_cutout.DEFAULT_TOLERANCE),
+                    keep=bo.get("keep") or 0)
             bo.pop("error", None)
         except Exception as e:
             bo["error"] = str(e)[:200]

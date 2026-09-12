@@ -822,7 +822,8 @@ class Studio:
 
     def op_breakout_panel(self, data):
         """🧍 Sujet hors cadre: {cid, pid, pnid, enabled, zoom?, outline?,
-        matte? ('ai' | 'key'), tolerance? (0-100), recompute?}. Active =
+        matte? ('ai' | 'key'), tolerance? (0-100), keep? (-30..30 px),
+        recompute?}. keep grossit (>0) ou retrecit (<0) la decoupe. Active =
         detourage du dessin pose par-dessus les cases voisines a la
         composition; matte 'ai' = sujet principal (rembg), 'key' = tout
         sauf la couleur de fond unie (papillons, trait sur fond blanc) ;
@@ -853,6 +854,14 @@ class Studio:
                 if t != bo.get("tolerance", c2c_cutout.DEFAULT_TOLERANCE):
                     recompute = True
                 bo["tolerance"] = t
+            if "keep" in data:
+                try:
+                    k = max(-c2c_cutout.MAX_KEEP, min(c2c_cutout.MAX_KEEP, int(data["keep"])))
+                except (TypeError, ValueError):
+                    k = 0
+                if k != int(bo.get("keep") or 0):
+                    recompute = True
+                bo["keep"] = k
             if "zoom" in data:
                 try:
                     bo["zoom"] = round(max(1.0, min(1.6, float(data["zoom"]))), 2)
@@ -876,7 +885,8 @@ class Studio:
                 try:
                     bo["cutout"] = c2c_cutout.refresh(
                         src, force=recompute, mode=mode,
-                        tolerance=bo.get("tolerance", c2c_cutout.DEFAULT_TOLERANCE))
+                        tolerance=bo.get("tolerance", c2c_cutout.DEFAULT_TOLERANCE),
+                        keep=bo.get("keep") or 0)
                     bo.pop("error", None)
                 except Exception as e:
                     return {"ok": False, "error": f"{pnid}: cutout failed: {e}"}

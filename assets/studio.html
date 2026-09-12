@@ -908,7 +908,7 @@ Bruno (think): Of course...
           </div>
           <div id="bobox" class="field">
             <span class="lbl">🧍 Break the frame — the subject overflows the neighbouring panels
-              <button class="helpb" data-help="The Spider-Man effect: the panel's subject (character, hand, web) is cut out of its background and drawn OVER the neighbouring panels, while the background stays inside the frame. The cutout is refreshed when the drawing changes. Matte: 'AI subject' (rembg, a few seconds, CPU) finds the main subject - right for a character over a scene; 'plain background' keeps everything that differs from the background colour sampled on the edges - right for line art or several small subjects (butterflies, props) on a plain white ground, where the AI keeps only one of them; raise Tolerance if faint marks or paper grain leak through, lower it if light lines vanish. Zoom frames the drawing tighter so the subject overflows more; Outline adds a page-coloured rim around the subject. If the matte takes too much or too little, turn on Paint (Inpaint block), brush the area, then '+ add painted' or '- remove painted'. Balloons stay on top.">?</button></span>
+              <button class="helpb" data-help="The Spider-Man effect: the panel's subject (character, hand, web) is cut out of its background and drawn OVER the neighbouring panels, while the background stays inside the frame. The cutout is refreshed when the drawing changes. Matte: 'AI subject' (rembg, a few seconds, CPU) finds the main subject - right for a character over a scene; 'plain background' keeps everything that differs from the background colour sampled on the edges - right for line art or several small subjects (butterflies, props) on a plain white ground, where the AI keeps only one of them; raise Tolerance if faint marks or paper grain leak through, lower it if light lines vanish. Keep grows (+) or shrinks (−) the cutout by that many pixels all around, whatever the matte: a quick way to keep a bit more or less of the drawing before touching the Paint tool. Zoom frames the drawing tighter so the subject overflows more; Outline adds a page-coloured rim around the subject. If the matte takes too much or too little, turn on Paint (Inpaint block), brush the area, then '+ add painted' or '- remove painted'. Balloons stay on top.">?</button></span>
             <div class="row" style="gap:6px;flex-wrap:wrap;align-items:center">
               <label class="lorarow" style="margin:0"><input type="checkbox" id="boon"> enabled</label>
               <select id="bomatte" title="How the subject is separated from its background">
@@ -917,6 +917,8 @@ Bruno (think): Of course...
               </select>
               <span class="lbl" id="botollbl" style="margin:0 0 0 6px">tolerance <b id="botolval" style="color:var(--fg)">25</b></span>
               <input id="botol" type="range" min="2" max="80" step="1" value="25" style="flex:1;min-width:60px" title="How far a pixel may drift from the background colour before it counts as subject">
+              <span class="lbl" style="margin:0 0 0 6px">keep <b id="bokeepval" style="color:var(--fg)">0</b>px</span>
+              <input id="bokeep" type="range" min="-30" max="30" step="1" value="0" style="flex:1;min-width:70px" title="Keep more (+) or less (−) of the drawing: the cutout grows or shrinks by this many pixels all around, whatever the matte">
               <span class="lbl" style="margin:0 0 0 6px">zoom <b id="bozoomval" style="color:var(--fg)">1.00</b></span>
               <input id="bozoom" type="range" min="1" max="1.6" step="0.05" value="1" style="flex:1;min-width:70px">
               <span class="lbl" style="margin:0 0 0 6px">outline <b id="booutval" style="color:var(--fg)">0</b>px</span>
@@ -1809,6 +1811,7 @@ function renderBreakout(pn){
   $('boout').value = bo.outline || 0; $('booutval').textContent = bo.outline || 0;
   $('bomatte').value = bo.matte || 'ai';
   $('botol').value = bo.tolerance == null ? 25 : bo.tolerance; $('botolval').textContent = $('botol').value;
+  $('bokeep').value = bo.keep || 0; $('bokeepval').textContent = bo.keep || 0;
   showTol();
   $('bostat').textContent = !bo.enabled ? '' : (bo.ready ? 'cutout ready' : 'cutout missing');
   ['borecompute', 'boadd', 'borem'].forEach(id => $(id).disabled = !bo.enabled);
@@ -1816,6 +1819,7 @@ function renderBreakout(pn){
 function showTol(){ const k = $('bomatte').value === 'key' ? '' : 'none'; $('botol').style.display = k; $('botollbl').style.display = k; }
 $('bomatte').onchange = showTol;
 $('botol').oninput = () => $('botolval').textContent = $('botol').value;
+$('bokeep').oninput = () => $('bokeepval').textContent = $('bokeep').value;
 $('bozoom').oninput = () => $('bozoomval').textContent = Number($('bozoom').value).toFixed(2);
 $('boout').oninput = () => $('booutval').textContent = $('boout').value;
 async function applyBreakout(extra){
@@ -1824,7 +1828,7 @@ async function applyBreakout(extra){
   const payload = Object.assign({cid: SEL.cid, pid: SEL.pid, pnid: pnid,
     enabled: $('boon').checked, zoom: parseFloat($('bozoom').value),
     outline: parseInt($('boout').value, 10), matte: $('bomatte').value,
-    tolerance: parseInt($('botol').value, 10)}, extra || {});
+    tolerance: parseInt($('botol').value, 10), keep: parseInt($('bokeep').value, 10)}, extra || {});
   const res = await api('breakout_panel', payload,
     payload.enabled ? 'Cutting the subject out and recomposing… (a few seconds)' : 'Recomposing…');
   if(!res) return;

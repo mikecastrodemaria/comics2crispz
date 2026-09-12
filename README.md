@@ -249,7 +249,9 @@ colour sampled on the drawing's edges — line art or several small subjects
 (butterflies, props, SFX) on a plain white ground, where the AI keeps only
 one of them; *Tolerance* says how far a pixel may drift from that colour
 before it counts as subject (raise it if paper grain leaks through, lower it
-if light lines vanish). The matte refreshes itself when the drawing
+if light lines vanish). *Keep* grows (+) or shrinks (−) the cutout by that
+many pixels all around, whatever the matte: more or less of the drawing in
+one move. The matte refreshes itself when the drawing
 changes; if it takes too much or too little, brush the area with the Paint
 tool and use ➕ add painted / ➖ remove painted. Frameless panels use the
 plain-background matte automatically when rembg is not installed.

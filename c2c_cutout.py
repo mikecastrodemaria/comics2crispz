@@ -142,15 +142,53 @@ def _enclosed_ground(alpha):
     return enclosed if enclosed.getbbox() else None
 
 
-def cutout(image, mode="ai", tolerance=DEFAULT_TOLERANCE):
+MAX_KEEP = 30
+
+
+def grow_alpha(matte, keep):
+    """Keep more (keep > 0: the matte grows by `keep` pixels all around) or
+    less (keep < 0: it shrinks) of the drawing, whatever produced the matte.
+    A morphological dilation / erosion of the alpha; the RGB is the drawing
+    everywhere, so grown pixels show the drawing. keep = 0 -> unchanged."""
+    from PIL import ImageFilter
+    try:
+        k = int(keep or 0)
+    except (TypeError, ValueError):
+        k = 0
+    k = max(-MAX_KEEP, min(MAX_KEEP, k))
+    if k == 0:
+        return matte
+    r, g, b, a = matte.convert("RGBA").split()
+    try:
+        import numpy as np
+        from scipy import ndimage
+        arr = np.asarray(a)
+        if k > 0:
+            arr = ndimage.grey_dilation(arr, size=(2 * k + 1, 2 * k + 1))
+        else:
+            arr = ndimage.grey_erosion(arr, size=(-2 * k + 1, -2 * k + 1))
+        from PIL import Image
+        a = Image.fromarray(arr.astype("uint8"), "L")
+    except Exception:
+        f = ImageFilter.MaxFilter(3) if k > 0 else ImageFilter.MinFilter(3)
+        for _ in range(abs(k)):
+            a = a.filter(f)
+    from PIL import Image
+    out = Image.merge("RGBA", (r, g, b, a))
+    out.info.update(matte.info)
+    return out
+
+
+def cutout(image, mode="ai", tolerance=DEFAULT_TOLERANCE, keep=0):
     """PIL image -> RGBA matte (same size). mode 'ai' = rembg subject
     (RuntimeError with a clear message when rembg is unavailable),
-    'key' = everything but the plain background colour."""
+    'key' = everything but the plain background colour. keep (-30..30 px)
+    grows or shrinks the result all around."""
     if mode == "key":
         t0 = time.time()
         out = cutout_key(image, tolerance)
         out.info["seconds"] = round(time.time() - t0, 1)
-        return out
+        return grow_alpha(out, keep)
     ok, why = available()
     if not ok:
         raise RuntimeError(why)
@@ -159,7 +197,7 @@ def cutout(image, mode="ai", tolerance=DEFAULT_TOLERANCE):
     t0 = time.time()
     out = remove(img, session=_session(), post_process_mask=True)
     out.info["seconds"] = round(time.time() - t0, 1)
-    return out.convert("RGBA")
+    return grow_alpha(out.convert("RGBA"), keep)
 
 
 def cutout_path(image_path):
@@ -177,14 +215,14 @@ def is_stale(image_path):
         return True
 
 
-def refresh(image_path, force=False, mode="ai", tolerance=DEFAULT_TOLERANCE):
+def refresh(image_path, force=False, mode="ai", tolerance=DEFAULT_TOLERANCE, keep=0):
     """Compute (or recompute) the matte of a drawing; returns its path."""
     from PIL import Image
     cp = cutout_path(image_path)
     if not force and not is_stale(image_path):
         return cp
     with Image.open(image_path) as im:
-        m = cutout(im, mode=mode, tolerance=tolerance)
+        m = cutout(im, mode=mode, tolerance=tolerance, keep=keep)
     tmp = cp + f".{os.getpid()}.tmp"
     m.save(tmp, "PNG")
     os.replace(tmp, cp)
