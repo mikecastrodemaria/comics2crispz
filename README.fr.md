@@ -156,7 +156,10 @@ le bundle est la recette, `panels/` et `pages/` sont le résultat). Une copie
 
 Une case est par défaut le rectangle de sa cellule. Dans le panneau de la
 case, **✎ Edit corners** affiche des poignées sur la planche : glisser un
-coin, cliquer le point bleu au milieu d'un côté pour en ajouter un,
+coin, glisser un côté (il coulisse sur sa normale : un côté horizontal monte
+ou descend, un vertical va à gauche ou à droite), glisser le point central
+pour déplacer toute la case, Shift contraint à l'horizontale / verticale /
+45° ; cliquer le point bleu au milieu d'un côté pour ajouter un coin,
 double-clic sur un coin pour le retirer (3 minimum), arrondir le coin
 sélectionné avec le curseur ; **⬆ Front / ⬇ Back** empile la case au-dessus
 ou au-dessous de ses voisines (une case large peut passer sous deux petites,

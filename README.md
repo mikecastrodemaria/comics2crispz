@@ -222,9 +222,12 @@ The status bar reports the engine, the seeds (replayable) and any warnings
 ### 4b. Panel shapes — slanted edges, rounded corners, overlaps
 
 A panel is the rectangle of its layout cell by default. In the panel box,
-**✎ Edit corners** shows handles on the page: drag a corner, click the blue
-midpoint of a side to add one, double-click a corner to remove it (3
-minimum), round the selected corner with the slider; **⬆ Front / ⬇ Back**
+**✎ Edit corners** shows handles on the page: drag a corner, drag a side
+(it slides along its own normal: a horizontal side goes up or down, a
+vertical one left or right), drag the centre dot to move the whole panel,
+Shift constrains to horizontal / vertical / 45°; click the blue midpoint of
+a side to add a corner, double-click a corner to remove it (3 minimum),
+round the selected corner with the slider; **⬆ Front / ⬇ Back**
 stacks the panel over or under its neighbours (a wide panel can sit under
 two smaller ones, with a gutter halo). The drawing is generated at the
 shape's bounding box and clipped by the shape at composition; the border
