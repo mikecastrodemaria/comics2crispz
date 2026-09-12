@@ -252,9 +252,14 @@ Balloons stay on top.
 **Free panels and frameless elements.** **➕ Panel** (page box) adds a panel
 beyond the grid, with its own shape on top of the page (an insert; move and
 resize it with Edit corners). Tick **🦋 frameless** (Shape section) and the
-panel draws nothing but its cut-out subject: generate "three butterflies,
-isolated on a plain white background", and they float across two panels with
-a transparent background. **🗑 Remove panel** takes a free panel away (text
+panel draws nothing but its cut-out subject: write "three butterflies
+fluttering", generate, and they float across two panels with a transparent
+background. A frameless panel is prompted on its own: its text plus an
+automatic isolation clause (plain white ground, the subject only), the book
+LoRAs and negative — but NOT the style suffix nor the mood, which describe
+a scene and would fill the ground again; the Bible's *Isolated elements*
+line carries the rendering words for them ("black and white pen ink lines").
+Use the *plain background* matte for line art or several small subjects. **🗑 Remove panel** takes a free panel away (text
 reported, drawing kept in `_removed/`); a grid cell is removed by picking a
 smaller layout. Free panels survive a layout change. In the script a free
 panel is any `[pn]` beyond the grid: it needs a `shape=` line, and

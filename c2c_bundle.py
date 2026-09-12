@@ -11,7 +11,8 @@ exportable and importable without loss.
     ```
     ## Style
     ```json
-    {"prompt_suffix": "...", "negative": "...", "loras": [...], "mood": "...", "font": "..."}
+    {"prompt_suffix": "...", "negative": "...", "loras": [...], "mood": "...", "font": "...",
+     "bubble": "...", "element_suffix": "..."}
     ```
     ## Story bible
     ```json
@@ -44,7 +45,8 @@ import c2c_script
 
 BUNDLE_VERSION = 1
 _SETTINGS_KEYS = ("name", "description", "page", "engine")
-_STYLE_KEYS = ("prompt_suffix", "negative", "loras", "mood", "font", "bubble")
+_STYLE_KEYS = ("prompt_suffix", "negative", "loras", "mood", "font", "bubble",
+               "element_suffix")
 _CARD_KEYS = ("desc", "refs", "loras", "negative", "kind")
 
 
@@ -208,7 +210,7 @@ def apply_bundle(project, bundle, ref_exists=None):
         style = project.setdefault("style", {})
         new = {k: bundle["style"].get(k) for k in _STYLE_KEYS}
         new["loras"] = [str(x) for x in (new.get("loras") or [])]
-        for k in ("prompt_suffix", "negative", "mood", "font", "bubble"):
+        for k in ("prompt_suffix", "negative", "mood", "font", "bubble", "element_suffix"):
             new[k] = str(new.get(k) or "")
         if new["bubble"] not in cz_comic.BUBBLE_STYLES:
             new["bubble"] = ""

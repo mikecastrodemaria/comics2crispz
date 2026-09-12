@@ -415,6 +415,10 @@ def shape_points(shape, pg):
 # par-dessus (z 1). Un papillon qui traverse deux cases, un insert, un
 # element decoratif: c'est une case libre, souvent 'frameless' (sans cadre ni
 # fond, seul son sujet detoure est dessine).
+# frameless panels: the subject alone on a plain ground (see resolve_panel)
+FRAMELESS_PROMPT = ("isolated on a plain pure white background, the subject only, "
+                    "centered, no scenery, no setting, no ground, no other elements")
+FRAMELESS_NEGATIVE = "background, scenery, landscape, setting, environment, frame, border"
 FREE_PANEL_DEFAULT = {"points": [[0.3, 0.35, 0], [0.7, 0.35, 0], [0.7, 0.65, 0], [0.3, 0.65, 0]],
                       "z": 1}
 
@@ -785,10 +789,23 @@ def resolve_panel(project, page, panel, index=None, target_pixels=1024 * 1024):
     style = project.get("style") or {}
     # ordre: texte de la case (casting resolu), style du livre, mood
     # (chapitre > global) - le mood est une ambiance, jamais un sujet
-    parts = [res["prompt"], (style.get("prompt_suffix") or "").strip(),
-             effective_mood(project, page)]
+    if panel.get("frameless"):
+        # an isolated element (butterflies, a prop, a SFX) cut out of a
+        # plain ground. The book's style suffix and mood describe a SCENE
+        # ("huge flowers growing out of ruins, cold night") and would fill
+        # the ground again, so they are dropped: the panel text, the
+        # isolation clause, the style's rendering words for elements
+        # (element_suffix, e.g. "black and white pen ink lines"), the
+        # LoRAs and the negative remain
+        parts = [res["prompt"], FRAMELESS_PROMPT,
+                 (style.get("element_suffix") or "").strip()]
+        negs = [res["negative"], (style.get("negative") or "").strip(),
+                FRAMELESS_NEGATIVE]
+    else:
+        parts = [res["prompt"], (style.get("prompt_suffix") or "").strip(),
+                 effective_mood(project, page)]
+        negs = [res["negative"], (style.get("negative") or "").strip()]
     prompt = ", ".join(p for p in parts if p)
-    negs = [res["negative"], (style.get("negative") or "").strip()]
 
     loras = list(res["loras"]) + list(panel.get("loras") or [])
     seen = set()

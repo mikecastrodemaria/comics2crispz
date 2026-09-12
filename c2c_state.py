@@ -741,7 +741,8 @@ def bible_state(project, project_dir):
                       "loras": list(style.get("loras") or []),
                       "mood": style.get("mood") or "",
                       "font": style.get("font") or "",
-                      "bubble": style.get("bubble") or "round"},
+                      "bubble": style.get("bubble") or "round",
+                      "element_suffix": style.get("element_suffix") or ""},
             "chapters": [{"id": ch["id"], "name": ch.get("name") or ch["id"],
                           "mood": ch.get("mood") or "",
                           "pages": len(ch.get("pages") or [])}

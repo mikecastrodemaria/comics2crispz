@@ -596,7 +596,7 @@ class Studio:
         with _LOCK:
             project = self.load()
             style = project.setdefault("style", {})
-            for k in ("prompt_suffix", "negative", "mood", "font"):
+            for k in ("prompt_suffix", "negative", "mood", "font", "element_suffix"):
                 if k in data:
                     style[k] = str(data.get(k) or "").strip()
             if "bubble" in data:

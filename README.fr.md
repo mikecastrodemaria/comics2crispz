@@ -188,8 +188,14 @@ détourage par couleur de fond.
 ajoute une case au-delà de la grille, avec sa propre forme posée par-dessus
 (un insert ; déplace et redimensionne avec Edit corners). Coche **🦋
 frameless** (section Shape) et la case ne dessine que son sujet détouré :
-génère « three butterflies, isolated on a plain white background » et les
-papillons flottent sur deux cases avec un fond transparent. **🗑 Remove
+écris « three butterflies fluttering », génère, et les papillons flottent
+sur deux cases avec un fond transparent. Une case sans cadre a son propre
+prompt : son texte plus une clause d'isolement automatique (fond blanc uni,
+le sujet seul), les LoRAs et le négatif du livre, mais NI le suffixe de
+style NI le mood, qui décrivent une scène et rempliraient le fond ; la ligne
+*Isolated elements* de la Bible porte les mots de rendu pour ces cases
+(« black and white pen ink lines »). Prends le détourage *plain background*
+pour du trait ou plusieurs petits sujets. **🗑 Remove
 panel** retire une case libre (texte cité, dessin gardé dans `_removed/`) ;
 une cellule de grille se retire en choisissant une grille plus petite. Les
 cases libres survivent à un changement de gabarit. Dans le script, une case

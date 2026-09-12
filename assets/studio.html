@@ -550,6 +550,11 @@ Bruno (think): Of course...
           <button class="helpb" data-help="The book's visual style, appended after each panel text: drawing technique, line, colors ('black and white manga style, screentone shading'). Keep it about style, not content. Changing it only affects future generations - use Redraw to update existing panels (their previous versions stay in the history).">?</button></span>
         <textarea id="bsuffix" rows="2"></textarea>
       </div>
+      <div class="field">
+        <span class="lbl">Isolated elements (frameless panels) — rendering words only
+          <button class="helpb" data-help="A frameless panel (butterflies, a prop, a SFX floating across the page) must come out ALONE on a plain white ground, so it does NOT receive the style suffix nor the mood: they describe a scene and would fill the ground again. It gets its own text, an automatic isolation clause, the book LoRAs, the negative, and this line: the rendering words of the style without any subject - 'black and white pen ink lines', 'flat cel shading, thick outlines'. Leave empty to rely on the LoRAs alone.">?</button></span>
+        <textarea id="bselem" rows="1" placeholder="black and white pen ink lines"></textarea>
+      </div>
       <div class="grid2">
         <div class="field">
           <span class="lbl">Global negative</span>
@@ -3025,6 +3030,7 @@ function renderStyleTab(){
   $('bsloras').value = loraLines(st.loras); $('bmood').value = st.mood;
   fillFontSelect($('bsfont'), st.font || '', '(built-in comic font)');
   $('bsbubble').value = st.bubble || 'round';
+  $('bselem').value = st.element_suffix || '';
   const cm = $('bchmoods');
   cm.innerHTML = '';
   BIBLE.chapters.forEach(ch => {
@@ -3140,6 +3146,7 @@ $('bstylesave').onclick = async () => {
   const res = await api('save_style', {prompt_suffix: $('bsuffix').value,
     negative: $('bsneg').value, loras: parseLoras($('bsloras').value),
     mood: $('bmood').value, font: $('bsfont').value, bubble: $('bsbubble').value,
+    element_suffix: $('bselem').value,
     chapter_moods: cm}, 'Saving the style…');
   if(!res) return;
   BIBLE = res; renderBible(); refreshIndexQuiet();
