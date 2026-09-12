@@ -152,73 +152,114 @@ absente est signalée par son chemin (les images sont listées, pas incluses :
 le bundle est la recette, `panels/` et `pages/` sont le résultat). Une copie
 `book.md` est gardée dans le dossier du livre après chaque import.
 
-### Formes de case — bords obliques, coins arrondis, chevauchement
+### Formes de case — coins, côtés, marge interne, cadrage
 
-Une case est par défaut le rectangle de sa cellule. Dans le panneau de la
-case, **✎ Edit corners** affiche des poignées sur la planche : glisser un
-coin, glisser un côté (il coulisse sur sa normale : un côté horizontal monte
-ou descend, un vertical va à gauche ou à droite), glisser le point central
-pour déplacer toute la case, Shift contraint à l'horizontale / verticale /
-45° ; cliquer le point bleu au milieu d'un côté pour ajouter un coin,
-double-clic sur un coin pour le retirer (3 minimum), arrondir le coin
-sélectionné avec le curseur ; **⬆ Front / ⬇ Back** empile la case au-dessus
-ou au-dessous de ses voisines (une case large peut passer sous deux petites,
-avec un halo de gouttière). Le dessin est généré au ratio de la boîte de la
-forme puis découpé à la composition ; le contour suit le polygone, et les
-bulles automatiques se placent à l'intérieur de la forme (une bulle punaisée
-à la main reste où tu l'as mise).
-**Framing** (curseur de zoom, **✥ Move image**, ↺) : le cadre est le masque
-de découpe et le dessin son fond ; le zoom agrandit le dessin dans le cadre
-(à 1× il le couvre exactement), puis Move image permet de faire glisser le
-dessin sur la planche pour choisir ce que le cadre montre, sans jamais
-laisser de vide. `framing=zoom,dx,dy` dans le script.
-**▭ Reset** revient au rectangle. **Inner margin** (curseur, % de la
-largeur de page) fait rentrer le cadre de cette case depuis sa cellule ou
-les coins de sa forme, tout autour, en plus de la demi-gouttière du livre ;
-le dessin suit le cadre réduit. Dans le script : `shape=fx,fy[,r] …`
-(fractions de page, `r` = arrondi 0–1), `z=N` et `inset=0.02` ;
-`shape=rect` remet le rectangle.
-**🧍 Break the frame** (panneau de la case) : le sujet de la case est détouré
-de son fond (rembg, dépendance optionnelle, quelques secondes sur CPU, modèle
-téléchargé une fois) et dessiné PAR-DESSUS les cases voisines pendant que le
-fond reste dans le cadre. *Zoom* cadre le dessin plus serré pour que le sujet
-déborde davantage, *Outline* ajoute un liseré couleur de page. Deux
-détourages : **AI subject** (rembg) trouve le sujet principal, un personnage
-devant un décor ; **plain background** garde tout ce qui diffère de la couleur
-de fond relevée sur les bords du dessin, pour du trait ou plusieurs petits
-sujets (papillons, accessoires, SFX) sur un fond blanc uni, là où l'IA n'en
-garde qu'un ; *Tolerance* dit de combien un pixel peut s'écarter de cette
-couleur avant de compter comme sujet (monte-la si le grain du papier passe,
-baisse-la si les traits clairs disparaissent). *Keep* grossit (+) ou
-rétrécit (−) la découpe d'autant de pixels tout autour, quel que soit le
-détourage : plus ou moins de dessin en un geste. Le détourage se recalcule
-quand le dessin change ; s'il prend trop ou pas assez, peins la zone avec
-l'outil Paint puis ➕ add painted / ➖ remove painted. Les bulles restent
-au-dessus. Sans rembg, les cases sans cadre passent d'elles-mêmes au
-détourage par couleur de fond.
+Une case est par défaut le rectangle de sa cellule. Tout ce qui suit se
+trouve dans l'onglet **◆ Shape** du panneau de la case et recompose la
+planche aussitôt (pas de regénération : le dessin est seulement découpé et
+placé autrement).
 
-**Cases libres et éléments sans cadre.** **➕ Panel** (bloc de la planche)
-ajoute une case au-delà de la grille, avec sa propre forme posée par-dessus
-(un insert ; déplace et redimensionne avec Edit corners). Coche **🦋
-frameless** (section Shape) et la case ne dessine que son sujet détouré :
-écris « three butterflies fluttering », génère, et les papillons flottent
-sur deux cases avec un fond transparent. Une case sans cadre a son propre
-prompt : son texte plus une clause d'isolement automatique (fond blanc uni,
-le sujet seul), les LoRAs et le négatif du livre, mais NI le suffixe de
-style NI le mood, qui décrivent une scène et rempliraient le fond ; la ligne
-*Isolated elements* de la Bible porte les mots de rendu pour ces cases
-(« black and white pen ink lines »). Prends le détourage *plain background*
-pour du trait ou plusieurs petits sujets. **🗑 Remove
-panel** retire une case libre (texte cité, dessin gardé dans `_removed/`) ;
-une cellule de grille se retire en choisissant une grille plus petite. Les
-cases libres survivent à un changement de gabarit. Dans le script, une case
-libre est tout `[pn]` au-delà de la grille : il lui faut une ligne `shape=`,
-et `frameless` seul sur une ligne.
+**✎ Edit corners** affiche des poignées sur la planche :
 
+| Poignée | Glisser | Notes |
+| --- | --- | --- |
+| point blanc (coin) | déplace ce coin | double-clic le retire (3 minimum) ; le curseur **round corner** arrondit le coin sélectionné (0–1) |
+| un côté | fait coulisser le côté sur sa normale | un côté horizontal monte ou descend, un vertical va à gauche ou à droite, un oblique reste parallèle : on redimensionne comme dans n'importe quel outil de mise en page |
+| point central | déplace toute la case | garde la forme, s'arrête au bord de la page |
+| point bleu (milieu) | clic : ajoute un coin ici | pour couper un angle ou casser un côté |
+
+**Shift** pendant le glissé d'un coin ou du centre contraint à
+l'horizontale / verticale / 45°. **⬆ Front / ⬇ Back** empile la case
+au-dessus ou au-dessous de ses voisines (une case large peut passer sous deux
+petites, avec un halo de gouttière). **▭ Reset** revient au rectangle de la
+cellule. Le dessin est généré au ratio de la boîte de la forme puis découpé à
+la composition ; le contour suit le polygone, les bulles automatiques se
+placent à l'intérieur (une bulle punaisée à la main reste où tu l'as mise).
 **Gabarits obliques** (fenêtre Layout › ✂) : diagonale, trio oblique,
 escalier, éclat manga, case large sous deux inserts, insert arrondi, grille
 penchée ; appliqués sur une planche du même nombre de cases, puis ajustables
 coin par coin.
+
+**Inner margin** (curseur, % de la largeur de page) : le cadre de cette case
+rentre depuis sa cellule ou depuis les coins de sa forme, tout autour, en
+plus de la demi-gouttière du livre. Pour une case qui doit respirer plus que
+les autres, ou un insert qui flotte dans du blanc. Le dessin suit le cadre
+réduit ; Edit corners part toujours de la cellule entière.
+
+**Framing : le cadre est un masque de découpe, le dessin est son fond.** À
+**×1** le dessin couvre exactement le cadre (on en voit le centre quand les
+ratios diffèrent). Monte le **zoom** (×1 à ×3) pour agrandir le dessin dans
+le cadre, puis clique **✥ Move image** et fais glisser le dessin sur la
+planche pour choisir ce que le cadre montre : un visage plutôt que toute la
+rue, un plan plus serré, un autre recadrage pour un autre rythme. Le
+décalage est borné, le cadre ne montre jamais de vide ; **↺** recentre à ×1.
+Le zoom de Break the frame se multiplie avec celui-ci, et le sujet détouré
+suit le même cadrage. Usage typique : le moteur a dessiné une belle scène
+mais le personnage est petit, zoom ×1,6 et glisse-le dans le tiers gauche ;
+ou réutilise un seul dessin dans deux cases avec deux cadrages (plan large,
+puis gros plan).
+
+**Lignes de script** (toutes optionnelles, sous la ligne `[pnN]`) :
+`shape=fx,fy[,r] fx,fy …` (fractions de page, `r` = arrondi 0–1,
+`shape=rect` remet le rectangle), `z=N`, `inset=0.02`, `framing=zoom,dx,dy`,
+`frameless`.
+
+### Hors-cadre, cases libres, éléments sans cadre
+
+**🧍 Break the frame** (onglet Shape) : le sujet de la case est détouré de
+son fond et dessiné PAR-DESSUS les cases voisines pendant que le fond reste
+dans le cadre, la planche Spider-Man. Coche **enabled**, puis :
+
+- **matte : AI subject** (rembg, dépendance optionnelle listée dans
+  `requirements.txt`, quelques secondes sur CPU, modèle téléchargé une fois)
+  trouve le sujet principal : un personnage, une main, un monstre devant un
+  décor.
+- **matte : plain background** garde tout ce qui diffère de la couleur de
+  fond relevée sur les bords du dessin : du trait ou plusieurs petits sujets
+  (papillons, accessoires, SFX) sur un fond blanc ou crème uni, là où l'IA
+  n'en garderait qu'un. Le fond enfermé dans le dessin (le blanc d'une aile,
+  un visage) reste. **Tolerance** dit de combien un pixel peut s'écarter de
+  la couleur de fond avant de compter comme sujet : monte-la si le grain du
+  papier passe, baisse-la si les traits clairs disparaissent. Pillow seul.
+- **keep** (−30 … +30 px) grossit (+) ou rétrécit (−) la découpe tout
+  autour, quel que soit le détourage : l'IA a mordu dans un contour → +4 ;
+  un liseré de fond reste collé au sujet → −3.
+- **zoom** cadre le dessin plus serré pour que le sujet déborde davantage ;
+  **outline** ajoute un liseré couleur de page autour du sujet pour le
+  détacher de la case du dessous.
+- **↻ Recompute** après un changement de dessin ; le détourage se recalcule
+  aussi tout seul quand le dessin change. Pour une retouche locale, active
+  **Paint** (onglet Edit), peins la zone, puis **➕ add painted** /
+  **➖ remove painted**.
+
+Les bulles restent toujours au-dessus.
+
+**Cases libres** : **➕ Panel** (bloc de la planche) ajoute une case au-delà
+de la grille, avec sa propre forme posée par-dessus : un insert, un bloc de
+titre, un élément flottant. Déplace-la et redimensionne-la avec Edit
+corners, empile-la avec Front / Back ; **🗑 Remove panel** la retire (texte
+cité, dessin gardé dans `_removed/`). Une cellule de grille se retire en
+choisissant une grille plus petite ; les cases libres survivent à un
+changement de gabarit.
+
+**Éléments sans cadre** : coche **🦋 frameless** (onglet Shape) et la case ne
+dessine que son sujet détouré : ni cadre, ni fond. Recette des papillons sur
+deux cases :
+
+1. **➕ Panel**, coche **frameless**, texte `three butterflies fluttering`,
+   Regenerate. Une case sans cadre a son propre prompt : son texte plus une
+   clause d'isolement automatique (fond blanc uni, le sujet seul), les LoRAs
+   et le négatif du livre, mais NI le suffixe de style NI le mood, qui
+   décrivent une scène et rempliraient le fond. La ligne *Isolated elements*
+   de la Bible (onglet Style) porte les mots de rendu pour ces cases :
+   `black and white pen ink lines`.
+2. Détourage **plain background** (du trait, plusieurs sujets), ajuste
+   Tolerance / keep si besoin.
+3. Edit corners : glisse le point central pour poser les papillons à cheval
+   sur les deux cases, Front pour passer au-dessus.
+
+Sans rembg, les cases sans cadre passent d'elles-mêmes au détourage par
+couleur de fond au lieu de refuser.
 
 ### Storyboard d'abord, rendu final ensuite
 
@@ -257,10 +298,8 @@ muette. La police par défaut du livre est dans 📖 Bible › Style ; déposez 
 polices BD `.ttf`/`.otf` dans un dossier `fonts/` à côté de l'app ou dans le
 livre pour les choisir.
 **Outline** règle l'épaisseur du contour (ou du trait noir des lettres SFX /
-titre) ; tapez `
-` dans le texte d'une bulle pour forcer un retour à la ligne
-(`La fille des
-ruines fleuries`).
+titre) ; tapez `\n` dans le texte d'une bulle pour forcer un retour à la ligne
+(`La fille des\nruines fleuries`).
 **Width** (×0,3 à ×2, ou `(width=1.5)` dans le texte) règle la largeur de
 coupe d'une bulle, ou la largeur maximale d'un SFX ; au-dessus de ×1 un titre
 peut être plus large que sa case. Une bulle glissée à la main peut être
@@ -285,13 +324,18 @@ Style ; la forme d'une bulle « (book default: …) » la suit, ou la remplace.
 Les répliques acceptent des modificateurs entre parenthèses, cumulables :
 `Lea (think, rounded, hidden, font=comicbd.ttf, outline=2, width=1.3, color=#c00000): …`,
 idem sur `CAP (…)` / `SFX (…)` ; la boîte de la bulle les écrit pour toi,
-l'onglet Script les montre. `color=` est la couleur du contour (bord et
-queue de la bulle, cadre du cartouche, trait des lettres SFX) : la pastille
-à côté du curseur Outline ouvre un sélecteur de couleur ; noir par défaut.
-`halo=1.5` ajoute un second trait, plus large, À L'EXTÉRIEUR du contour,
-`halo_color=#ffffff` sa couleur (blanc par défaut) : le moyen classique de
-décoller un cri, un titre ou une bulle d'un dessin chargé (curseur Halo et
-pastille dans la boîte de la bulle).
+l'onglet Script les montre. 
+
+**Couleur du contour et halo.** À côté du curseur **Outline**, une pastille
+ouvre le sélecteur de couleur du navigateur : elle colore le bord et la
+queue de la bulle, les ronds d'une pensée, le cadre d'un cartouche et le
+trait autour des lettres d'un SFX ou d'un titre (noir par défaut ;
+`color=#c00000` dans le script). Le contour est dessiné À L'EXTÉRIEUR de la
+lettre, qui garde sa forme entière. **Halo** (×0 à ×3, avec sa propre
+pastille, blanc par défaut) ajoute un second trait, plus large, à
+l'extérieur du contour : le moyen classique de décoller un cri, un titre ou
+une bulle d'un dessin chargé ; un `KRRRRAAK` rouge à halo blanc se lit sur
+n'importe quel fond. Script : `halo=1.5, halo_color=#ffe000`.
 
 ### Corriger une case — Régénérer, Retoucher, Variation, Versions
 

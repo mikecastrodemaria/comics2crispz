@@ -219,68 +219,110 @@ recomposes with lettering:
 The status bar reports the engine, the seeds (replayable) and any warnings
 (unknown casting names, empty panels, dropped refs — never silent).
 
-### 4b. Panel shapes — slanted edges, rounded corners, overlaps
+### 4b. Panel shapes — corners, sides, inner margin, framing
 
-A panel is the rectangle of its layout cell by default. In the panel box,
-**✎ Edit corners** shows handles on the page: drag a corner, drag a side
-(it slides along its own normal: a horizontal side goes up or down, a
-vertical one left or right), drag the centre dot to move the whole panel,
-Shift constrains to horizontal / vertical / 45°; click the blue midpoint of
-a side to add a corner, double-click a corner to remove it (3 minimum),
-round the selected corner with the slider; **⬆ Front / ⬇ Back**
-stacks the panel over or under its neighbours (a wide panel can sit under
-two smaller ones, with a gutter halo). The drawing is generated at the
-shape's bounding box and clipped by the shape at composition; the border
-follows the polygon, and automatic balloons are placed inside the shape (a
-balloon you pinned by hand stays where you put it). **Framing** (zoom slider, **✥ Move image**, ↺): the frame is the clipping
-mask and the drawing its background; zoom enlarges the drawing inside the
-frame (at 1× it exactly covers it), then Move image lets you drag the
-drawing on the page to choose what the frame shows, never leaving a gap.
-`framing=zoom,dx,dy` in the script. **▭ Reset** returns to the rectangle. **Inner margin**
-(slider, % of the page width) steps this panel's frame back from its cell or
-shape corners all around, on top of the book's half gutter; the drawing
-follows the smaller frame. In the script a
-panel carries `shape=fx,fy[,r] fx,fy …` (page fractions, `r` = corner
-rounding 0–1), `z=N` and `inset=0.02`; `shape=rect` resets.
-**🧍 Break the frame** (panel box): the panel's subject is cut out of its
-background (rembg, optional dependency, a few seconds on CPU; the model is
-downloaded once) and drawn OVER the neighbouring panels while the background
-stays inside the frame. *Zoom* frames the drawing tighter so the subject
-overflows more, *Outline* adds a page-coloured rim. Two mattes: **AI
-subject** (rembg) finds the main subject — a character over a scene;
-**plain background** keeps everything that differs from the background
-colour sampled on the drawing's edges — line art or several small subjects
-(butterflies, props, SFX) on a plain white ground, where the AI keeps only
-one of them; *Tolerance* says how far a pixel may drift from that colour
-before it counts as subject (raise it if paper grain leaks through, lower it
-if light lines vanish). *Keep* grows (+) or shrinks (−) the cutout by that
-many pixels all around, whatever the matte: more or less of the drawing in
-one move. The matte refreshes itself when the drawing
-changes; if it takes too much or too little, brush the area with the Paint
-tool and use ➕ add painted / ➖ remove painted. Frameless panels use the
-plain-background matte automatically when rembg is not installed.
-Balloons stay on top.
+A panel is the rectangle of its layout cell by default. Everything below
+lives in the **◆ Shape** tab of the panel box and recomposes the page at
+once (no regeneration: the drawing is only clipped and placed differently).
 
-**Free panels and frameless elements.** **➕ Panel** (page box) adds a panel
-beyond the grid, with its own shape on top of the page (an insert; move and
-resize it with Edit corners). Tick **🦋 frameless** (Shape section) and the
-panel draws nothing but its cut-out subject: write "three butterflies
-fluttering", generate, and they float across two panels with a transparent
-background. A frameless panel is prompted on its own: its text plus an
-automatic isolation clause (plain white ground, the subject only), the book
-LoRAs and negative — but NOT the style suffix nor the mood, which describe
-a scene and would fill the ground again; the Bible's *Isolated elements*
-line carries the rendering words for them ("black and white pen ink lines").
-Use the *plain background* matte for line art or several small subjects. **🗑 Remove panel** takes a free panel away (text
-reported, drawing kept in `_removed/`); a grid cell is removed by picking a
-smaller layout. Free panels survive a layout change. In the script a free
-panel is any `[pn]` beyond the grid: it needs a `shape=` line, and
-`frameless` on its own line.
+**✎ Edit corners** shows handles on the page:
 
-**Slanted presets** (Layout dialog › ✂): diagonal split, slanted trio, stairs,
-manga burst, a wide panel under two inserts, a rounded inset, a tilted
-grid — applied on a page with the same panel count, then adjustable corner
-by corner.
+| Handle | Drag | Notes |
+| --- | --- | --- |
+| white corner dot | moves that corner | double-click removes it (3 minimum); the **round corner** slider rounds the selected one (0–1) |
+| a side | slides the side along its own normal | a horizontal side goes up or down, a vertical one left or right, a slanted one stays parallel — resizes like any layout tool |
+| centre dot | moves the whole panel | keeps the shape, stops at the page edge |
+| blue midpoint | click: adds a corner there | to cut a corner or bend a side |
+
+Hold **Shift** while dragging a corner or the centre to constrain to
+horizontal / vertical / 45°. **⬆ Front / ⬇ Back** stack the panel over or
+under its neighbours (a wide panel can sit under two smaller ones, with a
+gutter halo). **▭ Reset** returns to the cell rectangle. The drawing is
+generated at the shape's bounding box and clipped by the shape at
+composition; the border follows the polygon, automatic balloons are placed
+inside it (a balloon you pinned by hand stays where you put it).
+**Slanted presets** (Layout dialog › ✂): diagonal split, slanted trio,
+stairs, manga burst, a wide panel under two inserts, a rounded inset, a
+tilted grid — applied on a page with the same panel count, then adjustable
+corner by corner.
+
+**Inner margin** (slider, % of the page width): this panel's frame steps
+back from its cell or from its shape's corners, all around, on top of the
+book's half gutter — for one panel that must breathe more than the others,
+or an inset that should float in white. The drawing follows the smaller
+frame; Edit corners still starts from the full cell.
+
+**Framing — the frame is a clipping mask, the drawing its background.**
+At **×1** the drawing exactly covers the frame (its centre is shown when
+the ratios differ). Raise the **zoom** (×1 to ×3) to enlarge the drawing
+inside the frame, then click **✥ Move image** and drag the drawing on the
+page to choose what the frame shows: a face instead of the whole street, a
+tighter shot, a different crop for a different rhythm. The offset is bounded
+so the frame never shows a gap; **↺** centres at ×1 again. Break the frame's
+own zoom multiplies this one, and the cut-out subject follows the same
+framing. Typical use: the engine drew a fine scene but the character is
+small — zoom ×1.6 and slide him to the left third; or reuse one drawing in
+two panels with two framings (wide shot, then close-up).
+
+**Script lines** (all optional, under the `[pnN]` line): `shape=fx,fy[,r]
+fx,fy …` (page fractions, `r` = corner rounding 0–1, `shape=rect` resets),
+`z=N`, `inset=0.02`, `framing=zoom,dx,dy`, `frameless`.
+
+### 4d. Break the frame, free panels, frameless elements
+
+**🧍 Break the frame** (Shape tab): the panel's subject is cut out of its
+background and drawn OVER the neighbouring panels while the background
+stays inside the frame — the Spider-Man page. Turn it on with **enabled**,
+then:
+
+- **matte: AI subject** (rembg, optional dependency listed in
+  `requirements.txt`, a few seconds on CPU, model downloaded once) finds the
+  main subject — right for a character, a hand, a monster over a scene.
+- **matte: plain background** keeps everything that differs from the
+  background colour sampled on the drawing's edges — right for line art or
+  several small subjects (butterflies, props, SFX) on a plain white or cream
+  ground, where the AI would keep only one of them. Ground enclosed inside
+  the drawing (the white of a wing, a face) stays. **Tolerance** says how far
+  a pixel may drift from the ground colour before it counts as subject:
+  raise it if paper grain or faint marks leak through, lower it if light
+  lines vanish. Needs nothing but Pillow.
+- **keep** (−30 … +30 px) grows (+) or shrinks (−) the cutout all around,
+  whatever the matte: the AI bit into an outline → +4; a rim of background
+  stays glued to the subject → −3.
+- **zoom** frames the drawing tighter so the subject overflows more;
+  **outline** adds a page-coloured rim around the subject to detach it from
+  the panel below.
+- **↻ Recompute** after changing the drawing; the matte also refreshes
+  itself when the drawing changes. For a local fix, turn on **Paint**
+  (Edit tab), brush the area, then **➕ add painted** / **➖ remove painted**.
+
+Balloons always stay on top.
+
+**Free panels** — **➕ Panel** (page box) adds a panel beyond the grid, with
+its own shape on top of the page: an insert, a title block, a floating
+element. Move and resize it with Edit corners, stack it with Front / Back;
+**🗑 Remove panel** takes it away (text reported, drawing kept in
+`_removed/`). A grid cell is removed by picking a smaller layout; free
+panels survive a layout change.
+
+**Frameless elements** — tick **🦋 frameless** (Shape tab) and the panel
+draws nothing but its cut-out subject: no frame, no background. Recipe for
+butterflies across two panels:
+
+1. **➕ Panel**, tick **frameless**, text `three butterflies fluttering`,
+   Regenerate. A frameless panel is prompted on its own: its text plus an
+   automatic isolation clause (plain white ground, the subject only), the
+   book LoRAs and negative — but NOT the style suffix nor the mood, which
+   describe a scene and would fill the ground again. The Bible's
+   *Isolated elements* line (Style tab) carries the rendering words for
+   these panels: `black and white pen ink lines`.
+2. Matte **plain background** (line art, several subjects), adjust
+   Tolerance / keep if needed.
+3. Edit corners: drag the centre dot to put the butterflies across the two
+   panels, Front to pass over them.
+
+Without rembg, frameless panels use the plain-background matte on their
+own instead of refusing.
 
 ### 6c. Storyboard first, final render later
 
@@ -318,10 +360,8 @@ model already drew inside the image, or a silent panel. The book's default
 balloon font lives in 📖 Bible › Style; drop `.ttf`/`.otf` comic fonts in a
 `fonts/` folder next to the app or inside the book to pick them.
 **Outline** sets the border thickness (or the black stroke around SFX / title
-letters); type `
-` inside a balloon text to force a line break
-(`La fille des
-ruines fleuries`).
+letters); type `\n` inside a balloon text to force a line break
+(`La fille des\nruines fleuries`).
 **Width** (×0.3 to ×2, or `(width=1.5)` in the text) sets how wide a balloon
 wraps, or how wide an SFX may grow; above ×1 a title can be wider than its
 panel. A balloon you drag can be dropped **outside its panel** (over the
@@ -344,12 +384,17 @@ balloon's Shape "(book default: …)" follows it, or overrides it.
 Balloon lines accept modifiers in parentheses, combinable with commas:
 `Lea (think, rounded, hidden, font=comicbd.ttf, outline=2, width=1.3, color=#c00000): …`
 and the same on `CAP (…)` / `SFX (…)` lines; the balloon box writes them for
-you, the Script tab shows them. `color=` is the outline colour (balloon
-border and tail, caption frame, SFX letter stroke): the swatch next to the
-Outline slider opens a colour picker; black when absent. `halo=1.5` adds a
-second, wider stroke OUTSIDE the outline, `halo_color=#ffffff` its colour
-(white when absent): the classic way to lift a shout, a title or a balloon
-off a busy drawing (Halo slider + swatch in the balloon box).
+you, the Script tab shows them. 
+
+**Outline colour and halo.** Next to the **Outline** slider, a colour swatch
+opens the browser's colour picker: it colours the balloon border and tail,
+the thought circles, a caption's frame and the stroke around SFX / title
+letters (black by default; `color=#c00000` in the script). The outline is
+drawn OUTSIDE the letter, the letter keeps its full shape. **Halo** (×0 to
+×3, plus its own swatch, white by default) adds a second, wider stroke
+outside the outline: the classic way to lift a shout, a title or a balloon
+off a busy drawing — a red `KRRRRAAK` with a white halo reads over any
+background. Script: `halo=1.5, halo_color=#ffe000`.
 
 ### 5b. Fix one panel — Regenerate, Edit, Variation, Versions
 
