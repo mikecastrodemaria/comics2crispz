@@ -50,6 +50,10 @@ crée un (couverture + une première planche 4 cases, prête à remplir) ; le to
 premier lancement affiche un écran d'accueil. Linux/macOS : `./start.sh`.
 Avancé : `run.bat books\exemple` (livre précis, sans navigateur),
 `start.bat books\autre --port 8771` (deux livres côte à côte).
+**Pinokio** : un launcher 1-clic est disponible,
+[comics2crispz.pinokio](https://github.com/mikecastrodemaria/comics2crispz.pinokio)
+(Install / Start / Update / Reset ; les moteurs de dessin sont les launchers
+crispz voisins).
 
 Dépendances : Python 3.10+, Pillow, et rembg pour **Break the frame** / les
 cases sans cadre (dans `requirements.txt`, le CPU suffit). `start.bat` relance

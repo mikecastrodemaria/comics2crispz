@@ -56,6 +56,11 @@ run.bat books\exemple             REM serve a specific book, no browser
 start.bat books\autre --port 8771 REM a second book side by side
 ```
 
+**Pinokio**: a 1-click launcher lives at
+[comics2crispz.pinokio](https://github.com/mikecastrodemaria/comics2crispz.pinokio)
+(Install / Start / Update / Reset; the drawing engines are the crispz
+family launchers next to it).
+
 Dependencies: Python 3.10+, Pillow, and rembg for **Break the frame** /
 frameless panels (listed in `requirements.txt`, CPU is enough). `start.bat`
 re-runs `pip install -r requirements.txt` whenever that file changed since the
