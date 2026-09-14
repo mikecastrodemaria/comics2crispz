@@ -107,6 +107,15 @@ D:\Github\crispz-krea2\czp.bat caps
 
 `"instance": {"running": true, …}` = ready.
 
+**Fooocus2026 as an engine.** The SDXL fork
+[Fooocus2026](https://github.com/mikecastrodemaria/Fooocus2026) speaks the same
+protocol (`czp.bat` at its root). Declare it with its `czp` path only —
+`"fooocus2026": {"czp": "D:/Github/Fooocus2026/czp.bat"}` — and its czp finds the
+running Fooocus by itself. There is no `url`: Fooocus runs Gradio 3, the direct
+route speaks Gradio 4/5. Fooocus has no instruction edit (`supports.edit` false)
+and no face detector for balloons (`supports.faces` false): balloons use the
+fallback placement.
+
 ### 1b. Pick the book format
 
 The wizard asks for the **book format**: Franco-Belge 24×32 cm, A4, US comic

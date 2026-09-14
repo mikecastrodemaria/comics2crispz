@@ -14,6 +14,10 @@
     "qwen-edit": {
       "url": "http://127.0.0.1:7860",
       "czp": "D:/Github/crispz-qwen-edit/czp.bat"
+    },
+    "fooocus2026": {
+      "czp": "D:/Github/Fooocus2026/czp.bat",
+      "tool": "fooocus2026"
     }
   },
   "port": 8770

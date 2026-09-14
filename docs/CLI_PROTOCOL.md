@@ -33,9 +33,9 @@
 | Command | Role | Tools exposing it |
 |---|---|---|
 | `caps` | announce the tool's capabilities | all |
-| `gen`  | txt2img / omni multi-reference from a spec | studio, qwen-edit, krea, krea2 |
-| `edit` | image + instruction → image (`input`, `prompt`) | qwen-edit; studio when an omni model is configured; krea/krea2 answer exit 3 (`supports.edit` false) |
-| `upscale` | upscale/refine an image (`input`, `factor`, `denoise`); **factor 1 = pure img2img** (variation, no ESRGAN stage) | all |
+| `gen`  | txt2img / omni multi-reference from a spec | studio, qwen-edit, krea, krea2, fooocus2026 (SDXL; `refs` become IP-Adapter image prompts) |
+| `edit` | image + instruction → image (`input`, `prompt`) | qwen-edit; studio when an omni model is configured; krea/krea2 and fooocus2026 answer exit 3 (`supports.edit` false) |
+| `upscale` | upscale/refine an image (`input`, `factor`, `denoise`); **factor 1 = pure img2img** (variation, no ESRGAN stage) | all (fooocus2026: factor 1, 1.5 or 2 only, other factors exit 2) |
 | `inpaint` | redraw the WHITE area of a mask (`input`, `mask`, `prompt`, `denoise`); the rest stays pixel-exact | all |
 
 ## 3. The spec (input)
@@ -194,3 +194,12 @@ config-driven on crispz-studio (`zimage_omni_model`).
 - The remote route speaks to the Gradio endpoints in **plain HTTP (urllib)**
   — no gradio_client dependency.
 - Spec files may carry a UTF-8 BOM (PowerShell `-Encoding utf8`): accepted.
+- **Fooocus2026** (SDXL, Gradio 3.41) speaks the protocol since its custom-26:
+  `czp.bat` + hidden `cli_caps` / `cli_gen` endpoints reached with
+  `POST /run/<name>` (Gradio 3 has no `/gradio_api/call`). Declare it in
+  comics2crispz with its `czp` path only
+  (`"fooocus2026": {"czp": "…/Fooocus2026/czp.bat"}`): its czp routes to the warm
+  instance itself (default `127.0.0.1:7865`), while the direct `url` route of
+  `c2c_engines` speaks the Gradio 4/5 API. `detail_faces` / `detail_hands` map to
+  Fooocus Enhance; `supports.faces` is false (no `cli_faces`), so balloons use the
+  fallback placement.
