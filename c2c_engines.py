@@ -67,9 +67,12 @@ def _run_czp(czp_path, args, spec=None, timeout=3600):
     cmd = [czp_path] + args
     if czp_path.lower().endswith((".bat", ".cmd")):
         cmd = ["cmd", "/c", czp_path] + args
+    # the child must WRITE UTF-8 too: on Windows a Python czp inherits a
+    # cp1252 pipe and dies on the first accented LoRA / model name
+    env = dict(os.environ, PYTHONUTF8="1", PYTHONIOENCODING="utf-8")
     p = subprocess.run(cmd, input=(json.dumps(spec) if spec else None),
                        capture_output=True, text=True, encoding="utf-8",
-                       errors="replace", timeout=timeout)
+                       errors="replace", timeout=timeout, env=env)
     for line in reversed((p.stdout or "").strip().splitlines()):
         line = line.strip()
         if line.startswith("{"):
